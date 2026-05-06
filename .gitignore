@@ -1,0 +1,44 @@
+
+# Environment variables
+.env
+.env.*
+
+# Dependency directories
+node_modules/
+.pnpm/
+
+# Production build
+dist/
+coverage/
+
+# Local tooling
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Vite
+*.local
+
+# Editor directories and files
+*.log
+*.tmp
+*.temp
+
+# Misc
+*.env
