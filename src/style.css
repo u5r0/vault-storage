@@ -77,6 +77,14 @@
     text-rendering: optimizeLegibility;
   }
 
+  button {
+    cursor: pointer;
+    
+    &:is([disabled]) {
+      cursor: not-allowed;
+    }
+  }
+
   ::selection {
     background: color-mix(in oklch, var(--color-primary) 30%, transparent);
     color: var(--color-foreground);
