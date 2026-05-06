@@ -2,6 +2,7 @@
 # Environment variables
 .env
 .env.*
+!.env*.example
 
 # Dependency directories
 node_modules/
@@ -39,6 +40,3 @@ Thumbs.db
 *.log
 *.tmp
 *.temp
-
-# Misc
-*.env
