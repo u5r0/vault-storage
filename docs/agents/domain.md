@@ -4,9 +4,9 @@ This repo uses a **multi-context** layout with separate domain documentation for
 
 ## Context Map
 
-- **Frontend** (`src/`): Vue.js application
-  - Context: `src/CONTEXT.md`
-  - ADRs: `src/docs/adr/`
+- **Frontend** (`app/`): Vue.js application
+  - Context: `app/CONTEXT.md`
+  - ADRs: `app/docs/adr/`
   
 - **Backend** (`server/`): Node.js API server
   - Context: `server/CONTEXT.md`

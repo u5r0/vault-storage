@@ -12,58 +12,7 @@ import {
 } from "lucide-vue-next"
 import FileIcon from "./FileIcon.vue"
 import type { VaultEntry } from "@vault/sdk"
-
-const props = defineProps<{
-  files: VaultEntry[]
-  selectedPath: string
-}>()
-
-const emit = defineEmits<{ (e: "select", path: string): void }>()
-
-type SortKey = "name" | "modified" | "type" | "size"
-const sortKey = ref<SortKey>("name")
-const sortAsc = ref(true)
-const view = ref<"list" | "grid">("list")
-
-function setSort(key: SortKey) {
-  if (sortKey.value === key) sortAsc.value = !sortAsc.value
-  else { sortKey.value = key; sortAsc.value = true }
-}
-
-function formatSize(bytes: number): string {
-  if (bytes === 0) return "—"
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
-  return `${(bytes / 1024 ** 3).toFixed(1)} GB`
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "—"
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit",
-  })
-}
-
-function typeLabel(entry: VaultEntry): string {
-  if (entry.type === "folder") return "Folder"
-  if (entry.contentType) {
-    const map: Record<string, string> = {
-      "image/png": "PNG image",
-      "image/jpeg": "JPEG image",
-      "audio/wav": "Audio",
-      "audio/mpeg": "Audio",
-      "application/zip": "Archive",
-      "application/x-tar": "Archive",
-      "application/msword": "Word document",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word document",
-    }
-    return map[entry.contentType] ?? entry.contentType.split("/")[1]?.toUpperCase() ?? "File"
-  }
-  const ext = entry.name.split(".").pop()?.toUpperCase()
-  return ext ?? "File"
-}
+import { formatSize, formatDate, typeLabel } from "@/lib/format"
 
 const sorted = computed(() => {
   const list = [...props.files]
