@@ -1,3 +1,3 @@
-import { createVaultClient } from "@vault/sdk"
+import { createVaultClient, type VaultStore } from "@vault/sdk"
 
-export const client = createVaultClient(import.meta.env.VITE_API_URL || "http://localhost:3001")
+export const client: VaultStore = createVaultClient(import.meta.env.VITE_API_URL || "")

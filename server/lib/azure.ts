@@ -3,6 +3,8 @@ import {
   StorageSharedKeyCredential,
   type ContainerClient,
 } from "@azure/storage-blob"
+import { AzureBlobStore } from "./azure-blob-store"
+import type { BlobStore } from "./storage"
 
 /**
  * Server-side configuration loaded from environment variables.
@@ -69,4 +71,12 @@ export function getContainer(): Promise<ContainerClient> {
  */
 export function isConfigured(): boolean {
   return Boolean(env.connectionString || (env.accountName && env.accountKey))
+}
+
+/**
+ * Get the BlobStore instance (abstraction over Azure Blob Storage)
+ */
+export async function getBlobStore(): Promise<BlobStore> {
+  const container = await getContainer()
+  return new AzureBlobStore(container)
 }

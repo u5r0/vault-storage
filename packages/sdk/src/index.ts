@@ -15,7 +15,16 @@ export type VaultEntry = z.infer<typeof VaultEntrySchema>
 
 /* ======================== Client ======================== */
 
-export class VaultClient {
+export interface VaultStore {
+  listFiles(input?: { path?: string }): Promise<{ path: string; entries: VaultEntry[] }>
+  createFolder(input: { path?: string; name: string }): Promise<{ path: string; type: "folder" }>
+  uploadFiles(input: { path?: string; files: File[] }): Promise<{ uploaded: VaultEntry[] }>
+  getDownloadUrl(path: string): string
+  renameFile(input: { from: string; to: string }): Promise<{ path: string }>
+  deleteFile(input: { path: string; isFolder?: boolean }): Promise<{ deleted: number }>
+}
+
+export class VaultClient implements VaultStore {
   constructor(private baseUrl: string) {}
 
   private async request<T>(
