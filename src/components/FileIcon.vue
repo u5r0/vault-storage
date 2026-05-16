@@ -11,7 +11,7 @@ import {
   FileCode2,
   File as FileGeneric,
 } from "lucide-vue-next"
-import type { FileType } from "@/data/files"
+type FileType = "folder" | "file" | "image" | "video" | "audio" | "document" | "archive" | "code"
 
 const props = defineProps<{
   type: FileType

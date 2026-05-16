@@ -20,7 +20,7 @@ app.use(
   }),
 )
 
-/** Health probe — also reports whether Azure credentials are present. */
+/** Health probe */
 app.get("/api/health", (c) =>
   c.json({
     status: "ok",
@@ -29,6 +29,7 @@ app.get("/api/health", (c) =>
   }),
 )
 
+/** Mount files routes */
 app.route("/api/files", files)
 
 app.notFound((c) => c.json({ error: "Not found" }, 404))

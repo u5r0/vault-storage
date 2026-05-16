@@ -1,24 +1,61 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { Star, Share2, Download, Tag } from "lucide-vue-next"
+import { Share2, Download } from "lucide-vue-next"
 import FileIcon from "./FileIcon.vue"
-import { fileTypeLabel, type FileNode } from "@/data/files"
+import type { VaultEntry } from "@vault/sdk"
 
-const props = defineProps<{ file: FileNode | null }>()
+const props = defineProps<{ file: VaultEntry | null }>()
+
+function formatSize(bytes: number): string {
+  if (bytes === 0) return "—"
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return "—"
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit",
+  })
+}
+
+function typeLabel(entry: VaultEntry): string {
+  if (entry.type === "folder") return "Folder"
+  if (entry.contentType) {
+    const map: Record<string, string> = {
+      "image/png": "PNG image",
+      "image/jpeg": "JPEG image",
+      "audio/wav": "Audio",
+      "audio/mpeg": "Audio",
+      "application/zip": "Archive",
+      "application/x-tar": "Archive",
+      "application/msword": "Word document",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word document",
+    }
+    return map[entry.contentType] ?? entry.contentType.split("/")[1]?.toUpperCase() ?? "File"
+  }
+  const ext = entry.name.split(".").pop()?.toUpperCase()
+  return ext ?? "File"
+}
 
 const meta = computed(() => {
   if (!props.file) return []
-  const m: { label: string; value: string }[] = [
-    { label: "Type", value: fileTypeLabel(props.file) },
-    { label: "Created", value: props.file.created },
-    { label: "Modified", value: props.file.modified },
-    { label: "Size", value: props.file.size },
+  return [
+    { label: "Type", value: typeLabel(props.file) },
+    { label: "Modified", value: formatDate(props.file.modifiedAt) },
+    { label: "Size", value: formatSize(props.file.size) },
+    ...(props.file.contentType ? [{ label: "MIME", value: props.file.contentType }] : []),
   ]
-  if (props.file.items != null) {
-    m.push({ label: "Items", value: `${props.file.items} items` })
-  }
-  return m
 })
+
+import { client } from "@/lib/client"
+
+function downloadUrl(file: VaultEntry): string {
+  return client.getDownloadUrl(file.path)
+}
 </script>
 
 <template>
@@ -30,19 +67,6 @@ const meta = computed(() => {
       <div
         class="relative flex flex-col items-center gap-4 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] px-5 pt-8 pb-6 grain"
       >
-        <button
-          type="button"
-          aria-label="Star"
-          class="absolute top-3 right-3 grid h-8 w-8 place-items-center rounded-[var(--radius-sm)] text-muted-foreground transition hover:bg-[var(--color-muted)] hover:text-[var(--color-accent)]"
-        >
-          <Star
-            :size="15"
-            :stroke-width="1.75"
-            :fill="file.starred ? 'currentColor' : 'none'"
-            :class="file.starred ? 'text-[var(--color-accent)]' : ''"
-          />
-        </button>
-
         <span
           class="grid h-20 w-20 place-items-center rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--color-primary)_20%,transparent)]"
         >
@@ -50,21 +74,20 @@ const meta = computed(() => {
         </span>
 
         <div class="text-center">
-          <p class="text-base font-semibold tracking-tight text-balance">
-            {{ file.name }}
-          </p>
+          <p class="text-base font-semibold tracking-tight text-balance">{{ file.name }}</p>
           <p class="mt-1 text-[12px] text-muted-foreground">
-            {{ fileTypeLabel(file) }} · {{ file.size }}
+            {{ typeLabel(file) }} · {{ formatSize(file.size) }}
           </p>
         </div>
 
         <div class="flex w-full items-center gap-2 pt-1">
-          <button
-            type="button"
+          <a
+            :href="downloadUrl(file)"
+            :download="file.name"
             class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-3 py-2 text-[12.5px] font-medium text-[var(--color-primary-foreground)] transition hover:opacity-90"
           >
             <Download :size="13" :stroke-width="2.25" /> Download
-          </button>
+          </a>
           <button
             type="button"
             class="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-[12.5px] font-medium transition hover:bg-[var(--color-muted)]"
@@ -89,58 +112,6 @@ const meta = computed(() => {
             <dd class="text-right font-medium tabular-nums">{{ row.value }}</dd>
           </div>
         </dl>
-      </div>
-
-      <!-- Tags -->
-      <div
-        v-if="file.tags && file.tags.length"
-        class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] p-4"
-      >
-        <div class="mb-3 flex items-center gap-2">
-          <Tag :size="13" :stroke-width="2" class="text-muted-foreground" />
-          <h3 class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Tags
-          </h3>
-        </div>
-        <div class="flex flex-wrap gap-1.5">
-          <span
-            v-for="tag in file.tags"
-            :key="tag"
-            class="inline-flex items-center gap-1 rounded-full bg-[var(--color-muted)] px-2.5 py-1 text-[11.5px] font-medium text-foreground/80"
-          >
-            #{{ tag }}
-          </span>
-        </div>
-      </div>
-
-      <!-- Activity -->
-      <div class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] p-4">
-        <h3 class="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Activity
-        </h3>
-        <ol class="relative flex flex-col gap-3 text-[12.5px]">
-          <li class="flex items-start gap-3">
-            <span class="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--color-primary)]" />
-            <div class="flex-1">
-              <p class="font-medium">You modified this file</p>
-              <p class="text-muted-foreground">{{ file.modified }}</p>
-            </div>
-          </li>
-          <li class="flex items-start gap-3">
-            <span class="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" />
-            <div class="flex-1">
-              <p class="font-medium">Shared with team</p>
-              <p class="text-muted-foreground">2 days ago</p>
-            </div>
-          </li>
-          <li class="flex items-start gap-3">
-            <span class="mt-1 h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-            <div class="flex-1">
-              <p class="font-medium">Created by Ed</p>
-              <p class="text-muted-foreground">{{ file.created }}</p>
-            </div>
-          </li>
-        </ol>
       </div>
     </template>
 

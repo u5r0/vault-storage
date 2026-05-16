@@ -4,16 +4,18 @@ import AppHeader from "./components/AppHeader.vue"
 import AppSidebar from "./components/AppSidebar.vue"
 import FileList from "./components/FileList.vue"
 import DetailsPanel from "./components/DetailsPanel.vue"
-import { files } from "./data/files"
+import { useFiles } from "./composables/useFiles"
 import { useTheme } from "./composables/useTheme"
 
-useTheme() // initialize on mount
+useTheme()
 
-const selectedId = ref<string>("movies")
-const activeFolder = ref<string>("movies")
+const currentPath = ref("")
+const selectedPath = ref<string | null>(null)
+
+const { entries, loading, error } = useFiles(currentPath)
 
 const selectedFile = computed(
-  () => files.find((f) => f.id === selectedId.value) ?? null,
+  () => entries.value.find((e) => e.path === selectedPath.value) ?? null,
 )
 </script>
 
@@ -21,11 +23,18 @@ const selectedFile = computed(
   <div class="flex h-screen flex-col">
     <AppHeader />
     <main class="flex flex-1 overflow-hidden">
-      <AppSidebar :active-id="activeFolder" @select="activeFolder = $event" />
+      <AppSidebar :active-id="currentPath" @select="currentPath = $event" />
+      <div v-if="loading" class="grid flex-1 place-items-center text-muted-foreground text-sm">
+        Loading…
+      </div>
+      <div v-else-if="error" class="grid flex-1 place-items-center text-destructive text-sm">
+        {{ error.message }}
+      </div>
       <FileList
-        :files="files"
-        :selected-id="selectedId"
-        @select="selectedId = $event"
+        v-else
+        :files="entries"
+        :selected-path="selectedPath ?? ''"
+        @select="selectedPath = $event"
       />
       <DetailsPanel :file="selectedFile" />
     </main>

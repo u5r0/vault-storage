@@ -37,7 +37,7 @@ type Entry = {
   type: "folder" | "file"
   size: number
   contentType: string | null
-  modified: string | null
+  modifiedAt: string | null
 }
 
 /* ----------------------------- Routes ---------------------------------- */
@@ -64,7 +64,7 @@ files.get("/", zValidator("query", listQuery), async (c) => {
         type: "folder",
         size: 0,
         contentType: null,
-        modified: null,
+        modifiedAt: null,
       })
     } else {
       const name = item.name.slice(prefix.length)
@@ -76,7 +76,7 @@ files.get("/", zValidator("query", listQuery), async (c) => {
         type: "file",
         size: Number(props.contentLength ?? 0),
         contentType: props.contentType ?? null,
-        modified: props.lastModified ? new Date(props.lastModified).toISOString() : null,
+        modifiedAt: props.lastModified ? new Date(props.lastModified).toISOString() : null,
       })
     }
   }
@@ -162,7 +162,7 @@ files.post("/upload", async (c) => {
       type: "file",
       size: buf.byteLength,
       contentType: file.type || "application/octet-stream",
-      modified: new Date().toISOString(),
+      modifiedAt: new Date().toISOString(),
     })
   }
 

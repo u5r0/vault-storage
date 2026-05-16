@@ -17,6 +17,9 @@ importers:
       '@hono/zod-validator':
         specifier: ^0.7.6
         version: 0.7.6(hono@4.12.17)(zod@4.4.3)
+      '@vault/sdk':
+        specifier: workspace:*
+        version: link:packages/sdk
       dotenv:
         specifier: ^17.2.3
         version: 17.4.2
@@ -63,6 +66,12 @@ importers:
       vue-tsc:
         specifier: ^2.1.10
         version: 2.2.12(typescript@5.6.3)
+
+  packages/sdk:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
 packages:
 

@@ -11,14 +11,14 @@ import {
   FolderOpen,
 } from "lucide-vue-next"
 import FileIcon from "./FileIcon.vue"
-import { fileTypeLabel, type FileNode } from "@/data/files"
+import type { VaultEntry } from "@vault/sdk"
 
 const props = defineProps<{
-  files: FileNode[]
-  selectedId: string
+  files: VaultEntry[]
+  selectedPath: string
 }>()
 
-const emit = defineEmits<{ (e: "select", id: string): void }>()
+const emit = defineEmits<{ (e: "select", path: string): void }>()
 
 type SortKey = "name" | "modified" | "type" | "size"
 const sortKey = ref<SortKey>("name")
@@ -27,32 +27,54 @@ const view = ref<"list" | "grid">("list")
 
 function setSort(key: SortKey) {
   if (sortKey.value === key) sortAsc.value = !sortAsc.value
-  else {
-    sortKey.value = key
-    sortAsc.value = true
+  else { sortKey.value = key; sortAsc.value = true }
+}
+
+function formatSize(bytes: number): string {
+  if (bytes === 0) return "—"
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return "—"
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit",
+  })
+}
+
+function typeLabel(entry: VaultEntry): string {
+  if (entry.type === "folder") return "Folder"
+  if (entry.contentType) {
+    const map: Record<string, string> = {
+      "image/png": "PNG image",
+      "image/jpeg": "JPEG image",
+      "audio/wav": "Audio",
+      "audio/mpeg": "Audio",
+      "application/zip": "Archive",
+      "application/x-tar": "Archive",
+      "application/msword": "Word document",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word document",
+    }
+    return map[entry.contentType] ?? entry.contentType.split("/")[1]?.toUpperCase() ?? "File"
   }
+  const ext = entry.name.split(".").pop()?.toUpperCase()
+  return ext ?? "File"
 }
 
 const sorted = computed(() => {
   const list = [...props.files]
   list.sort((a, b) => {
-    // folders first
-    if (a.type === "folder" && b.type !== "folder") return -1
-    if (a.type !== "folder" && b.type === "folder") return 1
+    if (a.type !== b.type) return a.type === "folder" ? -1 : 1
     let cmp = 0
     switch (sortKey.value) {
-      case "name":
-        cmp = a.name.localeCompare(b.name)
-        break
-      case "modified":
-        cmp = a.modified.localeCompare(b.modified)
-        break
-      case "type":
-        cmp = (a.type + (a.ext ?? "")).localeCompare(b.type + (b.ext ?? ""))
-        break
-      case "size":
-        cmp = a.sizeBytes - b.sizeBytes
-        break
+      case "name": cmp = a.name.localeCompare(b.name); break
+      case "modified": cmp = (a.modifiedAt ?? "").localeCompare(b.modifiedAt ?? ""); break
+      case "type": cmp = typeLabel(a).localeCompare(typeLabel(b)); break
+      case "size": cmp = a.size - b.size; break
     }
     return sortAsc.value ? cmp : -cmp
   })
@@ -72,9 +94,7 @@ const toolbarActions = [
     class="flex h-full min-w-0 flex-1 flex-col overflow-hidden border-r border-[var(--color-border)]"
   >
     <!-- Toolbar -->
-    <div
-      class="flex items-center gap-3 border-b border-[var(--color-border)] px-5 py-3.5"
-    >
+    <div class="flex items-center gap-3 border-b border-[var(--color-border)] px-5 py-3.5">
       <span
         class="grid h-8 w-8 place-items-center rounded-[var(--radius-sm)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
         aria-hidden="true"
@@ -83,11 +103,9 @@ const toolbarActions = [
       </span>
       <div class="min-w-0">
         <h1 class="truncate text-[15px] font-semibold tracking-tight">
-          Main folder
+          {{ props.files.length ? "Files" : "Empty folder" }}
         </h1>
-        <p class="text-[11.5px] text-muted-foreground">
-          {{ props.files.length }} items · 624 GB used
-        </p>
+        <p class="text-[11.5px] text-muted-foreground">{{ props.files.length }} items</p>
       </div>
 
       <div class="ml-auto flex items-center gap-1">
@@ -100,9 +118,7 @@ const toolbarActions = [
             @click="view = 'list'"
             :class="[
               'grid h-7 w-7 place-items-center rounded-[var(--radius-xs)] transition',
-              view === 'list'
-                ? 'bg-[var(--color-card)] text-foreground shadow-sm'
-                : 'text-muted-foreground',
+              view === 'list' ? 'bg-[var(--color-card)] text-foreground shadow-sm' : 'text-muted-foreground',
             ]"
           >
             <List :size="14" :stroke-width="2" />
@@ -113,9 +129,7 @@ const toolbarActions = [
             @click="view = 'grid'"
             :class="[
               'grid h-7 w-7 place-items-center rounded-[var(--radius-xs)] transition',
-              view === 'grid'
-                ? 'bg-[var(--color-card)] text-foreground shadow-sm'
-                : 'text-muted-foreground',
+              view === 'grid' ? 'bg-[var(--color-card)] text-foreground shadow-sm' : 'text-muted-foreground',
             ]"
           >
             <LayoutGrid :size="14" :stroke-width="2" />
@@ -137,69 +151,35 @@ const toolbarActions = [
 
     <!-- LIST VIEW -->
     <div v-if="view === 'list'" class="flex-1 overflow-y-auto">
-      <!-- Column headers -->
       <div
         class="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_180px_140px_100px] items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-background)]/95 px-5 py-2.5 text-[11.5px] font-medium uppercase tracking-wider text-muted-foreground backdrop-blur"
       >
-        <button
-          type="button"
-          @click="setSort('name')"
-          class="flex items-center gap-1.5 hover:text-foreground"
-        >
+        <button type="button" @click="setSort('name')" class="flex items-center gap-1.5 hover:text-foreground">
           Name
-          <ArrowUpDown
-            :size="11"
-            :stroke-width="2"
-            :class="sortKey === 'name' ? 'text-foreground' : 'opacity-60'"
-          />
+          <ArrowUpDown :size="11" :stroke-width="2" :class="sortKey === 'name' ? 'text-foreground' : 'opacity-60'" />
         </button>
-        <button
-          type="button"
-          @click="setSort('modified')"
-          class="flex items-center gap-1.5 hover:text-foreground"
-        >
+        <button type="button" @click="setSort('modified')" class="flex items-center gap-1.5 hover:text-foreground">
           Last modified
-          <ArrowUpDown
-            :size="11"
-            :stroke-width="2"
-            :class="sortKey === 'modified' ? 'text-foreground' : 'opacity-60'"
-          />
+          <ArrowUpDown :size="11" :stroke-width="2" :class="sortKey === 'modified' ? 'text-foreground' : 'opacity-60'" />
         </button>
-        <button
-          type="button"
-          @click="setSort('type')"
-          class="flex items-center gap-1.5 hover:text-foreground"
-        >
+        <button type="button" @click="setSort('type')" class="flex items-center gap-1.5 hover:text-foreground">
           Type
-          <ArrowUpDown
-            :size="11"
-            :stroke-width="2"
-            :class="sortKey === 'type' ? 'text-foreground' : 'opacity-60'"
-          />
+          <ArrowUpDown :size="11" :stroke-width="2" :class="sortKey === 'type' ? 'text-foreground' : 'opacity-60'" />
         </button>
-        <button
-          type="button"
-          @click="setSort('size')"
-          class="flex items-center justify-end gap-1.5 hover:text-foreground"
-        >
+        <button type="button" @click="setSort('size')" class="flex items-center justify-end gap-1.5 hover:text-foreground">
           Size
-          <ArrowUpDown
-            :size="11"
-            :stroke-width="2"
-            :class="sortKey === 'size' ? 'text-foreground' : 'opacity-60'"
-          />
+          <ArrowUpDown :size="11" :stroke-width="2" :class="sortKey === 'size' ? 'text-foreground' : 'opacity-60'" />
         </button>
       </div>
 
-      <!-- Rows -->
       <ul class="flex flex-col px-2 py-2">
-        <li v-for="file in sorted" :key="file.id">
+        <li v-for="file in sorted" :key="file.path">
           <button
             type="button"
-            @click="emit('select', file.id)"
+            @click="emit('select', file.path)"
             :class="[
               'grid w-full grid-cols-[minmax(0,1fr)_180px_140px_100px] items-center gap-4 rounded-[var(--radius-md)] px-3 py-2.5 text-left text-[13.5px] transition',
-              selectedId === file.id
+              selectedPath === file.path
                 ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--color-primary)_20%,transparent)]'
                 : 'hover:bg-[var(--color-muted)]',
             ]"
@@ -208,36 +188,24 @@ const toolbarActions = [
               <span
                 :class="[
                   'grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius-sm)]',
-                  selectedId === file.id
+                  selectedPath === file.path
                     ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
                     : 'bg-[var(--color-muted)] text-muted-foreground',
                 ]"
               >
                 <FileIcon
                   :type="file.type"
-                  :tone="selectedId === file.id ? 'primary' : 'muted'"
+                  :tone="selectedPath === file.path ? 'primary' : 'muted'"
                   :size="16"
                 />
               </span>
               <span class="min-w-0">
                 <span class="block truncate font-medium">{{ file.name }}</span>
-                <span class="flex items-center gap-1.5 truncate text-[11.5px] text-muted-foreground">
-                  <span v-if="file.starred" class="inline-flex items-center gap-0.5 text-[var(--color-accent)]">
-                    <Star :size="10" :stroke-width="2.25" fill="currentColor" />
-                  </span>
-                  <span v-for="tag in file.tags?.slice(0, 2)" :key="tag" class="truncate">#{{ tag }}</span>
-                </span>
               </span>
             </div>
-            <span class="truncate text-muted-foreground">
-              {{ file.modified }}
-            </span>
-            <span class="truncate">
-              {{ fileTypeLabel(file) }}
-            </span>
-            <span class="text-right tabular-nums text-foreground/85">
-              {{ file.size }}
-            </span>
+            <span class="truncate text-muted-foreground">{{ formatDate(file.modifiedAt) }}</span>
+            <span class="truncate">{{ typeLabel(file) }}</span>
+            <span class="text-right tabular-nums text-foreground/85">{{ formatSize(file.size) }}</span>
           </button>
         </li>
       </ul>
@@ -246,13 +214,13 @@ const toolbarActions = [
     <!-- GRID VIEW -->
     <div v-else class="flex-1 overflow-y-auto p-5">
       <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-        <li v-for="file in sorted" :key="file.id">
+        <li v-for="file in sorted" :key="file.path">
           <button
             type="button"
-            @click="emit('select', file.id)"
+            @click="emit('select', file.path)"
             :class="[
               'group flex h-full w-full flex-col items-start gap-3 rounded-[var(--radius-md)] border p-4 text-left transition',
-              selectedId === file.id
+              selectedPath === file.path
                 ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary-soft)]'
                 : 'border-[var(--color-border)] bg-[var(--color-card)] hover:border-[var(--color-primary)]/30 hover:shadow-[0_8px_24px_-12px_color-mix(in_oklch,var(--color-primary)_25%,transparent)]',
             ]"
@@ -260,7 +228,7 @@ const toolbarActions = [
             <span
               :class="[
                 'grid h-10 w-10 place-items-center rounded-[var(--radius-sm)]',
-                selectedId === file.id
+                selectedPath === file.path
                   ? 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
                   : 'bg-[var(--color-muted)] text-muted-foreground group-hover:text-foreground',
               ]"
@@ -270,7 +238,7 @@ const toolbarActions = [
             <div class="min-w-0">
               <p class="truncate text-[13.5px] font-medium">{{ file.name }}</p>
               <p class="truncate text-[11.5px] text-muted-foreground">
-                {{ fileTypeLabel(file) }} · {{ file.size }}
+                {{ typeLabel(file) }} · {{ formatSize(file.size) }}
               </p>
             </div>
           </button>

@@ -10,7 +10,12 @@ import {
   Tag,
   HardDrive,
 } from "lucide-vue-next"
-import { sidebarTree } from "@/data/files"
+const sidebarTree = [
+  { id: "", name: "Root" },
+  { id: "Movies", name: "Movies" },
+  { id: "Pictures", name: "Pictures" },
+  { id: "Documents", name: "Documents" },
+]
 
 const props = defineProps<{ activeId: string }>()
 const emit = defineEmits<{ (e: "select", id: string): void }>()
