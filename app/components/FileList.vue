@@ -14,6 +14,30 @@ import FileIcon from "./FileIcon.vue"
 import type { VaultEntry } from "@vault/sdk"
 import { formatSize, formatDate, typeLabel } from "@/lib/format"
 
+const props = defineProps<{
+  files: VaultEntry[]
+  selectedPath: string
+  loading?: boolean
+  error?: Error | null
+}>()
+
+const emit = defineEmits<{
+  select: [path: string]
+}>()
+
+const view = ref<"list" | "grid">("list")
+const sortKey = ref<"name" | "modified" | "type" | "size">("name")
+const sortAsc = ref(true)
+
+function setSort(key: typeof sortKey.value) {
+  if (sortKey.value === key) {
+    sortAsc.value = !sortAsc.value
+  } else {
+    sortKey.value = key
+    sortAsc.value = true
+  }
+}
+
 const sorted = computed(() => {
   const list = [...props.files]
   list.sort((a, b) => {
@@ -36,6 +60,14 @@ const toolbarActions = [
   { id: "star", icon: Star, label: "Star" },
   { id: "trash", icon: Trash2, label: "Delete" },
 ]
+
+const showEmptyState = computed(() => {
+  return !props.loading && !props.error && props.files.length === 0
+})
+
+const showLoadingState = computed(() => {
+  return props.loading && props.files.length === 0
+})
 </script>
 
 <template>
@@ -52,7 +84,7 @@ const toolbarActions = [
       </span>
       <div class="min-w-0">
         <h1 class="truncate text-[15px] font-semibold tracking-tight">
-          {{ props.files.length ? "Files" : "Empty folder" }}
+          {{ showEmptyState ? "Empty folder" : "Files" }}
         </h1>
         <p class="text-[11.5px] text-muted-foreground">{{ props.files.length }} items</p>
       </div>
@@ -121,7 +153,25 @@ const toolbarActions = [
         </button>
       </div>
 
-      <ul class="flex flex-col px-2 py-2">
+      <!-- Loading State -->
+      <div v-if="showLoadingState" class="grid place-items-center py-16 text-sm text-muted-foreground">
+        Loading…
+      </div>
+
+      <!-- Error State -->
+      <div v-else-if="error" class="flex flex-col items-center gap-3 px-5 py-16">
+        <div class="flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <span>{{ error.message }}</span>
+        </div>
+      </div>
+
+      <!-- File List -->
+      <ul v-else class="flex flex-col px-2 py-2">
         <li v-for="file in sorted" :key="file.path">
           <button
             type="button"
@@ -162,7 +212,25 @@ const toolbarActions = [
 
     <!-- GRID VIEW -->
     <div v-else class="flex-1 overflow-y-auto p-5">
-      <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+      <!-- Loading State -->
+      <div v-if="showLoadingState" class="grid place-items-center py-16 text-sm text-muted-foreground">
+        Loading…
+      </div>
+
+      <!-- Error State -->
+      <div v-else-if="error" class="flex flex-col items-center gap-3 py-16">
+        <div class="flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <span>{{ error.message }}</span>
+        </div>
+      </div>
+
+      <!-- File Grid -->
+      <ul v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
         <li v-for="file in sorted" :key="file.path">
           <button
             type="button"

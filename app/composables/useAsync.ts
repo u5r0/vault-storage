@@ -15,6 +15,7 @@ export function useAsync<T>(
       data.value = await fn()
     } catch (e) {
       error.value = e instanceof Error ? e : new Error(String(e))
+      // Keep previous data on error - don't clear it
     } finally {
       loading.value = false
     }
