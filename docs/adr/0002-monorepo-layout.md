@@ -8,7 +8,7 @@
 Today the repo is a hybrid:
 
 ```
-vault-app/
+vault-storage/
 ├── package.json         ← contains BOTH frontend and server deps
 ├── app/                 ← frontend source, no package.json
 ├── server/              ← server source, no package.json
@@ -38,7 +38,7 @@ This causes:
 ### A. Full apps + packages split
 
 ```
-vault-app/
+vault-storage/
 ├── package.json              ← workspace root, dev tools only
 ├── pnpm-workspace.yaml       ← packages: ["apps/*", "packages/*"]
 ├── apps/

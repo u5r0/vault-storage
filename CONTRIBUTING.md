@@ -9,7 +9,7 @@ Thank you for your interest in contributing to Vault Storage! This document prov
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/your-username/vault-app.git`
+2. Clone your fork: `git clone https://github.com/your-username/vault-storage.git`
 3. Install dependencies: `pnpm install`
 4. Create a branch: `git checkout -b feature/your-feature-name`
 

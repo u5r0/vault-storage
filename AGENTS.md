@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Issues are tracked in GitHub at `u5r0/vault-app`. See `docs/agents/issue-tracker.md`.
+Issues are tracked in GitHub at `u5r0/vault-storage`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

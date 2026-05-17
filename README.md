@@ -28,7 +28,7 @@ This project is currently in active development. Core features are functional bu
 ## Project Structure
 
 ```
-vault-app/
+vault-storage/
 ├── apps/
 │   ├── web/          # Vue.js frontend application
 │   └── server/       # Hono backend API (+ scripts/seed.ts)

@@ -1,6 +1,6 @@
 # Issue Tracker
 
-Issues for this repo are tracked in **GitHub Issues** at `u5r0/vault-app`.
+Issues for this repo are tracked in **GitHub Issues** at `u5r0/vault-storage`.
 
 ## Creating issues
 
