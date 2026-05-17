@@ -40,6 +40,16 @@ Configuration and initialization:
 - Creates and caches container client
 - Exports `getBlobStore()` factory function
 
+## Local development
+
+The Azure code path runs against [Azurite](https://learn.microsoft.com/azure/storage/common/storage-use-azurite) locally — Microsoft's official Blob Storage emulator. Same REST API as production, different connection string. See [ADR 0004](../../docs/adr/0004-azurite-for-local-dev.md) for the reasoning.
+
+Quick start:
+```bash
+pnpm dev        # starts azurite + api + web concurrently
+pnpm seed       # populates the dev container with a sample folder tree
+```
+
 ## Usage
 
 ```typescript

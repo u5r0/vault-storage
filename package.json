@@ -4,9 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n web,api -c \"#22d3ee,#a78bfa\" \"pnpm dev:web\" \"pnpm dev:api\"",
+    "dev": "concurrently -n azurite,api,web -c \"#fbbf24,#a78bfa,#22d3ee\" \"pnpm azurite\" \"pnpm dev:api\" \"pnpm dev:web\"",
     "dev:web": "vite --host",
     "dev:api": "tsx watch server/index.ts",
+    "azurite": "azurite-blob --silent --location ./.azurite-data --debug ./.azurite-data/debug.log --blobHost 127.0.0.1 --blobPort 10000",
+    "seed": "tsx scripts/seed.ts",
     "build": "vue-tsc -b && vite build",
     "start": "tsx server/index.ts",
     "preview": "vite preview"
@@ -28,6 +30,7 @@
     "@types/node": "^22.10.0",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/tsconfig": "^0.7.0",
+    "azurite": "^3.35.0",
     "concurrently": "^9.0.0",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.21.0",

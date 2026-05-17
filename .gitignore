@@ -12,6 +12,9 @@ node_modules/
 dist/
 coverage/
 
+# Azurite local emulator data
+.azurite-data/
+
 # Local tooling
 .vscode/
 .idea/

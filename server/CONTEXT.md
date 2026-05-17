@@ -26,3 +26,6 @@ The folder path with a trailing slash used as a delimiter when listing blobs, e.
 
 **Wire contract**
 All request bodies, query schemas, and response shapes are defined as Zod schemas in `@vault/sdk` and imported by routes. The server does not redefine `VaultEntry` or any DTO locally. See [ADR 0001](../docs/adr/0001-sdk-as-shared-contract.md).
+
+**Local dev backend (Azurite)**
+The `AzureBlobStore` adapter is exercised locally against [Azurite](https://learn.microsoft.com/azure/storage/common/storage-use-azurite), Microsoft's official Azure Blob emulator. Started by `pnpm azurite` (auto-launched by `pnpm dev`). Same REST API as production Azure — switching deploy targets is one env var. See [ADR 0004](../docs/adr/0004-azurite-for-local-dev.md). Seed sample data with `pnpm seed`.
