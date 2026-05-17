@@ -1,6 +1,6 @@
 import * as z from "zod"
 
-/* ======================== Types ======================== */
+/* ======================== Entities ======================== */
 
 export const VaultEntrySchema = z.object({
   name: z.string(),
@@ -13,15 +13,69 @@ export const VaultEntrySchema = z.object({
 
 export type VaultEntry = z.infer<typeof VaultEntrySchema>
 
+/* ======================== Request schemas ======================== */
+
+export const ListFilesQuery = z.object({
+  path: z.string().optional().default(""),
+})
+export type ListFilesInput = z.infer<typeof ListFilesQuery>
+
+export const CreateFolderBody = z.object({
+  path: z.string().optional().default(""),
+  name: z.string().min(1).max(255),
+})
+export type CreateFolderInput = z.infer<typeof CreateFolderBody>
+
+export const RenameBody = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+})
+export type RenameInput = z.infer<typeof RenameBody>
+
+export const DeleteBody = z.object({
+  path: z.string().min(1),
+  isFolder: z.boolean().optional().default(false),
+})
+export type DeleteInput = z.infer<typeof DeleteBody>
+
+/* ======================== Response schemas ======================== */
+
+export const ListFilesResponse = z.object({
+  path: z.string(),
+  entries: z.array(VaultEntrySchema),
+})
+export type ListFilesResult = z.infer<typeof ListFilesResponse>
+
+export const CreateFolderResponse = z.object({
+  path: z.string(),
+  type: z.literal("folder"),
+})
+export type CreateFolderResult = z.infer<typeof CreateFolderResponse>
+
+export const UploadResponse = z.object({
+  uploaded: z.array(VaultEntrySchema),
+})
+export type UploadResult = z.infer<typeof UploadResponse>
+
+export const RenameResponse = z.object({
+  path: z.string(),
+})
+export type RenameResult = z.infer<typeof RenameResponse>
+
+export const DeleteResponse = z.object({
+  deleted: z.number(),
+})
+export type DeleteResult = z.infer<typeof DeleteResponse>
+
 /* ======================== Client ======================== */
 
 export interface VaultStore {
-  listFiles(input?: { path?: string }): Promise<{ path: string; entries: VaultEntry[] }>
-  createFolder(input: { path?: string; name: string }): Promise<{ path: string; type: "folder" }>
-  uploadFiles(input: { path?: string; files: File[] }): Promise<{ uploaded: VaultEntry[] }>
+  listFiles(input?: Partial<ListFilesInput>): Promise<ListFilesResult>
+  createFolder(input: CreateFolderInput): Promise<CreateFolderResult>
+  uploadFiles(input: { path?: string; files: File[] }): Promise<UploadResult>
   getDownloadUrl(path: string): string
-  renameFile(input: { from: string; to: string }): Promise<{ path: string }>
-  deleteFile(input: { path: string; isFolder?: boolean }): Promise<{ deleted: number }>
+  renameFile(input: RenameInput): Promise<RenameResult>
+  deleteFile(input: DeleteInput): Promise<DeleteResult>
 }
 
 export class VaultClient implements VaultStore {
@@ -39,24 +93,26 @@ export class VaultClient implements VaultStore {
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }))
+      const error = await response
+        .json()
+        .catch(() => ({ error: response.statusText })) as { error?: string }
       throw new Error(error.error || `Request failed: ${response.statusText}`)
     }
 
-    return response.json()
+    return response.json() as Promise<T>
   }
 
   /* ======================== Files API ======================== */
 
-  async listFiles(input: { path?: string } = {}) {
+  async listFiles(input: Partial<ListFilesInput> = {}): Promise<ListFilesResult> {
     const path = input.path || ""
-    return this.request<{ path: string; entries: VaultEntry[] }>(
+    return this.request<ListFilesResult>(
       `/api/files?path=${encodeURIComponent(path)}`
     )
   }
 
-  async createFolder(input: { path?: string; name: string }) {
-    return this.request<{ path: string; type: "folder" }>(
+  async createFolder(input: CreateFolderInput): Promise<CreateFolderResult> {
+    return this.request<CreateFolderResult>(
       `/api/files/folder`,
       {
         method: "POST",
@@ -66,12 +122,12 @@ export class VaultClient implements VaultStore {
     )
   }
 
-  async uploadFiles(input: { path?: string; files: File[] }) {
+  async uploadFiles(input: { path?: string; files: File[] }): Promise<UploadResult> {
     const formData = new FormData()
     if (input.path) formData.append("path", input.path)
     input.files.forEach((file) => formData.append("files", file))
 
-    return this.request<{ uploaded: VaultEntry[] }>(
+    return this.request<UploadResult>(
       `/api/files/upload`,
       {
         method: "POST",
@@ -84,8 +140,8 @@ export class VaultClient implements VaultStore {
     return `${this.baseUrl}/api/files/download?path=${encodeURIComponent(path)}`
   }
 
-  async renameFile(input: { from: string; to: string }) {
-    return this.request<{ path: string }>(
+  async renameFile(input: RenameInput): Promise<RenameResult> {
+    return this.request<RenameResult>(
       `/api/files/rename`,
       {
         method: "PATCH",
@@ -95,8 +151,8 @@ export class VaultClient implements VaultStore {
     )
   }
 
-  async deleteFile(input: { path: string; isFolder?: boolean }) {
-    return this.request<{ deleted: number }>(
+  async deleteFile(input: DeleteInput): Promise<DeleteResult> {
+    return this.request<DeleteResult>(
       `/api/files`,
       {
         method: "DELETE",

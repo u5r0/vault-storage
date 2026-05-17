@@ -8,21 +8,25 @@ import {
   ArrowUpDown,
   LayoutGrid,
   List,
-  FolderOpen,
+  Home,
+  ChevronRight,
 } from "lucide-vue-next"
 import FileIcon from "./FileIcon.vue"
 import type { VaultEntry } from "@vault/sdk"
-import { formatSize, formatDate, typeLabel } from "@/lib/format"
+import { formatSize, formatDate, typeLabel, fileIconType } from "@/lib/format"
 
 const props = defineProps<{
   files: VaultEntry[]
   selectedPath: string
+  currentPath: string
+  breadcrumbs: { name: string; path: string }[]
   loading?: boolean
   error?: Error | null
 }>()
 
 const emit = defineEmits<{
   select: [path: string]
+  navigate: [path: string]
 }>()
 
 const view = ref<"list" | "grid">("list")
@@ -76,12 +80,29 @@ const showLoadingState = computed(() => {
   >
     <!-- Toolbar -->
     <div class="flex items-center gap-3 border-b border-[var(--color-border)] px-5 py-3.5">
-      <span
-        class="grid h-8 w-8 place-items-center rounded-[var(--radius-sm)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
-        aria-hidden="true"
+      <button
+        type="button"
+        @click="emit('navigate', '')"
+        class="grid h-8 w-8 place-items-center rounded-[var(--radius-sm)] bg-[var(--color-primary-soft)] text-[var(--color-primary)] transition hover:opacity-80"
+        aria-label="Root"
       >
-        <FolderOpen :size="16" :stroke-width="2" />
-      </span>
+        <Home :size="16" :stroke-width="2" />
+      </button>
+      <nav v-if="breadcrumbs.length" class="flex items-center gap-0.5 text-[13px]" aria-label="Breadcrumb">
+        <ChevronRight :size="12" :stroke-width="2" class="mx-0.5 text-muted-foreground" />
+        <template v-for="(crumb, i) in breadcrumbs" :key="crumb.path">
+          <button
+            v-if="i < breadcrumbs.length - 1"
+            type="button"
+            @click="emit('navigate', crumb.path)"
+            class="rounded-[var(--radius-xs)] px-1.5 py-0.5 text-muted-foreground transition hover:bg-[var(--color-muted)] hover:text-foreground"
+          >
+            {{ crumb.name }}
+          </button>
+          <span v-else class="px-1.5 font-medium">{{ crumb.name }}</span>
+          <ChevronRight v-if="i < breadcrumbs.length - 1" :size="12" :stroke-width="2" class="text-muted-foreground" />
+        </template>
+      </nav>
       <div class="min-w-0">
         <h1 class="truncate text-[15px] font-semibold tracking-tight">
           {{ showEmptyState ? "Empty folder" : "Files" }}
@@ -193,7 +214,7 @@ const showLoadingState = computed(() => {
                 ]"
               >
                 <FileIcon
-                  :type="file.type"
+                  :type="fileIconType(file)"
                   :tone="selectedPath === file.path ? 'primary' : 'muted'"
                   :size="16"
                 />
@@ -250,7 +271,7 @@ const showLoadingState = computed(() => {
                   : 'bg-[var(--color-muted)] text-muted-foreground group-hover:text-foreground',
               ]"
             >
-              <FileIcon :type="file.type" :size="20" />
+              <FileIcon :type="fileIconType(file)" :size="20" />
             </span>
             <div class="min-w-0">
               <p class="truncate text-[13.5px] font-medium">{{ file.name }}</p>

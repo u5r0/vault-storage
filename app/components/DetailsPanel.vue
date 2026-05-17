@@ -3,7 +3,10 @@ import { computed } from "vue"
 import { Share2, Download } from "lucide-vue-next"
 import FileIcon from "./FileIcon.vue"
 import type { VaultEntry } from "@vault/sdk"
-import { formatSize, formatDate, typeLabel } from "@/lib/format"
+import { formatSize, formatDate, typeLabel, fileIconType } from "@/lib/format"
+import { client } from "@/lib/client"
+
+const props = defineProps<{ file: VaultEntry | null }>()
 
 const meta = computed(() => {
   if (!props.file) return []
@@ -14,8 +17,6 @@ const meta = computed(() => {
     ...(props.file.contentType ? [{ label: "MIME", value: props.file.contentType }] : []),
   ]
 })
-
-import { client } from "@/lib/client"
 
 function downloadUrl(file: VaultEntry): string {
   return client.getDownloadUrl(file.path)
@@ -34,7 +35,7 @@ function downloadUrl(file: VaultEntry): string {
         <span
           class="grid h-20 w-20 place-items-center rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--color-primary)_20%,transparent)]"
         >
-          <FileIcon :type="file.type" :size="36" tone="primary" />
+          <FileIcon :type="fileIconType(file)" :size="36" tone="primary" />
         </span>
 
         <div class="text-center">

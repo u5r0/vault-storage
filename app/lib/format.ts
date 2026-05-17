@@ -32,3 +32,18 @@ export function typeLabel(entry: VaultEntry): string {
   if (entry.contentType) return MIME_LABELS[entry.contentType] ?? entry.contentType.split("/")[1]?.toUpperCase() ?? "File"
   return entry.name.split(".").pop()?.toUpperCase() ?? "File"
 }
+
+export type FileIconType = "folder" | "file" | "image" | "video" | "audio" | "document" | "archive" | "code"
+
+export function fileIconType(entry: VaultEntry): FileIconType {
+  if (entry.type === "folder") return "folder"
+  const ct = entry.contentType
+  if (!ct) return "file"
+  if (ct.startsWith("image/")) return "image"
+  if (ct.startsWith("video/")) return "video"
+  if (ct.startsWith("audio/")) return "audio"
+  if (ct.startsWith("text/") || ct === "application/pdf" || ct.includes("document") || ct.includes("msword") || ct.includes("officedocument")) return "document"
+  if (ct === "application/zip" || ct === "application/x-tar" || ct === "application/gzip" || ct === "application/x-7z-compressed" || ct === "application/x-rar-compressed") return "archive"
+  if (ct.includes("json") || ct.includes("xml") || ct.includes("javascript") || ct.includes("typescript")) return "code"
+  return "file"
+}

@@ -2,43 +2,17 @@ import { Hono } from "hono"
 import { stream } from "hono/streaming"
 import { HTTPException } from "hono/http-exception"
 import { zValidator } from "@hono/zod-validator"
-import { z } from "zod"
+import {
+  ListFilesQuery,
+  CreateFolderBody,
+  RenameBody,
+  DeleteBody,
+  type VaultEntry,
+} from "@vault/sdk"
 import { env, getBlobStore } from "../lib/azure"
 import { isSafeName, joinName, normalizePath, toPrefix } from "../lib/paths"
 
 const files = new Hono()
-
-/* ----------------------------- Schemas --------------------------------- */
-
-const listQuery = z.object({
-  path: z.string().optional().default(""),
-})
-
-const folderBody = z.object({
-  path: z.string().optional().default(""),
-  name: z.string().min(1).max(255),
-})
-
-const renameBody = z.object({
-  from: z.string().min(1),
-  to: z.string().min(1),
-})
-
-const deleteBody = z.object({
-  path: z.string().min(1),
-  isFolder: z.boolean().optional().default(false),
-})
-
-/* ----------------------------- Types ----------------------------------- */
-
-type Entry = {
-  name: string
-  path: string
-  type: "folder" | "file"
-  size: number
-  contentType: string | null
-  modifiedAt: string | null
-}
 
 /* ----------------------------- Routes ---------------------------------- */
 
@@ -46,12 +20,12 @@ type Entry = {
  * GET /api/files?path=Movies/Action
  * List the immediate children (folders + files) at a given path.
  */
-files.get("/", zValidator("query", listQuery), async (c) => {
+files.get("/", zValidator("query", ListFilesQuery), async (c) => {
   const { path } = c.req.valid("query")
   const prefix = toPrefix(path)
   const store = await getBlobStore()
 
-  const entries: Entry[] = []
+  const entries: VaultEntry[] = []
 
   for await (const item of store.list(prefix)) {
     if (item.kind === "folder") {
@@ -90,7 +64,7 @@ files.get("/", zValidator("query", listQuery), async (c) => {
  * POST /api/files/folder
  * Create a virtual folder by writing a 0-byte ".vault-keep" placeholder.
  */
-files.post("/folder", zValidator("json", folderBody), async (c) => {
+files.post("/folder", zValidator("json", CreateFolderBody), async (c) => {
   const { path, name } = c.req.valid("json")
   if (!isSafeName(name)) {
     throw new HTTPException(400, { message: "Invalid folder name" })
@@ -130,7 +104,7 @@ files.post("/upload", async (c) => {
   }
 
   const limit = env.maxUploadMb * 1024 * 1024
-  const uploaded: Entry[] = []
+  const uploaded: VaultEntry[] = []
 
   for (const file of list) {
     if (!isSafeName(file.name)) {
@@ -196,7 +170,7 @@ files.get("/download", async (c) => {
  * Rename or move a file by copy-then-delete. Folders are not renamed
  * here; that would require recursing every blob under the prefix.
  */
-files.patch("/rename", zValidator("json", renameBody), async (c) => {
+files.patch("/rename", zValidator("json", RenameBody), async (c) => {
   const { from, to } = c.req.valid("json")
   const src = normalizePath(from)
   const dst = normalizePath(to)
@@ -219,7 +193,7 @@ files.patch("/rename", zValidator("json", renameBody), async (c) => {
  * DELETE /api/files
  * Delete a single file, or a folder and everything inside it.
  */
-files.delete("/", zValidator("json", deleteBody), async (c) => {
+files.delete("/", zValidator("json", DeleteBody), async (c) => {
   const { path, isFolder } = c.req.valid("json")
   const norm = normalizePath(path)
   if (!norm) throw new HTTPException(400, { message: "Path is required" })

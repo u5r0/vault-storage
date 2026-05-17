@@ -23,3 +23,6 @@ The Azure Blob Storage container that holds all vault blobs. Configured via `AZU
 
 **Prefix**
 The folder path with a trailing slash used as a delimiter when listing blobs, e.g. `"Movies/Action/"`.
+
+**Wire contract**
+All request bodies, query schemas, and response shapes are defined as Zod schemas in `@vault/sdk` and imported by routes. The server does not redefine `VaultEntry` or any DTO locally. See [ADR 0001](../docs/adr/0001-sdk-as-shared-contract.md).
