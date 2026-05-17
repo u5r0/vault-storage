@@ -10,6 +10,7 @@ import {
   List,
   Home,
   ChevronRight,
+  FolderOpen,
 } from "lucide-vue-next"
 import FileIcon from "./FileIcon.vue"
 import type { VaultEntry } from "@vault/sdk"
@@ -88,6 +89,9 @@ const showLoadingState = computed(() => {
       >
         <Home :size="16" :stroke-width="2" />
       </button>
+      
+      <p class="text-[11.5px] text-muted-foreground">{{ props.files.length }} items</p>
+
       <nav v-if="breadcrumbs.length" class="flex items-center gap-0.5 text-[13px]" aria-label="Breadcrumb">
         <ChevronRight :size="12" :stroke-width="2" class="mx-0.5 text-muted-foreground" />
         <template v-for="(crumb, i) in breadcrumbs" :key="crumb.path">
@@ -103,12 +107,6 @@ const showLoadingState = computed(() => {
           <ChevronRight v-if="i < breadcrumbs.length - 1" :size="12" :stroke-width="2" class="text-muted-foreground" />
         </template>
       </nav>
-      <div class="min-w-0">
-        <h1 class="truncate text-[15px] font-semibold tracking-tight">
-          {{ showEmptyState ? "Empty folder" : "Files" }}
-        </h1>
-        <p class="text-[11.5px] text-muted-foreground">{{ props.files.length }} items</p>
-      </div>
 
       <div class="ml-auto flex items-center gap-1">
         <div
@@ -154,6 +152,7 @@ const showLoadingState = computed(() => {
     <!-- LIST VIEW -->
     <div v-if="view === 'list'" class="flex-1 overflow-y-auto">
       <div
+        v-if="!showEmptyState"
         class="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_180px_140px_100px] items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-background)]/95 px-5 py-2.5 text-[11.5px] font-medium uppercase tracking-wider text-muted-foreground backdrop-blur"
       >
         <button type="button" @click="setSort('name')" class="flex items-center gap-1.5 hover:text-foreground">
@@ -188,6 +187,15 @@ const showLoadingState = computed(() => {
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
           <span>{{ error.message }}</span>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div v-else-if="showEmptyState" class="grid h-full place-items-center px-4 text-center">
+        <div>
+          <FolderOpen :size="28" :stroke-width="1.5" class="mx-auto text-muted-foreground/70" />
+          <p class="mt-3 text-sm font-medium">This folder is empty</p>
+          <p class="mt-1 text-[12px] text-muted-foreground">Drop files here or upload to get started.</p>
         </div>
       </div>
 
@@ -247,6 +255,15 @@ const showLoadingState = computed(() => {
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
           <span>{{ error.message }}</span>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div v-else-if="showEmptyState" class="grid h-full place-items-center text-center">
+        <div>
+          <FolderOpen :size="28" :stroke-width="1.5" class="mx-auto text-muted-foreground/70" />
+          <p class="mt-3 text-sm font-medium">This folder is empty</p>
+          <p class="mt-1 text-[12px] text-muted-foreground">Drop files here or upload to get started.</p>
         </div>
       </div>
 

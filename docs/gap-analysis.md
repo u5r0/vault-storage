@@ -82,8 +82,8 @@ Sidebar is `hidden md:flex` with no hamburger menu or mobile drawer.
 ### 14. No loading skeletons
 Only "Loading…" text, no skeleton placeholders.
 
-### 15. No rich empty states
-"Empty folder" text only, no illustration or call-to-action.
+### 15. ~~No rich empty states~~ — fixed
+`FileList.vue` now renders a centered empty state (icon + message) in the body when a folder has no files, instead of repurposing the toolbar title. Mirrors the `DetailsPanel` "Nothing selected" pattern.
 
 ## Infrastructure
 
