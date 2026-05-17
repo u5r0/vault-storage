@@ -4,13 +4,13 @@ This repo uses a **multi-context** layout with separate domain documentation for
 
 ## Context Map
 
-- **Frontend** (`app/`): Vue.js application
-  - Context: `app/CONTEXT.md`
-  - ADRs: `app/docs/adr/`
-  
-- **Backend** (`server/`): Node.js API server
-  - Context: `server/CONTEXT.md`
-  - ADRs: `server/docs/adr/`
+- **Frontend** (`apps/web/`): Vue.js application
+  - Context: `apps/web/src/CONTEXT.md`
+  - ADRs: `docs/adr/`
+
+- **Backend** (`apps/server/`): Node.js API server
+  - Context: `apps/server/src/CONTEXT.md`
+  - ADRs: `docs/adr/`
 
 ## Consumer Rules
 

@@ -29,11 +29,11 @@ This project is currently in active development. Core features are functional bu
 
 ```
 vault-app/
-├── app/              # Vue.js frontend application
-├── server/           # Hono backend API
+├── apps/
+│   ├── web/          # Vue.js frontend application
+│   └── server/       # Hono backend API (+ scripts/seed.ts)
 ├── packages/sdk/     # Shared SDK with Zod schemas
 ├── tests/            # Vitest integration tests
-├── scripts/          # Utility scripts (seed data, etc.)
 └── docs/             # Architecture decisions and documentation
 ```
 

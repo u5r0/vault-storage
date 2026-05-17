@@ -42,7 +42,7 @@ Configuration and initialization:
 
 ## Local development
 
-The Azure code path runs against [Azurite](https://learn.microsoft.com/azure/storage/common/storage-use-azurite) locally — Microsoft's official Blob Storage emulator. Same REST API as production, different connection string. See [ADR 0004](../../docs/adr/0004-azurite-for-local-dev.md) for the reasoning.
+The Azure code path runs against [Azurite](https://learn.microsoft.com/azure/storage/common/storage-use-azurite) locally — Microsoft's official Blob Storage emulator. Same REST API as production, different connection string. See [ADR 0004](../../../../docs/adr/0004-azurite-for-local-dev.md) for the reasoning.
 
 Quick start:
 ```bash

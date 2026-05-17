@@ -13,7 +13,7 @@ tests/
     files.test.ts       Happy-path coverage of /api/files routes
 ```
 
-Unit tests live next to the code they cover (e.g. `server/lib/paths.test.ts`).
+Unit tests live next to the code they cover (e.g. `apps/server/src/lib/paths.test.ts`).
 
 ## Running
 
@@ -29,7 +29,7 @@ Integration runs spawn `azurite-blob --inMemoryPersistence` on a random free por
 ## Adding tests
 
 - **Pure-function logic** → unit test co-located with source.
-- **HTTP behaviour or anything that touches the BlobStore** → integration test under `tests/integration/`. Import `createApp` lazily from `server/app.ts` inside `beforeAll` (so per-worker env is set first) and call `app.request(...)`.
+- **HTTP behaviour or anything that touches the BlobStore** → integration test under `tests/integration/`. Import `createApp` lazily from `apps/server/src/app.ts` inside `beforeAll` (so per-worker env is set first) and call `app.request(...)`.
 - Reset container state in `beforeEach` with `store.deletePrefix("")`.
 
 ## Conventions

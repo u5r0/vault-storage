@@ -2,14 +2,17 @@
 
 This repository has multiple contexts:
 
-## Frontend (`app/`)
+## Frontend (`apps/web/`)
 Vue.js application for the vault storage UI.
 
-**Domain docs:** `app/CONTEXT.md`  
+**Domain docs:** `apps/web/src/CONTEXT.md`  
 **ADRs:** `docs/adr/`
 
-## Backend (`server/`)
+## Backend (`apps/server/`)
 Node.js API server with Azure Blob Storage integration.
 
-**Domain docs:** `server/CONTEXT.md`  
-**ADRs:** `server/docs/adr/`
+**Domain docs:** `apps/server/src/CONTEXT.md`  
+**ADRs:** `docs/adr/`
+
+## Shared (`packages/sdk/`)
+Wire-contract package (Zod schemas + typed client) consumed by both apps. See [ADR 0001](docs/adr/0001-sdk-as-shared-contract.md).

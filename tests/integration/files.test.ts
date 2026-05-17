@@ -18,13 +18,13 @@ let app: Hono
 beforeAll(async () => {
   // Imported lazily so `azurite.env.ts` (per-worker setup) has already
   // populated AZURE_STORAGE_* before `server/lib/azure.ts` reads env.
-  const { createApp } = await import("../../server/app")
+  const { createApp } = await import("../../apps/server/src/app")
   app = createApp()
 })
 
 beforeEach(async () => {
   // Wipe the test container between tests so each one starts clean.
-  const { getBlobStore } = await import("../../server/lib/azure")
+  const { getBlobStore } = await import("../../apps/server/src/lib/azure")
   const store = await getBlobStore()
   await store.deletePrefix("")
 })

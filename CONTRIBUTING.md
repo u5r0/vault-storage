@@ -56,8 +56,8 @@ pnpm test:watch
 
 ## Project Structure
 
-- `app/` - Vue.js frontend application
-- `server/` - Hono backend API
+- `apps/web/` - Vue.js frontend application
+- `apps/server/` - Hono backend API (with `scripts/seed.ts`)
 - `packages/sdk/` - Shared SDK with Zod schemas (API contract)
 - `tests/` - Integration tests
 - `docs/` - Architecture decisions and documentation

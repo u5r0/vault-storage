@@ -2,30 +2,6 @@
 
 Codebase review conducted 2026-05-17. Items ordered by priority.
 
-## Current milestone
-
-**~~Validate Azure code path with Azurite + seed sample data~~** ✅ done ([ADR 0004](adr/0004-azurite-for-local-dev.md)).
-
-- [x] Install Azurite as workspace dev dep
-- [x] Add `azurite` script and `.azurite-data/` to `.gitignore`
-- [x] Document Azurite connection string in `.env.example`
-- [x] Verify dev server boots and `/api/health` reports `azureConfigured: true`
-- [x] Write seed script (`scripts/seed.ts`) that creates sample folder tree via the API
-- [x] Smoke-test list / upload / download / rename / delete end-to-end
-- [x] Reference Azurite in `server/CONTEXT.md` and `server/lib/README.md`
-
-## Next milestone
-
-**~~API-level e2e tests against Azurite~~** ✅ Phase A done ([ADR 0005](adr/0005-testing-strategy.md)).
-
-Following the Epic Web testing trophy — "write tests, not too many, mostly integration." Skip mocked route tests in favour of real Azurite-backed integration tests; add unit tests selectively for gnarly utilities; defer browser e2e until UI stabilises.
-
-- [x] Add Vitest to devDeps, `vitest.config.ts`, `pnpm test` / `test:unit` / `test:integration` scripts
-- [x] Global setup spawns Azurite in in-memory mode on a random port
-- [x] `tests/integration/files.test.ts` covering happy paths of all routes (8 tests)
-- [x] `server/lib/paths.test.ts` for path-helper edge cases (18 tests)
-- [ ] (Phase B) error-path coverage + `format.test.ts`
-- [ ] (Phase C) one Playwright happy-path spec once UI stabilises
 
 ## Critical
 
@@ -86,23 +62,3 @@ Sidebar is `hidden md:flex` with no hamburger menu or mobile drawer.
 
 ### 14. No loading skeletons
 Only "Loading…" text, no skeleton placeholders.
-
-### 15. ~~No rich empty states~~ — fixed
-`FileList.vue` now renders a centered empty state (icon + message) in the body when a folder has no files, instead of repurposing the toolbar title. Mirrors the `DetailsPanel` "Nothing selected" pattern.
-
-## Infrastructure
-
-### 16. No CI/CD
-No GitHub Actions workflows, Dockerfile, or deployment config.
-
-### 17. No root README.md
-No top-level project README.
-
-### 18. ~~Missing `.env.example` entry~~ — fixed
-Added `VITE_API_URL` to `.env.example`.
-
-### 20. Hybrid monorepo layout — deferred
-Root `package.json` mixes frontend and server deps. `app/` and `server/` are not their own packages; only `packages/sdk` is. Decision and migration plan documented in [ADR 0002](adr/0002-monorepo-layout.md). Move to `apps/web` + `apps/server` + `packages/*` after higher-priority gaps land.
-
-### 21. ~~No local dev storage backend~~ — fixed
-Azurite installed as dev dep, auto-started by `pnpm dev`. `pnpm seed` populates a sample folder tree. List/upload/download/rename/delete confirmed working end-to-end against the emulator. See [ADR 0004](adr/0004-azurite-for-local-dev.md).

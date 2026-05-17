@@ -1,6 +1,6 @@
 # ADR 0002: Monorepo layout — apps + packages
 
-**Status:** Accepted, deferred (not yet implemented)
+**Status:** Accepted, executed 2026-05-17
 **Date:** 2026-05-17
 
 ## Context
@@ -71,33 +71,38 @@ being defensible the moment we need:
 
 ## Decision
 
-**Adopt Option A. Defer execution.**
+**Adopted Option A. Executed 2026-05-17 after Phase A tests landed.**
 
-Option A is the recommended structure and is what the project is already
-implicitly heading toward (the SDK is already a workspace package). The
-migration is mechanical but touches ~30-50 files. We are deferring the work
-because:
+Option A is the recommended structure and was what the project was already
+implicitly heading toward (the SDK was already a workspace package). The
+migration was mechanical but touched ~50 files. We executed earlier than
+originally planned because Phase A tests were green and the deferral
+rationale (auth/metadata schemas yet to land) no longer outweighed the
+ongoing friction of the hybrid layout.
 
-- Other gaps (auth, metadata persistence, tests) are higher value right now.
-- The current layout still works for a single combined dev/deploy.
-- Doing the migration after auth and metadata schemas land means we move
-  those into `packages/` once instead of twice.
+Executed migration:
 
-When we execute, the migration plan is roughly:
-
-1. Create `apps/web/` and `apps/server/`.
-2. Move `app/*` → `apps/web/src/*`; move `index.html`, `vite.config.ts` →
-   `apps/web/`.
-3. Move `server/*` → `apps/server/src/*`.
-4. Create `apps/web/package.json` and `apps/server/package.json`. Each lists
-   only its own runtime deps plus `@vault/sdk: workspace:*`.
-5. Slim root `package.json` to dev-only tooling (`concurrently`,
-   `typescript`, `vue-tsc`).
-6. Update `pnpm-workspace.yaml` to `packages: ["apps/*", "packages/*"]`.
-7. Adjust tsconfigs and `@/` path aliases per app.
-8. Update `CONTEXT-MAP.md` and the `dev`, `dev:web`, `dev:api`, `build`,
-   `start` scripts.
-9. Add a smoke-test build of each app to CI when CI lands.
+1. Created `apps/web/` and `apps/server/`.
+2. Moved `app/*` → `apps/web/src/*`; moved `index.html`, `vite.config.ts`,
+   `public/` → `apps/web/`.
+3. Moved `server/*` → `apps/server/src/*`; moved `scripts/seed.ts` →
+   `apps/server/scripts/seed.ts`.
+4. Created `apps/web/package.json` (`@vault/web`) and `apps/server/package.json`
+   (`@vault/server`). Each lists only its own runtime deps plus
+   `@vault/sdk: workspace:*`.
+5. Slimmed root `package.json` to orchestration + dev-only tooling
+   (`concurrently`, `azurite`, `tsx`, `typescript`, `vitest`,
+   `@changesets/cli`, `@types/node`).
+6. Updated `pnpm-workspace.yaml` to `packages: ["apps/*", "packages/*"]`.
+7. Per-app tsconfigs under each app dir; `@/*` alias in `apps/web` now points
+   at `./src/*`. Root `tsconfig.json` references the per-app projects plus
+   `tsconfig.test.json`.
+8. Updated `CONTEXT-MAP.md`, `README.md`, `CONTRIBUTING.md`, `docs/agents/domain.md`,
+   `tests/README.md`, and the `dev`, `dev:web`, `dev:api`, `build`, `start`,
+   `preview`, `seed` scripts.
+9. Updated `vitest.config.ts` include patterns and the integration test
+   imports (`tests/integration/files.test.ts`) to the new paths.
+10. Smoke-test build of each app in CI is deferred until CI lands (gap #16).
 
 ## Consequences
 
