@@ -12,6 +12,11 @@
     "noEmit": true,
     "resolveJsonModule": true
   },
-  "include": ["server/**/*.ts"],
-  "exclude": ["server/**/*.test.ts"]
+  "include": [
+    "tests/**/*.ts",
+    "vitest.config.ts",
+    "server/**/*.test.ts",
+    "app/**/*.test.ts",
+    "packages/**/*.test.ts"
+  ]
 }

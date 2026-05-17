@@ -29,3 +29,9 @@ All request bodies, query schemas, and response shapes are defined as Zod schema
 
 **Local dev backend (Azurite)**
 The `AzureBlobStore` adapter is exercised locally against [Azurite](https://learn.microsoft.com/azure/storage/common/storage-use-azurite), Microsoft's official Azure Blob emulator. Started by `pnpm azurite` (auto-launched by `pnpm dev`). Same REST API as production Azure — switching deploy targets is one env var. See [ADR 0004](../docs/adr/0004-azurite-for-local-dev.md). Seed sample data with `pnpm seed`.
+
+**Test app (`createApp`)**
+`server/app.ts` exports `createApp({ withLogger? })` returning a fresh Hono instance. The runtime entry (`server/index.ts`) calls it with `{ withLogger: true }` and wraps with `serve()`. Tests call it without args and dispatch via `app.request(...)` — no port binding.
+
+**Integration test harness**
+Vitest's `integration` project boots a single Azurite child process in `--inMemoryPersistence` mode on a random free port (see `tests/setup/azurite.global.ts`), `provide()`s a connection string + unique container name, and per-worker `tests/setup/azurite.env.ts` sets `AZURE_STORAGE_*` before any server module loads. `beforeEach` calls `store.deletePrefix("")` to reset state. See [ADR 0005](../docs/adr/0005-testing-strategy.md).

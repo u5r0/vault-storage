@@ -103,29 +103,57 @@ SDK Zod schemas are self-validating; no separate unit tests.
 
 ## Implementation plan
 
-### Phase A — Foundation (this milestone)
+### Phase A — Foundation ✅ done (2026-05-17)
 
-1. **Add Vitest** to root devDeps. Vue/Vite-native, fast, TS works.
-2. **Create `vitest.config.ts`** with two projects:
-   - `unit` — picks up `**/*.test.ts` co-located with source.
-   - `integration` — picks up `tests/integration/**/*.test.ts`, longer
-     timeout, global setup/teardown for Azurite.
-3. **Global setup** spawns Azurite in in-memory mode on a random port,
-   sets `AZURE_STORAGE_CONNECTION_STRING` for the test process. Teardown
-   stops it.
-4. **First integration test**: `tests/integration/files.test.ts`. Tests
-   the full happy path of every route by calling the Hono app via
-   `app.request(...)` (no socket, no port allocation):
-   - `GET /api/files` empty
-   - `POST /api/files/folder` → folder visible in list
-   - `POST /api/files/upload` → file visible with correct metadata
-   - `GET /api/files/download` → bytes match
-   - `PATCH /api/files/rename` → old path gone, new path present
-   - `DELETE /api/files` (file) → gone
-   - `DELETE /api/files` (folder) → folder and children gone
-5. **First unit test**: `server/lib/paths.test.ts` — edge cases for path
-   helpers.
-6. **CI hook later** (gap #16): `pnpm test` runs both projects.
+1. **Vitest 4.1** added to root devDeps.
+2. **`vitest.config.ts`** defines two projects:
+   - `unit` — `server/**/*.test.ts`, `app/**/*.test.ts`, `packages/**/*.test.ts`.
+   - `integration` — `tests/integration/**/*.test.ts`, 20s test timeout,
+     global setup/teardown for Azurite, `fileParallelism: false`.
+3. **`tests/setup/azurite.global.ts`** spawns `azurite-blob` with
+   `--inMemoryPersistence` on a random free port, polls until ready,
+   then `provide()`s the connection string + a unique container name.
+   The teardown closure kills the process. Per-worker `tests/setup/azurite.env.ts`
+   reads the provided values via `inject()` and sets
+   `AZURE_STORAGE_CONNECTION_STRING` / `AZURE_STORAGE_CONTAINER_NAME`
+   *before* any server module imports.
+4. **`server/app.ts`** factored out of `server/index.ts` so tests mount
+   the Hono app via `app.request(...)` without a port. `index.ts` is now
+   just the runtime entry.
+5. **`tests/integration/files.test.ts`** — 8 tests covering the happy
+   path of every route. `beforeEach` calls `store.deletePrefix("")` to
+   reset the container.
+6. **`server/lib/paths.test.ts`** — 18 tests for `normalizePath`,
+   `toPrefix`, `joinName`, `isSafeName`.
+7. **Scripts**: `pnpm test`, `pnpm test:unit`, `pnpm test:integration`,
+   `pnpm test:watch`. CI hook deferred to gap #16.
+8. **`tsconfig.test.json`** owns `tests/**`, `vitest.config.ts`, and all
+   co-located `*.test.ts`, referenced from the root `tsconfig.json`.
+   `server/**/*.test.ts` is excluded from `tsconfig.server.json` so each
+   file lives in exactly one project (TS project references forbid
+   overlap).
+
+### Style decision: explicit imports, no Vitest globals
+
+We import `describe` / `it` / `expect` / `beforeAll` / `beforeEach` /
+`inject` explicitly from `"vitest"` in every test file. We do **not**
+set `test.globals: true` and do **not** add `"vitest/globals"` to any
+`tsconfig`'s `types` array.
+
+Rationale:
+
+- **No global namespace pollution.** Non-test files don't see test
+  symbols in autocomplete.
+- **Better navigation.** Jump-to-definition and hover-docs resolve
+  through the import rather than an ambient declaration.
+- **Cheap.** One import line per file is a negligible cost at our scale.
+- The `declare module "vitest"` augmentation in
+  `tests/setup/azurite.global.ts` still works — augmentations resolve
+  via normal module resolution (node_modules), independent of the
+  `types` array.
+
+This is a deliberate divergence from the EpicWeb "Migrate Tests to
+Vitest" exercise, which enables globals as the introductory default.
 
 ### Phase B — Coverage
 

@@ -16,21 +16,26 @@ Codebase review conducted 2026-05-17. Items ordered by priority.
 
 ## Next milestone
 
-**API-level e2e tests against Azurite** ([ADR 0005](adr/0005-testing-strategy.md)).
+**~~API-level e2e tests against Azurite~~** ✅ Phase A done ([ADR 0005](adr/0005-testing-strategy.md)).
 
 Following the Epic Web testing trophy — "write tests, not too many, mostly integration." Skip mocked route tests in favour of real Azurite-backed integration tests; add unit tests selectively for gnarly utilities; defer browser e2e until UI stabilises.
 
-- [ ] Add Vitest to devDeps, `vitest.config.ts`, `pnpm test` script
-- [ ] Global setup spawns Azurite in in-memory mode on a random port
-- [ ] `tests/integration/files.test.ts` covering happy paths of all routes
-- [ ] `server/lib/paths.test.ts` for path-helper edge cases
-- [ ] (Later) error-path coverage + `format.test.ts`
-- [ ] (Later) one Playwright happy-path spec once UI stabilises
+- [x] Add Vitest to devDeps, `vitest.config.ts`, `pnpm test` / `test:unit` / `test:integration` scripts
+- [x] Global setup spawns Azurite in in-memory mode on a random port
+- [x] `tests/integration/files.test.ts` covering happy paths of all routes (8 tests)
+- [x] `server/lib/paths.test.ts` for path-helper edge cases (18 tests)
+- [ ] (Phase B) error-path coverage + `format.test.ts`
+- [ ] (Phase C) one Playwright happy-path spec once UI stabilises
 
 ## Critical
 
-### 1. No tests — in progress
-No unit, integration, or e2e tests yet. Strategy documented in [ADR 0005](adr/0005-testing-strategy.md): Epic Web testing trophy — integration tests through the HTTP API against real Azurite, unit tests selectively for utilities, browser e2e deferred. Tracked in the **Next milestone** above.
+### 1. No tests — Phase A done
+Strategy documented in [ADR 0005](adr/0005-testing-strategy.md). Vitest installed with two projects: `unit` and `integration`. Integration tests boot Azurite in `--inMemoryPersistence` on a random port via global setup and call the Hono app through `app.request(...)` — no mocks. 26 tests green:
+
+- `server/lib/paths.test.ts` — 18 tests covering `normalizePath` / `toPrefix` / `joinName` / `isSafeName` edge cases.
+- `tests/integration/files.test.ts` — 8 tests covering happy paths of `GET /api/files`, `POST /api/files/folder`, `POST /api/files/upload`, `GET /api/files/download`, `PATCH /api/files/rename`, and `DELETE /api/files` (file + folder).
+
+Phase B (error paths, `format.test.ts`) and Phase C (Playwright) tracked in [ADR 0005](adr/0005-testing-strategy.md).
 
 ### 2. No authentication / authorization
 `.env.example` hints at JWT but no auth middleware, login/signup routes, or user concept. API is wide open.
