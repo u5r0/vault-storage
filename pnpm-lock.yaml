@@ -7,6 +7,30 @@ settings:
 importers:
 
   .:
+    devDependencies:
+      '@changesets/cli':
+        specifier: ^2.31.0
+        version: 2.31.0(@types/node@22.19.17)
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.17
+      azurite:
+        specifier: ^3.35.0
+        version: 3.35.0(@azure/core-client@1.10.1)(@types/node@22.19.17)
+      concurrently:
+        specifier: ^9.0.0
+        version: 9.2.1
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ~5.6.3
+        version: 5.6.3
+      vitest:
+        specifier: ^4.1.6
+        version: 4.1.6(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(vite@6.4.2(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0))
+
+  apps/server:
     dependencies:
       '@azure/storage-blob':
         specifier: ^12.31.0
@@ -19,13 +43,32 @@ importers:
         version: 0.7.6(hono@4.12.17)(zod@4.4.3)
       '@vault/sdk':
         specifier: workspace:*
-        version: link:packages/sdk
+        version: link:../../packages/sdk
       dotenv:
         specifier: ^17.2.3
         version: 17.4.2
       hono:
         specifier: ^4.12.17
         version: 4.12.17
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.17
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ~5.6.3
+        version: 5.6.3
+
+  apps/web:
+    dependencies:
+      '@vault/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
       lucide-vue-next:
         specifier: ^0.468.0
         version: 0.468.0(vue@3.5.33(typescript@5.6.3))
@@ -35,13 +78,7 @@ importers:
       vue-router:
         specifier: ^4.6.4
         version: 4.6.4(vue@3.5.33(typescript@5.6.3))
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
     devDependencies:
-      '@changesets/cli':
-        specifier: ^2.31.0
-        version: 2.31.0(@types/node@22.19.17)
       '@tailwindcss/vite':
         specifier: ^4.0.0
         version: 4.2.4(vite@6.4.2(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0))
@@ -54,27 +91,15 @@ importers:
       '@vue/tsconfig':
         specifier: ^0.7.0
         version: 0.7.0(typescript@5.6.3)(vue@3.5.33(typescript@5.6.3))
-      azurite:
-        specifier: ^3.35.0
-        version: 3.35.0(@azure/core-client@1.10.1)(@types/node@22.19.17)
-      concurrently:
-        specifier: ^9.0.0
-        version: 9.2.1
       tailwindcss:
         specifier: ^4.0.0
         version: 4.2.4
-      tsx:
-        specifier: ^4.21.0
-        version: 4.21.0
       typescript:
         specifier: ~5.6.3
         version: 5.6.3
       vite:
         specifier: ^6.0.1
         version: 6.4.2(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)
-      vitest:
-        specifier: ^4.1.6
-        version: 4.1.6(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(vite@6.4.2(@types/node@22.19.17)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0))
       vue-tsc:
         specifier: ^2.1.10
         version: 2.2.12(typescript@5.6.3)
@@ -2106,6 +2131,7 @@ packages:
 
   lucide-vue-next@0.468.0:
     resolution: {integrity: sha512-quV/6T8YB1XK0VOEnebg3Byd8Rsan5/m95cvjnuHV4vcS3qEnLAybkrSh0hk3ppavx+V7R1PjNW+mGDvcBdz4A==}
+    deprecated: Package deprecated. Please use @lucide/vue instead.
     peerDependencies:
       vue: '>=3.0.1'
 
