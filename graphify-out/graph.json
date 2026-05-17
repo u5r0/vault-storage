@@ -1,0 +1,1033 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "vite.config.ts",
+      "file_type": "code",
+      "source_file": "vite.config.ts",
+      "source_location": "L1",
+      "id": "vite_config_ts",
+      "community": 8,
+      "norm_label": "vite.config.ts"
+    },
+    {
+      "label": "index.ts",
+      "file_type": "code",
+      "source_file": "server/index.ts",
+      "source_location": "L1",
+      "id": "server_index_ts",
+      "community": 3,
+      "norm_label": "index.ts"
+    },
+    {
+      "label": "paths.ts",
+      "file_type": "code",
+      "source_file": "server/lib/paths.ts",
+      "source_location": "L1",
+      "id": "server_lib_paths_ts",
+      "community": 2,
+      "norm_label": "paths.ts"
+    },
+    {
+      "label": "normalizePath()",
+      "file_type": "code",
+      "source_file": "server/lib/paths.ts",
+      "source_location": "L10",
+      "id": "lib_paths_normalizepath",
+      "community": 2,
+      "norm_label": "normalizepath()"
+    },
+    {
+      "label": "toPrefix()",
+      "file_type": "code",
+      "source_file": "server/lib/paths.ts",
+      "source_location": "L21",
+      "id": "lib_paths_toprefix",
+      "community": 2,
+      "norm_label": "toprefix()"
+    },
+    {
+      "label": "joinName()",
+      "file_type": "code",
+      "source_file": "server/lib/paths.ts",
+      "source_location": "L27",
+      "id": "lib_paths_joinname",
+      "community": 2,
+      "norm_label": "joinname()"
+    },
+    {
+      "label": "isSafeName()",
+      "file_type": "code",
+      "source_file": "server/lib/paths.ts",
+      "source_location": "L33",
+      "id": "lib_paths_issafename",
+      "community": 2,
+      "norm_label": "issafename()"
+    },
+    {
+      "label": "azure-blob-store.ts",
+      "file_type": "code",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L1",
+      "id": "server_lib_azure_blob_store_ts",
+      "community": 1,
+      "norm_label": "azure-blob-store.ts"
+    },
+    {
+      "label": "AzureBlobStore",
+      "file_type": "code",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L8",
+      "id": "lib_azure_blob_store_azureblobstore",
+      "community": 1,
+      "norm_label": "azureblobstore"
+    },
+    {
+      "label": ".constructor()",
+      "file_type": "code",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L9",
+      "id": "lib_azure_blob_store_azureblobstore_constructor",
+      "community": 1,
+      "norm_label": ".constructor()"
+    },
+    {
+      "label": ".list()",
+      "file_type": "code",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L11",
+      "id": "lib_azure_blob_store_azureblobstore_list",
+      "community": 1,
+      "norm_label": ".list()"
+    },
+    {
+      "label": ".exists()",
+      "file_type": "code",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L43",
+      "id": "lib_azure_blob_store_azureblobstore_exists",
+      "community": 1,
+      "norm_label": ".exists()"
+    },
+    {
+      "label": ".upload()",
+      "file_type": "code",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L48",
+      "id": "lib_azure_blob_store_azureblobstore_upload",
+      "community": 1,
+      "norm_label": ".upload()"
+    },
+    {
+      "label": ".download()",
+      "file_type": "code",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L57",
+      "id": "lib_azure_blob_store_azureblobstore_download",
+      "community": 1,
+      "norm_label": ".download()"
+    },
+    {
+      "label": ".copy()",
+      "file_type": "code",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L78",
+      "id": "lib_azure_blob_store_azureblobstore_copy",
+      "community": 1,
+      "norm_label": ".copy()"
+    },
+    {
+      "label": ".delete()",
+      "file_type": "code",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L86",
+      "id": "lib_azure_blob_store_azureblobstore_delete",
+      "community": 1,
+      "norm_label": ".delete()"
+    },
+    {
+      "label": ".deletePrefix()",
+      "file_type": "code",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L91",
+      "id": "lib_azure_blob_store_azureblobstore_deleteprefix",
+      "community": 1,
+      "norm_label": ".deleteprefix()"
+    },
+    {
+      "label": "azure.ts",
+      "file_type": "code",
+      "source_file": "server/lib/azure.ts",
+      "source_location": "L1",
+      "id": "server_lib_azure_ts",
+      "community": 3,
+      "norm_label": "azure.ts"
+    },
+    {
+      "label": "buildServiceClient()",
+      "file_type": "code",
+      "source_file": "server/lib/azure.ts",
+      "source_location": "L30",
+      "id": "lib_azure_buildserviceclient",
+      "community": 3,
+      "norm_label": "buildserviceclient()"
+    },
+    {
+      "label": "getContainer()",
+      "file_type": "code",
+      "source_file": "server/lib/azure.ts",
+      "source_location": "L53",
+      "id": "lib_azure_getcontainer",
+      "community": 3,
+      "norm_label": "getcontainer()"
+    },
+    {
+      "label": "isConfigured()",
+      "file_type": "code",
+      "source_file": "server/lib/azure.ts",
+      "source_location": "L72",
+      "id": "lib_azure_isconfigured",
+      "community": 3,
+      "norm_label": "isconfigured()"
+    },
+    {
+      "label": "getBlobStore()",
+      "file_type": "code",
+      "source_file": "server/lib/azure.ts",
+      "source_location": "L79",
+      "id": "lib_azure_getblobstore",
+      "community": 3,
+      "norm_label": "getblobstore()"
+    },
+    {
+      "label": "storage.ts",
+      "file_type": "code",
+      "source_file": "server/lib/storage.ts",
+      "source_location": "L1",
+      "id": "server_lib_storage_ts",
+      "community": 9,
+      "norm_label": "storage.ts"
+    },
+    {
+      "label": "files.ts",
+      "file_type": "code",
+      "source_file": "server/routes/files.ts",
+      "source_location": "L1",
+      "id": "server_routes_files_ts",
+      "community": 2,
+      "norm_label": "files.ts"
+    },
+    {
+      "label": "index.ts",
+      "file_type": "code",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L1",
+      "id": "packages_sdk_src_index_ts",
+      "community": 0,
+      "norm_label": "index.ts"
+    },
+    {
+      "label": "VaultClient",
+      "file_type": "code",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L27",
+      "id": "src_index_vaultclient",
+      "community": 0,
+      "norm_label": "vaultclient"
+    },
+    {
+      "label": ".constructor()",
+      "file_type": "code",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L28",
+      "id": "src_index_vaultclient_constructor",
+      "community": 0,
+      "norm_label": ".constructor()"
+    },
+    {
+      "label": ".request()",
+      "file_type": "code",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L30",
+      "id": "src_index_vaultclient_request",
+      "community": 0,
+      "norm_label": ".request()"
+    },
+    {
+      "label": ".listFiles()",
+      "file_type": "code",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L51",
+      "id": "src_index_vaultclient_listfiles",
+      "community": 0,
+      "norm_label": ".listfiles()"
+    },
+    {
+      "label": ".createFolder()",
+      "file_type": "code",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L58",
+      "id": "src_index_vaultclient_createfolder",
+      "community": 0,
+      "norm_label": ".createfolder()"
+    },
+    {
+      "label": ".uploadFiles()",
+      "file_type": "code",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L69",
+      "id": "src_index_vaultclient_uploadfiles",
+      "community": 0,
+      "norm_label": ".uploadfiles()"
+    },
+    {
+      "label": ".getDownloadUrl()",
+      "file_type": "code",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L83",
+      "id": "src_index_vaultclient_getdownloadurl",
+      "community": 0,
+      "norm_label": ".getdownloadurl()"
+    },
+    {
+      "label": ".renameFile()",
+      "file_type": "code",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L87",
+      "id": "src_index_vaultclient_renamefile",
+      "community": 0,
+      "norm_label": ".renamefile()"
+    },
+    {
+      "label": ".deleteFile()",
+      "file_type": "code",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L98",
+      "id": "src_index_vaultclient_deletefile",
+      "community": 0,
+      "norm_label": ".deletefile()"
+    },
+    {
+      "label": "createVaultClient()",
+      "file_type": "code",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L112",
+      "id": "src_index_createvaultclient",
+      "community": 0,
+      "norm_label": "createvaultclient()"
+    },
+    {
+      "label": "App.vue",
+      "file_type": "code",
+      "source_file": "app/App.vue",
+      "source_location": "L1",
+      "id": "app_app_vue",
+      "community": 7,
+      "norm_label": "app.vue"
+    },
+    {
+      "label": "env.d.ts",
+      "file_type": "code",
+      "source_file": "app/env.d.ts",
+      "source_location": "L1",
+      "id": "app_env_d_ts",
+      "community": 10,
+      "norm_label": "env.d.ts"
+    },
+    {
+      "label": "main.ts",
+      "file_type": "code",
+      "source_file": "app/main.ts",
+      "source_location": "L1",
+      "id": "app_main_ts",
+      "community": 7,
+      "norm_label": "main.ts"
+    },
+    {
+      "label": "AppHeader.vue",
+      "file_type": "code",
+      "source_file": "app/components/AppHeader.vue",
+      "source_location": "L1",
+      "id": "app_components_appheader_vue",
+      "community": 11,
+      "norm_label": "appheader.vue"
+    },
+    {
+      "label": "AppSidebar.vue",
+      "file_type": "code",
+      "source_file": "app/components/AppSidebar.vue",
+      "source_location": "L1",
+      "id": "app_components_appsidebar_vue",
+      "community": 12,
+      "norm_label": "appsidebar.vue"
+    },
+    {
+      "label": "DetailsPanel.vue",
+      "file_type": "code",
+      "source_file": "app/components/DetailsPanel.vue",
+      "source_location": "L1",
+      "id": "app_components_detailspanel_vue",
+      "community": 13,
+      "norm_label": "detailspanel.vue"
+    },
+    {
+      "label": "FileIcon.vue",
+      "file_type": "code",
+      "source_file": "app/components/FileIcon.vue",
+      "source_location": "L1",
+      "id": "app_components_fileicon_vue",
+      "community": 14,
+      "norm_label": "fileicon.vue"
+    },
+    {
+      "label": "FileList.vue",
+      "file_type": "code",
+      "source_file": "app/components/FileList.vue",
+      "source_location": "L1",
+      "id": "app_components_filelist_vue",
+      "community": 15,
+      "norm_label": "filelist.vue"
+    },
+    {
+      "label": "useAsync.ts",
+      "file_type": "code",
+      "source_file": "app/composables/useAsync.ts",
+      "source_location": "L1",
+      "id": "app_composables_useasync_ts",
+      "community": 4,
+      "norm_label": "useasync.ts"
+    },
+    {
+      "label": "useAsync()",
+      "file_type": "code",
+      "source_file": "app/composables/useAsync.ts",
+      "source_location": "L3",
+      "id": "composables_useasync_useasync",
+      "community": 4,
+      "norm_label": "useasync()"
+    },
+    {
+      "label": "useFiles.ts",
+      "file_type": "code",
+      "source_file": "app/composables/useFiles.ts",
+      "source_location": "L1",
+      "id": "app_composables_usefiles_ts",
+      "community": 4,
+      "norm_label": "usefiles.ts"
+    },
+    {
+      "label": "useFiles()",
+      "file_type": "code",
+      "source_file": "app/composables/useFiles.ts",
+      "source_location": "L6",
+      "id": "composables_usefiles_usefiles",
+      "community": 4,
+      "norm_label": "usefiles()"
+    },
+    {
+      "label": "useTheme.ts",
+      "file_type": "code",
+      "source_file": "app/composables/useTheme.ts",
+      "source_location": "L1",
+      "id": "app_composables_usetheme_ts",
+      "community": 6,
+      "norm_label": "usetheme.ts"
+    },
+    {
+      "label": "apply()",
+      "file_type": "code",
+      "source_file": "app/composables/useTheme.ts",
+      "source_location": "L9",
+      "id": "composables_usetheme_apply",
+      "community": 6,
+      "norm_label": "apply()"
+    },
+    {
+      "label": "useTheme()",
+      "file_type": "code",
+      "source_file": "app/composables/useTheme.ts",
+      "source_location": "L15",
+      "id": "composables_usetheme_usetheme",
+      "community": 6,
+      "norm_label": "usetheme()"
+    },
+    {
+      "label": "client.ts",
+      "file_type": "code",
+      "source_file": "app/lib/client.ts",
+      "source_location": "L1",
+      "id": "app_lib_client_ts",
+      "community": 16,
+      "norm_label": "client.ts"
+    },
+    {
+      "label": "format.ts",
+      "file_type": "code",
+      "source_file": "app/lib/format.ts",
+      "source_location": "L1",
+      "id": "app_lib_format_ts",
+      "community": 5,
+      "norm_label": "format.ts"
+    },
+    {
+      "label": "formatSize()",
+      "file_type": "code",
+      "source_file": "app/lib/format.ts",
+      "source_location": "L3",
+      "id": "lib_format_formatsize",
+      "community": 5,
+      "norm_label": "formatsize()"
+    },
+    {
+      "label": "formatDate()",
+      "file_type": "code",
+      "source_file": "app/lib/format.ts",
+      "source_location": "L11",
+      "id": "lib_format_formatdate",
+      "community": 5,
+      "norm_label": "formatdate()"
+    },
+    {
+      "label": "typeLabel()",
+      "file_type": "code",
+      "source_file": "app/lib/format.ts",
+      "source_location": "L30",
+      "id": "lib_format_typelabel",
+      "community": 5,
+      "norm_label": "typelabel()"
+    }
+  ],
+  "links": [
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/index.ts",
+      "source_location": "L7",
+      "weight": 1.0,
+      "source": "server_index_ts",
+      "target": "lib_azure_isconfigured",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/paths.ts",
+      "source_location": "L10",
+      "weight": 1.0,
+      "source": "server_lib_paths_ts",
+      "target": "lib_paths_normalizepath",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/paths.ts",
+      "source_location": "L21",
+      "weight": 1.0,
+      "source": "server_lib_paths_ts",
+      "target": "lib_paths_toprefix",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/paths.ts",
+      "source_location": "L27",
+      "weight": 1.0,
+      "source": "server_lib_paths_ts",
+      "target": "lib_paths_joinname",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/paths.ts",
+      "source_location": "L33",
+      "weight": 1.0,
+      "source": "server_lib_paths_ts",
+      "target": "lib_paths_issafename",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/paths.ts",
+      "source_location": "L22",
+      "weight": 1.0,
+      "source": "lib_paths_toprefix",
+      "target": "lib_paths_normalizepath",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/routes/files.ts",
+      "source_location": "L7",
+      "weight": 1.0,
+      "source": "server_routes_files_ts",
+      "target": "lib_paths_normalizepath",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/routes/files.ts",
+      "source_location": "L7",
+      "weight": 1.0,
+      "source": "server_routes_files_ts",
+      "target": "lib_paths_toprefix",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/routes/files.ts",
+      "source_location": "L7",
+      "weight": 1.0,
+      "source": "server_routes_files_ts",
+      "target": "lib_paths_joinname",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/routes/files.ts",
+      "source_location": "L7",
+      "weight": 1.0,
+      "source": "server_routes_files_ts",
+      "target": "lib_paths_issafename",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L8",
+      "weight": 1.0,
+      "source": "server_lib_azure_blob_store_ts",
+      "target": "lib_azure_blob_store_azureblobstore",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L9",
+      "weight": 1.0,
+      "source": "lib_azure_blob_store_azureblobstore",
+      "target": "lib_azure_blob_store_azureblobstore_constructor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L11",
+      "weight": 1.0,
+      "source": "lib_azure_blob_store_azureblobstore",
+      "target": "lib_azure_blob_store_azureblobstore_list",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L43",
+      "weight": 1.0,
+      "source": "lib_azure_blob_store_azureblobstore",
+      "target": "lib_azure_blob_store_azureblobstore_exists",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L48",
+      "weight": 1.0,
+      "source": "lib_azure_blob_store_azureblobstore",
+      "target": "lib_azure_blob_store_azureblobstore_upload",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L57",
+      "weight": 1.0,
+      "source": "lib_azure_blob_store_azureblobstore",
+      "target": "lib_azure_blob_store_azureblobstore_download",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L78",
+      "weight": 1.0,
+      "source": "lib_azure_blob_store_azureblobstore",
+      "target": "lib_azure_blob_store_azureblobstore_copy",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L86",
+      "weight": 1.0,
+      "source": "lib_azure_blob_store_azureblobstore",
+      "target": "lib_azure_blob_store_azureblobstore_delete",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure-blob-store.ts",
+      "source_location": "L91",
+      "weight": 1.0,
+      "source": "lib_azure_blob_store_azureblobstore",
+      "target": "lib_azure_blob_store_azureblobstore_deleteprefix",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure.ts",
+      "source_location": "L6",
+      "weight": 1.0,
+      "source": "server_lib_azure_ts",
+      "target": "lib_azure_blob_store_azureblobstore",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure.ts",
+      "source_location": "L30",
+      "weight": 1.0,
+      "source": "server_lib_azure_ts",
+      "target": "lib_azure_buildserviceclient",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure.ts",
+      "source_location": "L53",
+      "weight": 1.0,
+      "source": "server_lib_azure_ts",
+      "target": "lib_azure_getcontainer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure.ts",
+      "source_location": "L72",
+      "weight": 1.0,
+      "source": "server_lib_azure_ts",
+      "target": "lib_azure_isconfigured",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure.ts",
+      "source_location": "L79",
+      "weight": 1.0,
+      "source": "server_lib_azure_ts",
+      "target": "lib_azure_getblobstore",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "server/lib/azure.ts",
+      "source_location": "L80",
+      "weight": 1.0,
+      "source": "lib_azure_getblobstore",
+      "target": "lib_azure_getcontainer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/routes/files.ts",
+      "source_location": "L6",
+      "weight": 1.0,
+      "source": "server_routes_files_ts",
+      "target": "lib_azure_getblobstore",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L27",
+      "weight": 1.0,
+      "source": "packages_sdk_src_index_ts",
+      "target": "src_index_vaultclient",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L112",
+      "weight": 1.0,
+      "source": "packages_sdk_src_index_ts",
+      "target": "src_index_createvaultclient",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L28",
+      "weight": 1.0,
+      "source": "src_index_vaultclient",
+      "target": "src_index_vaultclient_constructor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L30",
+      "weight": 1.0,
+      "source": "src_index_vaultclient",
+      "target": "src_index_vaultclient_request",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L51",
+      "weight": 1.0,
+      "source": "src_index_vaultclient",
+      "target": "src_index_vaultclient_listfiles",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L58",
+      "weight": 1.0,
+      "source": "src_index_vaultclient",
+      "target": "src_index_vaultclient_createfolder",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L69",
+      "weight": 1.0,
+      "source": "src_index_vaultclient",
+      "target": "src_index_vaultclient_uploadfiles",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L83",
+      "weight": 1.0,
+      "source": "src_index_vaultclient",
+      "target": "src_index_vaultclient_getdownloadurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L87",
+      "weight": 1.0,
+      "source": "src_index_vaultclient",
+      "target": "src_index_vaultclient_renamefile",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L98",
+      "weight": 1.0,
+      "source": "src_index_vaultclient",
+      "target": "src_index_vaultclient_deletefile",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L53",
+      "weight": 1.0,
+      "source": "src_index_vaultclient_listfiles",
+      "target": "src_index_vaultclient_request",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L59",
+      "weight": 1.0,
+      "source": "src_index_vaultclient_createfolder",
+      "target": "src_index_vaultclient_request",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L74",
+      "weight": 1.0,
+      "source": "src_index_vaultclient_uploadfiles",
+      "target": "src_index_vaultclient_request",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L88",
+      "weight": 1.0,
+      "source": "src_index_vaultclient_renamefile",
+      "target": "src_index_vaultclient_request",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/sdk/src/index.ts",
+      "source_location": "L99",
+      "weight": 1.0,
+      "source": "src_index_vaultclient_deletefile",
+      "target": "src_index_vaultclient_request",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "app/main.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "source": "app_main_ts",
+      "target": "app_app_vue",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "app/composables/useAsync.ts",
+      "source_location": "L3",
+      "weight": 1.0,
+      "source": "app_composables_useasync_ts",
+      "target": "composables_useasync_useasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "app/composables/useFiles.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "source": "app_composables_usefiles_ts",
+      "target": "composables_useasync_useasync",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "app/composables/useFiles.ts",
+      "source_location": "L12",
+      "weight": 1.0,
+      "source": "composables_usefiles_usefiles",
+      "target": "composables_useasync_useasync"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "app/composables/useFiles.ts",
+      "source_location": "L6",
+      "weight": 1.0,
+      "source": "app_composables_usefiles_ts",
+      "target": "composables_usefiles_usefiles",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "app/composables/useTheme.ts",
+      "source_location": "L9",
+      "weight": 1.0,
+      "source": "app_composables_usetheme_ts",
+      "target": "composables_usetheme_apply",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "app/composables/useTheme.ts",
+      "source_location": "L15",
+      "weight": 1.0,
+      "source": "app_composables_usetheme_ts",
+      "target": "composables_usetheme_usetheme",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "app/lib/format.ts",
+      "source_location": "L3",
+      "weight": 1.0,
+      "source": "app_lib_format_ts",
+      "target": "lib_format_formatsize",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "app/lib/format.ts",
+      "source_location": "L11",
+      "weight": 1.0,
+      "source": "app_lib_format_ts",
+      "target": "lib_format_formatdate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "app/lib/format.ts",
+      "source_location": "L30",
+      "weight": 1.0,
+      "source": "app_lib_format_ts",
+      "target": "lib_format_typelabel",
+      "confidence_score": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "built_at_commit": "8b0ca46dca3d40e7809651af0aa702d3577f0565"
+}
