@@ -9,12 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@lucide/vue": "^1.16.0",
     "@uppy/components": "^1.2.0",
     "@uppy/core": "^5.2.0",
     "@uppy/vue": "^3.2.0",
     "@uppy/xhr-upload": "^5.2.0",
     "@vault/sdk": "workspace:*",
-    "lucide-vue-next": "^0.468.0",
     "vue": "^3.5.13",
     "vue-router": "^4.6.4"
   },

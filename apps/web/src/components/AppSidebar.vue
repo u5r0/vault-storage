@@ -9,7 +9,7 @@ import {
   Trash2,
   Tag,
   HardDrive,
-} from "lucide-vue-next"
+} from "@lucide/vue"
 const sidebarTree = [
   { id: "", name: "Root" },
   { id: "Movies", name: "Movies" },

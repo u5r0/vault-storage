@@ -66,14 +66,14 @@ export class AzureBlobStore implements BlobStore {
     }
 
     // Node stream (has pipe)
-    if (typeof (data as any).pipe === "function") {
+    if (typeof (data as NodeJS.ReadableStream).pipe === "function") {
       const nodeStream = data as NodeJS.ReadableStream
       await block.uploadStream(nodeStream, 4 * 1024 * 1024, 5, headers)
       return
     }
 
     // AsyncIterable<Uint8Array>: convert to Node stream
-    const nodeStream = Readable.from(data as AsyncIterable<any>)
+    const nodeStream = Readable.from(data as AsyncIterable<Uint8Array>)
     await block.uploadStream(nodeStream, 4 * 1024 * 1024, 5, headers)
   }
 

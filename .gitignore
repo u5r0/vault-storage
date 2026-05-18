@@ -15,6 +15,9 @@ coverage/
 # Azurite local emulator data
 .azurite-data/
 
+# Local SQLite dev database
+data/
+
 # Local tooling
 .vscode/
 .idea/

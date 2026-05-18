@@ -8,7 +8,7 @@ import {
   Command,
   Plus,
   Upload,
-} from "lucide-vue-next"
+} from "@lucide/vue"
 import { useTheme, type ThemeMode } from "@/composables/useTheme"
 
 const { mode, setMode } = useTheme()

@@ -11,7 +11,7 @@ import {
   Home,
   ChevronRight,
   FolderOpen,
-} from "lucide-vue-next"
+} from "@lucide/vue"
 import { UppyContextProvider, Dropzone, FilesList, UploadButton } from "@uppy/vue"
 import "@uppy/vue/css/style.css"
 import FileIcon from "./FileIcon.vue"

@@ -4,6 +4,7 @@ import { logger } from "hono/logger"
 import { HTTPException } from "hono/http-exception"
 import { env, isConfigured } from "./lib/azure"
 import files from "./routes/files"
+import auth from "./routes/auth"
 
 /**
  * Build the Hono app. Kept separate from `index.ts` so tests can
@@ -34,6 +35,7 @@ export function createApp(opts: { withLogger?: boolean } = {}) {
       container: env.containerName,
     }),
   )
+  app.route("/api/auth", auth)
 
   app.route("/api/files", files)
 

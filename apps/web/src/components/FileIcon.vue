@@ -10,7 +10,7 @@ import {
   FileArchive,
   FileCode2,
   File as FileGeneric,
-} from "lucide-vue-next"
+} from "@lucide/vue"
 type FileType = "folder" | "file" | "image" | "video" | "audio" | "document" | "archive" | "code"
 
 const props = defineProps<{

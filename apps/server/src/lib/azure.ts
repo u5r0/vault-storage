@@ -19,7 +19,7 @@ export const env = {
   accountName: process.env.AZURE_STORAGE_ACCOUNT_NAME ?? "",
   accountKey: process.env.AZURE_STORAGE_ACCOUNT_KEY ?? "",
   containerName: process.env.AZURE_STORAGE_CONTAINER_NAME ?? "vault",
-  maxUploadMb: Number(process.env.MAX_UPLOAD_MB ?? 100),
+  maxUploadMb: Number(process.env.VITE_MAX_UPLOAD_MB ?? 100),
 }
 
 let _container: ContainerClient | null = null

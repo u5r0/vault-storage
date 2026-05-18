@@ -12,6 +12,10 @@ import {
 import { env, getBlobStore, generateUploadSAS } from "../lib/azure"
 import { Readable } from "stream"
 import { isSafeName, joinName, normalizePath, toPrefix } from "../lib/paths"
+import { nanoid } from "nanoid"
+import { db } from "../db"
+import { vaultEntries } from "../db/schema"
+import { eq } from "drizzle-orm"
 
 const files = new Hono()
 
@@ -23,33 +27,33 @@ const files = new Hono()
  */
 files.get("/", zValidator("query", ListFilesQuery), async (c) => {
   const { path } = c.req.valid("query")
-  const prefix = toPrefix(path)
-  const store = await getBlobStore()
+  const prefix = normalizePath(path)
 
+  // Query metadata DB for immediate children of `prefix`.
+  const rows = await db.select().from(vaultEntries)
   const entries: VaultEntry[] = []
 
-  for await (const item of store.list(prefix)) {
-    if (item.kind === "folder") {
-      const name = item.path.slice(prefix.length)
-      entries.push({
-        name,
-        path: item.path,
-        type: "folder",
-        size: 0,
-        contentType: null,
-        modifiedAt: null,
-      })
+  for (const r of rows) {
+    if (!r.path) continue
+    if (!prefix) {
+      if (r.path.includes("/")) continue
     } else {
-      const meta = item.metadata
-      entries.push({
-        name: meta.name,
-        path: meta.path,
-        type: "file",
-        size: meta.size,
-        contentType: meta.contentType,
-        modifiedAt: meta.modifiedAt ? meta.modifiedAt.toISOString() : null,
-      })
+      if (r.path === prefix) continue
+      if (!r.path.startsWith(prefix + "/")) continue
+      const rest = r.path.slice(prefix.length + 1)
+      if (rest.includes("/")) continue
     }
+
+    entries.push({
+      id: r.id,
+      ownerId: r.ownerId ?? null,
+      name: r.name,
+      path: r.path,
+      type: r.type,
+      size: r.size,
+      contentType: r.contentType,
+      modifiedAt: r.modifiedAt,
+    } as VaultEntry)
   }
 
   // Folders first, then files, both alphabetical.
@@ -70,16 +74,26 @@ files.post("/folder", zValidator("json", CreateFolderBody), async (c) => {
   if (!isSafeName(name)) {
     throw new HTTPException(400, { message: "Invalid folder name" })
   }
-  const store = await getBlobStore()
-  const prefix = toPrefix(path)
-  const fullFolder = `${prefix}${name}`
-  const keep = `${fullFolder}/.vault-keep`
+  const prefix = normalizePath(path)
+  const fullPath = prefix ? `${prefix}/${name}` : name
 
-  await store.upload(keep, Buffer.alloc(0), {
-    contentType: "application/x-vault-folder",
-  })
+  const id = nanoid()
+  const createdAt = new Date().toISOString()
 
-  return c.json({ path: fullFolder, type: "folder" }, 201)
+  await db.insert(vaultEntries).values({
+    id,
+    ownerId: null,
+    name,
+    path: fullPath,
+    type: "folder",
+    size: 0,
+    contentType: null,
+    blobName: null,
+    createdAt,
+    modifiedAt: null,
+  }).run()
+
+  return c.json({ id, path: fullPath, type: "folder" }, 201)
 })
 
 /**
@@ -90,7 +104,7 @@ files.post("/folder", zValidator("json", CreateFolderBody), async (c) => {
 files.post("/upload", async (c) => {
   const form = await c.req.parseBody({ all: true })
   const path = typeof form.path === "string" ? form.path : ""
-  const prefix = toPrefix(path)
+  const prefix = normalizePath(path)
   const store = await getBlobStore()
 
   const raw = form.files
@@ -116,56 +130,72 @@ files.post("/upload", async (c) => {
         message: `File "${file.name}" exceeds ${env.maxUploadMb}MB limit`,
       })
     }
-    const blobName = joinName(prefix, file.name)
 
-    // Prefer streaming upload. File has a WHATWG ReadableStream in platforms that support it.
+    const id = nanoid()
+    const blobName = `vault/blobs/${id}`
+    const virtualPath = prefix ? `${prefix}/${file.name}` : file.name
+    const createdAt = new Date().toISOString()
+
     try {
-      // If Readable.fromWeb is available, use it to convert the web stream to a Node stream.
-      const webStream = (file as any).stream?.()
+      const webStream = (file as unknown as { stream?: () => unknown }).stream?.()
       let nodeStream: NodeJS.ReadableStream | null = null
-      if (webStream && (Readable as any).fromWeb) {
-        nodeStream = (Readable as any).fromWeb(webStream)
+      const readableAny = Readable as unknown as { fromWeb?: (s: unknown) => NodeJS.ReadableStream }
+      if (webStream && readableAny.fromWeb) {
+        nodeStream = readableAny.fromWeb(webStream)
       } else if (webStream) {
-        // Fallback: convert by reading arrayBuffer
         const buf = Buffer.from(await file.arrayBuffer())
         await store.upload(blobName, buf, { contentType: file.type || "application/octet-stream" })
-        uploaded.push({
+        await db.insert(vaultEntries).values({
+          id,
+          ownerId: null,
           name: file.name,
-          path: blobName,
+          path: virtualPath,
           type: "file",
           size: buf.byteLength,
           contentType: file.type || "application/octet-stream",
-          modifiedAt: new Date().toISOString(),
-        })
+          blobName,
+          createdAt,
+          modifiedAt: createdAt,
+        }).run()
+        uploaded.push({ id, name: file.name, path: virtualPath, type: "file", size: buf.byteLength, contentType: file.type || "application/octet-stream", modifiedAt: createdAt } as VaultEntry)
         continue
       } else {
-        // No stream available (older runtimes) — fallback to buffer
         const buf = Buffer.from(await file.arrayBuffer())
         await store.upload(blobName, buf, { contentType: file.type || "application/octet-stream" })
-        uploaded.push({
+        await db.insert(vaultEntries).values({
+          id,
+          ownerId: null,
           name: file.name,
-          path: blobName,
+          path: virtualPath,
           type: "file",
           size: buf.byteLength,
           contentType: file.type || "application/octet-stream",
-          modifiedAt: new Date().toISOString(),
-        })
+          blobName,
+          createdAt,
+          modifiedAt: createdAt,
+        }).run()
+        uploaded.push({ id, name: file.name, path: virtualPath, type: "file", size: buf.byteLength, contentType: file.type || "application/octet-stream", modifiedAt: createdAt } as VaultEntry)
         continue
       }
 
-      // Upload the node stream
       await store.upload(blobName, nodeStream as NodeJS.ReadableStream, {
         contentType: file.type || "application/octet-stream",
       })
 
-      uploaded.push({
+      await db.insert(vaultEntries).values({
+        id,
+        ownerId: null,
         name: file.name,
-        path: blobName,
+        path: virtualPath,
         type: "file",
         size: file.size,
         contentType: file.type || "application/octet-stream",
-        modifiedAt: new Date().toISOString(),
-      })
+        blobName,
+        createdAt,
+        modifiedAt: createdAt,
+      }).run()
+
+      uploaded.push({ id, name: file.name, path: virtualPath, type: "file", size: file.size, contentType: file.type || "application/octet-stream", modifiedAt: createdAt } as VaultEntry)
     } catch (err) {
       throw new HTTPException(500, { message: `Upload failed for ${file.name}` })
     }
@@ -179,21 +209,35 @@ files.post("/upload", async (c) => {
  * Stream a single file back to the client with original content type.
  */
 files.get("/download", async (c) => {
-  const path = normalizePath(c.req.query("path"))
-  if (!path) throw new HTTPException(400, { message: "Missing 'path' query param" })
+  const id = c.req.query("id")
+  const pathQuery = normalizePath(c.req.query("path"))
+  if (!id && !pathQuery) throw new HTTPException(400, { message: "Missing 'id' or 'path' query param" })
 
-  const store = await getBlobStore()
-  if (!(await store.exists(path))) {
+  let row: any = null
+  if (id) {
+    row = await db.select().from(vaultEntries).where(eq(vaultEntries.id, id)).get()
+  } else if (pathQuery) {
+    row = await db.select().from(vaultEntries).where(eq(vaultEntries.path, pathQuery)).get()
+  }
+
+  if (!row) {
     throw new HTTPException(404, { message: "File not found" })
   }
 
-  const { stream: downloadStream, metadata } = await store.download(path)
+  if (!row.blobName) throw new HTTPException(400, { message: "Not a file" })
+
+  const store = await getBlobStore()
+  if (!(await store.exists(row.blobName))) {
+    throw new HTTPException(404, { message: "File blob not found" })
+  }
+
+  const { stream: downloadStream, metadata } = await store.download(row.blobName)
 
   c.header("Content-Type", metadata.contentType ?? "application/octet-stream")
   c.header("Content-Length", String(metadata.size))
   c.header(
     "Content-Disposition",
-    `attachment; filename="${encodeURIComponent(metadata.name)}"`,
+    `attachment; filename="${encodeURIComponent(row.name)}"`,
   )
 
   return stream(c, async (s) => {
@@ -217,6 +261,9 @@ files.get("/sas", async (c) => {
     throw new HTTPException(400, { message: `Invalid filename: ${name}` })
   }
 
+  // Compatibility: generate a SAS for a blob name at the given virtual path.
+  // New clients should prefer creating an id and requesting a SAS for the
+  // canonical blob name (vault/blobs/<id>).
   try {
     const { url } = await generateUploadSAS(path)
     return c.json({ uploadUrl: url })
@@ -232,22 +279,26 @@ files.get("/sas", async (c) => {
  * here; that would require recursing every blob under the prefix.
  */
 files.patch("/rename", zValidator("json", RenameBody), async (c) => {
-  const { from, to } = c.req.valid("json")
-  const src = normalizePath(from)
+  const { from, to, id } = c.req.valid("json") as unknown as { from?: string; to?: string; id?: string }
   const dst = normalizePath(to)
-  if (!src || !dst) throw new HTTPException(400, { message: "Invalid paths" })
-  if (src === dst) return c.json({ path: dst })
+  if (!dst) throw new HTTPException(400, { message: "Invalid destination path" })
 
-  const store = await getBlobStore()
-
-  if (!(await store.exists(src))) {
-    throw new HTTPException(404, { message: "Source file not found" })
+  let row: any = null
+  if (id) {
+    row = await db.select().from(vaultEntries).where(eq(vaultEntries.id, id)).get()
+  } else if (from) {
+    const src = normalizePath(from)
+    row = await db.select().from(vaultEntries).where(eq(vaultEntries.path, src)).get()
   }
 
-  await store.copy(src, dst)
-  await store.delete(src)
+  if (!row) throw new HTTPException(404, { message: "Source not found" })
+  if (row.path === dst) return c.json({ path: dst })
 
-  return c.json({ path: dst })
+  // Update virtual path and name. Blob stays the same.
+  const newName = dst.split("/").pop() ?? row.name
+  await db.update(vaultEntries).set({ path: dst, name: newName, modifiedAt: new Date().toISOString() }).where(eq(vaultEntries.id, row.id)).run()
+
+  return c.json({ id: row.id, path: dst })
 })
 
 /**
@@ -255,23 +306,41 @@ files.patch("/rename", zValidator("json", RenameBody), async (c) => {
  * Delete a single file, or a folder and everything inside it.
  */
 files.delete("/", zValidator("json", DeleteBody), async (c) => {
-  const { path, isFolder } = c.req.valid("json")
-  const norm = normalizePath(path)
-  if (!norm) throw new HTTPException(400, { message: "Path is required" })
+  const { path, isFolder, id } = c.req.valid("json") as unknown as { path?: string; isFolder?: boolean; id?: string }
 
-  const store = await getBlobStore()
+  let store = await getBlobStore()
 
   if (!isFolder) {
-    if (!(await store.exists(norm))) {
-      throw new HTTPException(404, { message: "File not found" })
+    let row: any = null
+    if (id) row = await db.select().from(vaultEntries).where(eq(vaultEntries.id, id)).get()
+    else if (path) row = await db.select().from(vaultEntries).where(eq(vaultEntries.path, normalizePath(path))).get()
+
+    if (!row) throw new HTTPException(404, { message: "File not found" })
+    if (row.blobName) {
+      if (await store.exists(row.blobName)) {
+        await store.delete(row.blobName)
+      }
     }
-    await store.delete(norm)
+    await db.delete(vaultEntries).where(eq(vaultEntries.id, row.id)).run()
     return c.json({ deleted: 1 })
   }
 
-  const prefix = toPrefix(norm)
-  const deleted = await store.deletePrefix(prefix)
-  return c.json({ deleted })
+  const norm = normalizePath(path)
+  if (!norm) throw new HTTPException(400, { message: "Path is required for folder delete" })
+
+  // Delete all entries under this prefix and their blobs.
+  const rows = await db.select().from(vaultEntries)
+  const toDelete = rows.filter((r: any) => r.path === norm || r.path.startsWith(norm + "/"))
+  let deletedCount = 0
+  for (const r of toDelete) {
+    if (r.blobName && (await store.exists(r.blobName))) {
+      await store.delete(r.blobName)
+      deletedCount++
+    }
+    await db.delete(vaultEntries).where(eq(vaultEntries.id, r.id)).run()
+  }
+
+  return c.json({ deleted: deletedCount })
 })
 
 export default files

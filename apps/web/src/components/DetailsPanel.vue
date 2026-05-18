@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { Share2, Download } from "lucide-vue-next"
+import { Share2, Download } from "@lucide/vue"
 import FileIcon from "./FileIcon.vue"
 import type { VaultEntry } from "@vault/sdk"
 import { formatSize, formatDate, typeLabel, fileIconType } from "@/lib/format"

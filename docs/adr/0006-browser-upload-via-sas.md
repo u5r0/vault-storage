@@ -46,7 +46,7 @@ Browser → Hono → `AzureBlobStore.upload`.
 **Pros**
 
 - Simple mental model; one origin, no CORS on storage.
-- Server enforces `MAX_UPLOAD_MB`, `isSafeName`, and can log every upload.
+- Server enforces `VITE_MAX_UPLOAD_MB`, `isSafeName`, and can log every upload.
 - Already implemented and covered by integration tests.
 
 **Cons**
@@ -256,7 +256,7 @@ Azure block blob single PUT requirements are satisfied by
 | `maxNumberOfFiles: 20` | hard-coded in `useVaultUpload` |
 | `maxFileSize` | `VITE_MAX_UPLOAD_MB` (default 100) × 1024² |
 
-Server-side `POST /api/files/upload` enforces `MAX_UPLOAD_MB` from env;
+Server-side `POST /api/files/upload` enforces `VITE_MAX_UPLOAD_MB` from env;
 the SAS path does **not** yet enforce size server-side.
 
 **Lifecycle rules**
@@ -340,8 +340,7 @@ automation unless/until SAS is added to the SDK client.
 | `AZURE_STORAGE_ACCOUNT_NAME` | server | Alternative to connection string |
 | `AZURE_STORAGE_ACCOUNT_KEY` | server | SAS signing (required for SAS) |
 | `AZURE_STORAGE_CONTAINER_NAME` | server | Container (default `vault`) |
-| `MAX_UPLOAD_MB` | server | Multipart upload limit (default 100) |
-| `VITE_MAX_UPLOAD_MB` | web | Uppy client size limit (default 100) |
+| `VITE_MAX_UPLOAD_MB` | server + web | Upload size limit in MB; server enforces, web reads same value for Uppy `maxFileSize` (default 100) |
 | `ALLOWED_ORIGIN` | server | Hono CORS for API (not blob CORS) |
 
 ## Testing
