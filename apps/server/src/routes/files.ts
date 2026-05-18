@@ -9,7 +9,8 @@ import {
   DeleteBody,
   type VaultEntry,
 } from "@vault/sdk"
-import { env, getBlobStore } from "../lib/azure"
+import { env, getBlobStore, generateUploadSAS } from "../lib/azure"
+import { Readable } from "stream"
 import { isSafeName, joinName, normalizePath, toPrefix } from "../lib/paths"
 
 const files = new Hono()
@@ -115,21 +116,59 @@ files.post("/upload", async (c) => {
         message: `File "${file.name}" exceeds ${env.maxUploadMb}MB limit`,
       })
     }
-
     const blobName = joinName(prefix, file.name)
-    const buf = Buffer.from(await file.arrayBuffer())
-    await store.upload(blobName, buf, {
-      contentType: file.type || "application/octet-stream",
-    })
 
-    uploaded.push({
-      name: file.name,
-      path: blobName,
-      type: "file",
-      size: buf.byteLength,
-      contentType: file.type || "application/octet-stream",
-      modifiedAt: new Date().toISOString(),
-    })
+    // Prefer streaming upload. File has a WHATWG ReadableStream in platforms that support it.
+    try {
+      // If Readable.fromWeb is available, use it to convert the web stream to a Node stream.
+      const webStream = (file as any).stream?.()
+      let nodeStream: NodeJS.ReadableStream | null = null
+      if (webStream && (Readable as any).fromWeb) {
+        nodeStream = (Readable as any).fromWeb(webStream)
+      } else if (webStream) {
+        // Fallback: convert by reading arrayBuffer
+        const buf = Buffer.from(await file.arrayBuffer())
+        await store.upload(blobName, buf, { contentType: file.type || "application/octet-stream" })
+        uploaded.push({
+          name: file.name,
+          path: blobName,
+          type: "file",
+          size: buf.byteLength,
+          contentType: file.type || "application/octet-stream",
+          modifiedAt: new Date().toISOString(),
+        })
+        continue
+      } else {
+        // No stream available (older runtimes) — fallback to buffer
+        const buf = Buffer.from(await file.arrayBuffer())
+        await store.upload(blobName, buf, { contentType: file.type || "application/octet-stream" })
+        uploaded.push({
+          name: file.name,
+          path: blobName,
+          type: "file",
+          size: buf.byteLength,
+          contentType: file.type || "application/octet-stream",
+          modifiedAt: new Date().toISOString(),
+        })
+        continue
+      }
+
+      // Upload the node stream
+      await store.upload(blobName, nodeStream as NodeJS.ReadableStream, {
+        contentType: file.type || "application/octet-stream",
+      })
+
+      uploaded.push({
+        name: file.name,
+        path: blobName,
+        type: "file",
+        size: file.size,
+        contentType: file.type || "application/octet-stream",
+        modifiedAt: new Date().toISOString(),
+      })
+    } catch (err) {
+      throw new HTTPException(500, { message: `Upload failed for ${file.name}` })
+    }
   }
 
   return c.json({ uploaded }, 201)
@@ -163,6 +202,28 @@ files.get("/download", async (c) => {
       await s.write(chunk as Uint8Array)
     }
   })
+})
+
+/**
+ * GET /api/files/sas?path=Movies/movie.mp4
+ * Return a short-lived SAS upload URL for a given target blob path.
+ */
+files.get("/sas", async (c) => {
+  const path = normalizePath(c.req.query("path"))
+  if (!path) throw new HTTPException(400, { message: "Missing 'path' query param" })
+
+  const name = path.split("/").pop() ?? ""
+  if (!isSafeName(name)) {
+    throw new HTTPException(400, { message: `Invalid filename: ${name}` })
+  }
+
+  try {
+    const { url } = await generateUploadSAS(path)
+    return c.json({ uploadUrl: url })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to generate SAS"
+    throw new HTTPException(500, { message })
+  }
 })
 
 /**

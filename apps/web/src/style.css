@@ -142,4 +142,18 @@
         transparent 45%
       );
   }
+
+  /* Uppy headless components — map to vault tokens */
+  .vault-uppy {
+    --uppy-color-accent: var(--color-primary);
+    --uppy-color-bg: var(--color-background);
+    --uppy-color-fg: var(--color-foreground);
+    --uppy-color-border: var(--color-border);
+    --uppy-color-muted: var(--color-muted-foreground);
+  }
+
+  .vault-uppy .uppy-reset {
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
 }

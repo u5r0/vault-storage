@@ -39,9 +39,10 @@ export interface BlobStore {
   exists(path: string): Promise<boolean>
 
   /**
-   * Upload a blob from a buffer
+    * Upload a blob from a Buffer or a readable stream.
+    * Accepts a NodeJS.ReadableStream, an AsyncIterable<Uint8Array>, or Buffer.
    */
-  upload(path: string, data: Buffer, options?: UploadOptions): Promise<void>
+    upload(path: string, data: Buffer | NodeJS.ReadableStream | AsyncIterable<Uint8Array>, options?: UploadOptions): Promise<void>
 
   /**
    * Download a blob as a stream

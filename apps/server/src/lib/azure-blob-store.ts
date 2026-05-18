@@ -1,6 +1,7 @@
 import type { ContainerClient } from "@azure/storage-blob"
 import type { BlobStore, BlobListItem, BlobMetadata, UploadOptions, DownloadResult } from "./storage"
 import { FOLDER_KEEP } from "./paths"
+import { Readable } from "stream"
 
 /**
  * Azure Blob Storage adapter implementing the BlobStore interface
@@ -45,13 +46,35 @@ export class AzureBlobStore implements BlobStore {
     return blob.exists()
   }
 
-  async upload(path: string, data: Buffer, options?: UploadOptions): Promise<void> {
+  async upload(
+    path: string,
+    data: Buffer | NodeJS.ReadableStream | AsyncIterable<Uint8Array>,
+    options?: UploadOptions,
+  ): Promise<void> {
     const block = this.container.getBlockBlobClient(path)
-    await block.uploadData(data, {
+
+    const headers = {
       blobHTTPHeaders: {
         blobContentType: options?.contentType || "application/octet-stream",
       },
-    })
+    }
+
+    // Buffer: upload directly
+    if (Buffer.isBuffer(data)) {
+      await block.uploadData(data, headers)
+      return
+    }
+
+    // Node stream (has pipe)
+    if (typeof (data as any).pipe === "function") {
+      const nodeStream = data as NodeJS.ReadableStream
+      await block.uploadStream(nodeStream, 4 * 1024 * 1024, 5, headers)
+      return
+    }
+
+    // AsyncIterable<Uint8Array>: convert to Node stream
+    const nodeStream = Readable.from(data as AsyncIterable<any>)
+    await block.uploadStream(nodeStream, 4 * 1024 * 1024, 5, headers)
   }
 
   async download(path: string): Promise<DownloadResult> {

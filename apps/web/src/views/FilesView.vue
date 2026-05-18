@@ -13,7 +13,7 @@ const router = useRouter()
 const currentPath = computed(() => routeToCurrentPath(route.params.path))
 const selectedPath = computed(() => (route.query.selected as string) || null)
 
-const { entries, loading, error } = useFiles(currentPath)
+const { entries, loading, error, refresh } = useFiles(currentPath)
 
 const selectedFile = computed(
   () => entries.value.find((e) => e.path === selectedPath.value) ?? null,
@@ -70,6 +70,7 @@ const breadcrumbs = computed(() => {
       :breadcrumbs="breadcrumbs"
       @select="handleSelect"
       @navigate="navigateTo"
+      @upload-complete="refresh"
     />
     <DetailsPanel :file="selectedFile" />
   </main>

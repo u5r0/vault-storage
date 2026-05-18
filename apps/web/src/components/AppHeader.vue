@@ -4,7 +4,6 @@ import {
   Search,
   Settings,
   Sun,
-  SunMedium,
   Moon,
   Command,
   Plus,
@@ -17,7 +16,6 @@ const query = ref("")
 
 const themes: { id: ThemeMode; icon: typeof Sun; label: string }[] = [
   { id: "light", icon: Sun, label: "Light" },
-  { id: "dim", icon: SunMedium, label: "Dim" },
   { id: "dark", icon: Moon, label: "Dark" },
 ]
 </script>

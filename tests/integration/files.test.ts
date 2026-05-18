@@ -143,6 +143,43 @@ describe("PATCH /api/files/rename", () => {
   })
 })
 
+describe("GET /api/files/sas", () => {
+  it("returns a SAS upload URL for a valid path", async () => {
+    const res = await app.request("/api/files/sas?path=via-sas.txt")
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { uploadUrl: string }
+    expect(body.uploadUrl).toContain("via-sas.txt")
+    expect(body.uploadUrl).toMatch(/[?&]sig=/)
+  })
+
+  it("rejects invalid filenames", async () => {
+    const res = await app.request("/api/files/sas?path=..")
+    expect(res.status).toBe(400)
+  })
+
+  it("supports direct PUT upload through the SAS URL", async () => {
+    const sasRes = await app.request("/api/files/sas?path=sas-direct.txt")
+    expect(sasRes.status).toBe(200)
+    const { uploadUrl } = (await sasRes.json()) as { uploadUrl: string }
+
+    const putRes = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "x-ms-blob-type": "BlockBlob",
+        "Content-Type": "text/plain",
+      },
+      body: "uploaded via sas",
+    })
+    expect(putRes.ok).toBe(true)
+
+    const list = await listRoot()
+    expect(list.entries.find((e) => e.name === "sas-direct.txt")).toMatchObject({
+      type: "file",
+      size: "uploaded via sas".length,
+    })
+  })
+})
+
 describe("DELETE /api/files", () => {
   it("deletes a single file", async () => {
     await uploadText("", "trash.txt", "bye")

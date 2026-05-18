@@ -1,7 +1,9 @@
 import {
   BlobServiceClient,
+  BlobSASPermissions,
   StorageSharedKeyCredential,
   type ContainerClient,
+  generateBlobSASQueryParameters,
 } from "@azure/storage-blob"
 import { AzureBlobStore } from "./azure-blob-store"
 import type { BlobStore } from "./storage"
@@ -22,6 +24,55 @@ export const env = {
 
 let _container: ContainerClient | null = null
 let _ready: Promise<ContainerClient> | null = null
+let _credential: StorageSharedKeyCredential | null = null
+
+function parseConnectionString(connectionString: string): {
+  accountName: string
+  accountKey: string
+} {
+  const parts: Record<string, string> = {}
+  for (const segment of connectionString.split(";")) {
+    if (!segment) continue
+    const eq = segment.indexOf("=")
+    if (eq === -1) continue
+    parts[segment.slice(0, eq)] = segment.slice(eq + 1)
+  }
+
+  const accountName = parts.AccountName
+  const accountKey = parts.AccountKey
+  if (!accountName || !accountKey) {
+    throw new Error(
+      "Connection string must include AccountName and AccountKey for SAS generation",
+    )
+  }
+
+  return { accountName, accountKey }
+}
+
+/**
+ * Resolve account name + key from explicit env vars or a connection string.
+ */
+export function resolveAccountCredentials(): { accountName: string; accountKey: string } {
+  if (env.accountName && env.accountKey) {
+    return { accountName: env.accountName, accountKey: env.accountKey }
+  }
+
+  if (env.connectionString) {
+    return parseConnectionString(env.connectionString)
+  }
+
+  throw new Error(
+    "Missing Azure credentials. Set AZURE_STORAGE_CONNECTION_STRING " +
+      "or AZURE_STORAGE_ACCOUNT_NAME + AZURE_STORAGE_ACCOUNT_KEY.",
+  )
+}
+
+function getSharedKeyCredential(): StorageSharedKeyCredential {
+  if (_credential) return _credential
+  const { accountName, accountKey } = resolveAccountCredentials()
+  _credential = new StorageSharedKeyCredential(accountName, accountKey)
+  return _credential
+}
 
 /**
  * Build a BlobServiceClient from either a connection string or
@@ -63,6 +114,39 @@ export function getContainer(): Promise<ContainerClient> {
   })()
 
   return _ready
+}
+
+/**
+ * Generate a SAS URL for a specific blob path allowing client-side uploads.
+ * Uses the SDK blob URL so Azurite/custom endpoints work automatically.
+ */
+export async function generateUploadSAS(
+  path: string,
+  expiresMinutes = 15,
+): Promise<{ url: string; token: string }> {
+  const container = await getContainer()
+  const credential = getSharedKeyCredential()
+  const block = container.getBlockBlobClient(path)
+
+  const startsOn = new Date(Date.now() - 60_000)
+  const expiresOn = new Date(Date.now() + expiresMinutes * 60 * 1000)
+
+  const permissions = new BlobSASPermissions()
+  permissions.create = true
+  permissions.write = true
+
+  const sas = generateBlobSASQueryParameters(
+    {
+      containerName: env.containerName,
+      blobName: path,
+      permissions,
+      startsOn,
+      expiresOn,
+    },
+    credential,
+  ).toString()
+
+  return { url: `${block.url}?${sas}`, token: sas }
 }
 
 /**
