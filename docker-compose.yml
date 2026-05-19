@@ -1,0 +1,44 @@
+services:
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.32.0
+    container_name: vault-azurite
+    ports:
+      - "10000:10000"  # Blob service
+      # - "10001:10001"  # Queue service
+      # - "10002:10002"  # Table service
+    environment:
+      - AZURITE_ACCOUNTS=devstoreaccount1:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==
+      - AZURITE_LOCATOR=127.0.0.1
+    volumes:
+      - azurite_data:/data
+    command: "azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --skipApiVersionCheck"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10000/devstoreaccount1?comp=list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cosmos:
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+    container_name: vault-cosmos
+    ports:
+      - "8081:8081"  # Cosmos DB Emulator
+      # - "10250:10250"  # MongoDB API
+      # - "10251:10251"  # MongoDB API
+      # - "10252:10252"  # Cassandra API
+      # - "10253:10253"  # Azure Tables API
+      # - "10254:10254"  # Gremlin API
+    environment:
+      - AZURE_COSMOS_EMULATOR_ENABLE_CASSANDRA_ENDPOINT=true
+      - AZURE_COSMOS_EMULATOR_ENABLE_GREMLIN_ENDPOINT=true
+    volumes:
+      - cosmos_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/_explorer/emulator.pem"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  azurite_data:
+  cosmos_data:

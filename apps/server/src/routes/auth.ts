@@ -12,9 +12,7 @@ import {
   deleteRefreshToken,
   rotateRefreshToken,
 } from "../lib/auth"
-import { users } from "../db/schema"
 import { db } from "../db"
-import { eq } from "drizzle-orm"
 
 const app = new Hono()
 
@@ -44,7 +42,12 @@ app.post("/login", async (c) => {
   if (!parsed.success) return c.json({ error: "Invalid input" }, 400)
 
   const { email, password } = parsed.data
-  const user = await db.select().from(users).where(eq(users.email, email)).get()
+  const querySpec = {
+    query: "SELECT * FROM c WHERE c.type = 'user' AND c.email = @email",
+    parameters: [{ name: "@email", value: email }],
+  }
+  const { resources } = await db.items.query(querySpec).fetchAll()
+  const user = resources[0]
   if (!user) return c.json({ error: "Invalid credentials" }, 401)
 
   const ok = await verifyPassword(user.passwordHash, password)
@@ -105,8 +108,8 @@ app.post("/refresh", async (c) => {
       secure: isProd,
     })
 
-    const user = await db.select().from(users).where(eq(users.id, payload.sub)).get()
-    if (!user) return c.json({ error: "Unauthenticated" }, 401)
+    const { resource: user } = await db.item(payload.sub).read()
+    if (!user || user.type !== "user") return c.json({ error: "Unauthenticated" }, 401)
     return c.json({ user: { id: user.id, email: user.email, createdAt: user.createdAt } })
   } catch {
     return c.json({ error: "Unauthenticated" }, 401)
@@ -141,8 +144,8 @@ app.get("/me", async (c) => {
     
     const userId = decoded.sub || decoded.id 
     
-    const user = await db.select().from(users).where(eq(users.id, userId)).get()
-    if (!user) return c.json({ error: "Unauthenticated" }, 401)
+    const { resource: user } = await db.item(userId).read()
+    if (!user || user.type !== "user") return c.json({ error: "Unauthenticated" }, 401)
     
     return c.json({ user: { id: user.id, email: user.email, createdAt: user.createdAt } })
   } catch {
@@ -154,17 +157,23 @@ app.get("/verify", async (c) => {
   const token = c.req.query("token")
   if (!token) return c.json({ error: "Missing token" }, 400)
 
-  const user = await db.select().from(users).where(eq(users.verificationToken, token)).get()
+  const querySpec = {
+    query: "SELECT * FROM c WHERE c.type = 'user' AND c.verificationToken = @token",
+    parameters: [{ name: "@token", value: token }],
+  }
+  const { resources } = await db.items.query(querySpec).fetchAll()
+  const user = resources[0]
   if (!user) return c.json({ error: "Invalid token" }, 400)
 
   const expires = user.verificationExpires ? new Date(user.verificationExpires) : null
   if (!expires || expires.getTime() < Date.now()) return c.json({ error: "Token expired" }, 400)
 
-  await db
-    .update(users)
-    .set({ verified: "1", verificationToken: null, verificationExpires: null })
-    .where(eq(users.id, user.id))
-    .run()
+  await db.item(user.id).replace({
+    ...user,
+    verified: "1",
+    verificationToken: null,
+    verificationExpires: null,
+  })
 
   return c.json({ user: { id: user.id, email: user.email, createdAt: user.createdAt, verified: true } })
 })

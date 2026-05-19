@@ -2,8 +2,8 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router"
 import FilesView from "./views/FilesView.vue"
 
 const routes: RouteRecordRaw[] = [
-  { path: "/", redirect: "/files" },
-  { path: "/files/:path(.*)*", name: "files", component: FilesView },
+  { path: "/", redirect: "/contents" },
+  { path: "/contents/:entityId?", name: "content", component: FilesView, props: true },
 ]
 
 export const router = createRouter({
@@ -13,9 +13,9 @@ export const router = createRouter({
 
 /**
  * Helpers to translate between route state and app state.
- * Folder path is a route param; selected file path is a query param.
+ * Entity ID is a route param (applies to both folders and files).
  */
-export function routeToCurrentPath(rawPath: unknown): string {
-  if (Array.isArray(rawPath)) return rawPath.join("/")
-  return (rawPath as string) || ""
+export function routeToEntityId(entityId: unknown): string | null {
+  if (!entityId || entityId === "root") return null
+  return entityId as string
 }

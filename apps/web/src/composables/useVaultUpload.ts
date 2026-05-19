@@ -4,22 +4,7 @@ import { onBeforeUnmount, ref, shallowRef, watch, type Ref } from "vue"
 
 const MAX_UPLOAD_MB = Number(import.meta.env.VITE_MAX_UPLOAD_MB ?? 100)
 
-function blobPath(folderPath: string, fileName: string): string {
-  const prefix = folderPath ? `${folderPath.replace(/\/+$/, "")}/` : ""
-  return `${prefix}${fileName.replace(/^\/+/, "")}`
-}
-
-async function fetchUploadUrl(targetPath: string): Promise<string> {
-  const res = await fetch(`/api/files/sas?path=${encodeURIComponent(targetPath)}`)
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { message?: string } | null
-    throw new Error(body?.message ?? "Failed to get upload URL")
-  }
-  const { uploadUrl } = (await res.json()) as { uploadUrl: string }
-  return uploadUrl
-}
-
-function createUppyInstance() {
+function createUppyInstance(parentId: string | null) {
   return new Uppy({
     autoProceed: false,
     restrictions: {
@@ -27,30 +12,23 @@ function createUppyInstance() {
       maxFileSize: MAX_UPLOAD_MB * 1024 * 1024,
     },
   }).use(XHRUpload, {
-    method: "PUT",
-    formData: false,
-    allowedMetaFields: [],
+    method: "POST",
+    formData: true,
+    fieldName: "files",
+    allowedMetaFields: ["parentId"],
     limit: 3,
-    endpoint: async (fileOrBundle) => {
-      const file = Array.isArray(fileOrBundle) ? fileOrBundle[0] : fileOrBundle
-      const folderPath = (file.meta?.folderPath as string | undefined) ?? ""
-      return fetchUploadUrl(blobPath(folderPath, file.name))
-    },
-    headers: (fileOrBundle) => {
-      const file = Array.isArray(fileOrBundle) ? fileOrBundle[0] : fileOrBundle
-      return {
-        "x-ms-blob-type": "BlockBlob",
-        "Content-Type": file.type || "application/octet-stream",
-      }
+    endpoint: "/api/files/upload",
+    headers: {
+      "Accept": "application/json",
     },
   })
 }
 
 export function useVaultUpload(options: {
-  currentPath: Ref<string>
+  currentEntityId: Ref<string | null>
   onUploadComplete: () => void
 }) {
-  const uppy = shallowRef(createUppyInstance())
+  const uppy = shallowRef(createUppyInstance(options.currentEntityId.value))
   const hasPending = ref(false)
 
   function refreshPending() {
@@ -60,7 +38,7 @@ export function useVaultUpload(options: {
   }
 
   uppy.value.on("file-added", (file) => {
-    uppy.value.setFileMeta(file.id, { folderPath: options.currentPath.value })
+    uppy.value.setFileMeta(file.id, { parentId: options.currentEntityId.value ?? null })
     refreshPending()
   })
 
@@ -79,10 +57,10 @@ export function useVaultUpload(options: {
     }
   })
 
-  watch(options.currentPath, () => {
-    for (const file of uppy.value.getFiles()) {
-      uppy.value.removeFile(file.id)
-    }
+  watch(options.currentEntityId, (newId) => {
+    // Recreate uppy instance with new parentId
+    uppy.value.destroy()
+    uppy.value = createUppyInstance(newId)
     refreshPending()
   })
 

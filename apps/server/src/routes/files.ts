@@ -6,55 +6,61 @@ import {
   ListFilesQuery,
   CreateFolderBody,
   RenameBody,
+  MoveBody,
   DeleteBody,
   type VaultEntry,
 } from "@vault/sdk"
-import { env, getBlobStore, generateUploadSAS } from "../lib/azure"
+import { env, getBlobStore } from "../lib/azure"
 import { Readable } from "stream"
-import { isSafeName, joinName, normalizePath, toPrefix } from "../lib/paths"
 import { nanoid } from "nanoid"
 import { db } from "../db"
-import { vaultEntries } from "../db/schema"
-import { eq } from "drizzle-orm"
+import type { CosmosClient } from "@azure/cosmos"
+
+// Validate that a name doesn't contain path separators or control characters
+function isSafeName(name: string): boolean {
+  if (!name || name.length > 255) return false
+  if (name.includes("/") || name.includes("\\")) return false
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f]/.test(name)) return false
+  if (name === "." || name === "..") return false
+  return true
+}
 
 const files = new Hono()
 
 /* ----------------------------- Routes ---------------------------------- */
 
 /**
- * GET /api/files?path=Movies/Action
- * List the immediate children (folders + files) at a given path.
+ * GET /api/files?entityId=uuid
+ * List the immediate children (folders + files) at a given entity ID (folder).
  */
 files.get("/", zValidator("query", ListFilesQuery), async (c) => {
-  const { path } = c.req.valid("query")
-  const prefix = normalizePath(path)
+  const { entityId } = c.req.valid("query")
 
-  // Query metadata DB for immediate children of `prefix`.
-  const rows = await db.select().from(vaultEntries)
-  const entries: VaultEntry[] = []
-
-  for (const r of rows) {
-    if (!r.path) continue
-    if (!prefix) {
-      if (r.path.includes("/")) continue
-    } else {
-      if (r.path === prefix) continue
-      if (!r.path.startsWith(prefix + "/")) continue
-      const rest = r.path.slice(prefix.length + 1)
-      if (rest.includes("/")) continue
-    }
-
-    entries.push({
-      id: r.id,
-      ownerId: r.ownerId ?? null,
-      name: r.name,
-      path: r.path,
-      type: r.type,
-      size: r.size,
-      contentType: r.contentType,
-      modifiedAt: r.modifiedAt,
-    } as VaultEntry)
+  // Query Cosmos DB for immediate children of `entityId`.
+  const querySpec = {
+    query: "SELECT * FROM c WHERE c.parentId = @parentId AND c.deletedAt = null",
+    parameters: [
+      { name: "@parentId", value: entityId ?? null },
+    ],
   }
+
+  const { resources } = await db.items.query(querySpec).fetchAll()
+
+  const entries: VaultEntry[] = resources.map((r: any) => ({
+    id: r.id,
+    ownerId: r.ownerId ?? null,
+    parentId: r.parentId,
+    name: r.name,
+    type: r.type,
+    size: r.size ?? 0,
+    contentType: r.contentType ?? null,
+    blobUrl: r.blobName ?? null,
+    isFavorite: r.isFavorite === "1",
+    tags: r.tags ? JSON.parse(r.tags) : [],
+    createdAt: r.createdAt,
+    modifiedAt: r.modifiedAt ?? null,
+  }))
 
   // Folders first, then files, both alphabetical.
   entries.sort((a, b) => {
@@ -62,49 +68,51 @@ files.get("/", zValidator("query", ListFilesQuery), async (c) => {
     return a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
   })
 
-  return c.json({ path: normalizePath(path), entries })
+  return c.json({ entityId: entityId ?? null, entries })
 })
 
 /**
  * POST /api/files/folder
- * Create a virtual folder by writing a 0-byte ".vault-keep" placeholder.
+ * Create a folder with a given parent ID.
  */
 files.post("/folder", zValidator("json", CreateFolderBody), async (c) => {
-  const { path, name } = c.req.valid("json")
+  const { parentId, name } = c.req.valid("json")
   if (!isSafeName(name)) {
     throw new HTTPException(400, { message: "Invalid folder name" })
   }
-  const prefix = normalizePath(path)
-  const fullPath = prefix ? `${prefix}/${name}` : name
 
   const id = nanoid()
   const createdAt = new Date().toISOString()
 
-  await db.insert(vaultEntries).values({
+  const folder = {
     id,
     ownerId: null,
+    parentId: parentId ?? null,
     name,
-    path: fullPath,
     type: "folder",
     size: 0,
     contentType: null,
     blobName: null,
+    isFavorite: "0",
+    tags: null,
+    deletedAt: null,
     createdAt,
     modifiedAt: null,
-  }).run()
+  }
 
-  return c.json({ id, path: fullPath, type: "folder" }, 201)
+  await db.items.create(folder)
+
+  return c.json({ id, parentId: parentId ?? null, type: "folder" }, 201)
 })
 
 /**
  * POST /api/files/upload
  * Upload one or more files via multipart/form-data.
- * Form fields: `path` (string, optional), `files` (one or more File entries).
+ * Form fields: `parentId` (string, optional), `files` (one or more File entries).
  */
 files.post("/upload", async (c) => {
   const form = await c.req.parseBody({ all: true })
-  const path = typeof form.path === "string" ? form.path : ""
-  const prefix = normalizePath(path)
+  const parentId = typeof form.parentId === "string" ? form.parentId : null
   const store = await getBlobStore()
 
   const raw = form.files
@@ -133,7 +141,6 @@ files.post("/upload", async (c) => {
 
     const id = nanoid()
     const blobName = `vault/blobs/${id}`
-    const virtualPath = prefix ? `${prefix}/${file.name}` : file.name
     const createdAt = new Date().toISOString()
 
     try {
@@ -145,36 +152,44 @@ files.post("/upload", async (c) => {
       } else if (webStream) {
         const buf = Buffer.from(await file.arrayBuffer())
         await store.upload(blobName, buf, { contentType: file.type || "application/octet-stream" })
-        await db.insert(vaultEntries).values({
+        const entry = {
           id,
           ownerId: null,
+          parentId,
           name: file.name,
-          path: virtualPath,
           type: "file",
           size: buf.byteLength,
           contentType: file.type || "application/octet-stream",
           blobName,
+          isFavorite: "0",
+          tags: null,
+          deletedAt: null,
           createdAt,
           modifiedAt: createdAt,
-        }).run()
-        uploaded.push({ id, name: file.name, path: virtualPath, type: "file", size: buf.byteLength, contentType: file.type || "application/octet-stream", modifiedAt: createdAt } as VaultEntry)
+        }
+        await db.items.create(entry)
+        uploaded.push({ id, ownerId: null, parentId, name: file.name, type: "file", size: buf.byteLength, contentType: file.type || "application/octet-stream", blobUrl: blobName, isFavorite: false, tags: [], createdAt, modifiedAt: createdAt } as VaultEntry)
         continue
       } else {
         const buf = Buffer.from(await file.arrayBuffer())
         await store.upload(blobName, buf, { contentType: file.type || "application/octet-stream" })
-        await db.insert(vaultEntries).values({
+        const entry = {
           id,
           ownerId: null,
+          parentId,
           name: file.name,
-          path: virtualPath,
           type: "file",
           size: buf.byteLength,
           contentType: file.type || "application/octet-stream",
           blobName,
+          isFavorite: "0",
+          tags: null,
+          deletedAt: null,
           createdAt,
           modifiedAt: createdAt,
-        }).run()
-        uploaded.push({ id, name: file.name, path: virtualPath, type: "file", size: buf.byteLength, contentType: file.type || "application/octet-stream", modifiedAt: createdAt } as VaultEntry)
+        }
+        await db.items.create(entry)
+        uploaded.push({ id, ownerId: null, parentId, name: file.name, type: "file", size: buf.byteLength, contentType: file.type || "application/octet-stream", blobUrl: blobName, isFavorite: false, tags: [], createdAt, modifiedAt: createdAt } as VaultEntry)
         continue
       }
 
@@ -182,20 +197,24 @@ files.post("/upload", async (c) => {
         contentType: file.type || "application/octet-stream",
       })
 
-      await db.insert(vaultEntries).values({
+      const entry = {
         id,
         ownerId: null,
+        parentId,
         name: file.name,
-        path: virtualPath,
         type: "file",
         size: file.size,
         contentType: file.type || "application/octet-stream",
         blobName,
+        isFavorite: "0",
+        tags: null,
+        deletedAt: null,
         createdAt,
         modifiedAt: createdAt,
-      }).run()
+      }
+      await db.items.create(entry)
 
-      uploaded.push({ id, name: file.name, path: virtualPath, type: "file", size: file.size, contentType: file.type || "application/octet-stream", modifiedAt: createdAt } as VaultEntry)
+      uploaded.push({ id, ownerId: null, parentId, name: file.name, type: "file", size: file.size, contentType: file.type || "application/octet-stream", blobUrl: blobName, isFavorite: false, tags: [], createdAt, modifiedAt: createdAt } as VaultEntry)
     } catch (err) {
       throw new HTTPException(500, { message: `Upload failed for ${file.name}` })
     }
@@ -205,39 +224,33 @@ files.post("/upload", async (c) => {
 })
 
 /**
- * GET /api/files/download?path=Movies/movie.mp4
+ * GET /api/files/download?id=uuid
  * Stream a single file back to the client with original content type.
  */
 files.get("/download", async (c) => {
   const id = c.req.query("id")
-  const pathQuery = normalizePath(c.req.query("path"))
-  if (!id && !pathQuery) throw new HTTPException(400, { message: "Missing 'id' or 'path' query param" })
+  if (!id) throw new HTTPException(400, { message: "Missing 'id' query param" })
 
-  let row: any = null
-  if (id) {
-    row = await db.select().from(vaultEntries).where(eq(vaultEntries.id, id)).get()
-  } else if (pathQuery) {
-    row = await db.select().from(vaultEntries).where(eq(vaultEntries.path, pathQuery)).get()
-  }
+  const { resource } = await db.item(id).read()
 
-  if (!row) {
+  if (!resource) {
     throw new HTTPException(404, { message: "File not found" })
   }
 
-  if (!row.blobName) throw new HTTPException(400, { message: "Not a file" })
+  if (!resource.blobName) throw new HTTPException(400, { message: "Not a file" })
 
   const store = await getBlobStore()
-  if (!(await store.exists(row.blobName))) {
+  if (!(await store.exists(resource.blobName))) {
     throw new HTTPException(404, { message: "File blob not found" })
   }
 
-  const { stream: downloadStream, metadata } = await store.download(row.blobName)
+  const { stream: downloadStream, metadata } = await store.download(resource.blobName)
 
   c.header("Content-Type", metadata.contentType ?? "application/octet-stream")
   c.header("Content-Length", String(metadata.size))
   c.header(
     "Content-Disposition",
-    `attachment; filename="${encodeURIComponent(row.name)}"`,
+    `attachment; filename="${encodeURIComponent(resource.name)}"`,
   )
 
   return stream(c, async (s) => {
@@ -248,57 +261,47 @@ files.get("/download", async (c) => {
   })
 })
 
-/**
- * GET /api/files/sas?path=Movies/movie.mp4
- * Return a short-lived SAS upload URL for a given target blob path.
- */
-files.get("/sas", async (c) => {
-  const path = normalizePath(c.req.query("path"))
-  if (!path) throw new HTTPException(400, { message: "Missing 'path' query param" })
-
-  const name = path.split("/").pop() ?? ""
-  if (!isSafeName(name)) {
-    throw new HTTPException(400, { message: `Invalid filename: ${name}` })
-  }
-
-  // Compatibility: generate a SAS for a blob name at the given virtual path.
-  // New clients should prefer creating an id and requesting a SAS for the
-  // canonical blob name (vault/blobs/<id>).
-  try {
-    const { url } = await generateUploadSAS(path)
-    return c.json({ uploadUrl: url })
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to generate SAS"
-    throw new HTTPException(500, { message })
-  }
-})
 
 /**
  * PATCH /api/files/rename
- * Rename or move a file by copy-then-delete. Folders are not renamed
- * here; that would require recursing every blob under the prefix.
+ * Rename a file or folder by ID.
  */
 files.patch("/rename", zValidator("json", RenameBody), async (c) => {
-  const { from, to, id } = c.req.valid("json") as unknown as { from?: string; to?: string; id?: string }
-  const dst = normalizePath(to)
-  if (!dst) throw new HTTPException(400, { message: "Invalid destination path" })
+  const { id, name } = c.req.valid("json")
 
-  let row: any = null
-  if (id) {
-    row = await db.select().from(vaultEntries).where(eq(vaultEntries.id, id)).get()
-  } else if (from) {
-    const src = normalizePath(from)
-    row = await db.select().from(vaultEntries).where(eq(vaultEntries.path, src)).get()
-  }
+  const { resource } = await db.item(id).read()
+  if (!resource) throw new HTTPException(404, { message: "Item not found" })
+  if (resource.name === name) return c.json({ id, name })
 
-  if (!row) throw new HTTPException(404, { message: "Source not found" })
-  if (row.path === dst) return c.json({ path: dst })
+  const modifiedAt = new Date().toISOString()
+  const { resource: updated } = await db.item(id).replace({
+    ...resource,
+    name,
+    modifiedAt,
+  })
 
-  // Update virtual path and name. Blob stays the same.
-  const newName = dst.split("/").pop() ?? row.name
-  await db.update(vaultEntries).set({ path: dst, name: newName, modifiedAt: new Date().toISOString() }).where(eq(vaultEntries.id, row.id)).run()
+  return c.json({ id, name })
+})
 
-  return c.json({ id: row.id, path: dst })
+/**
+ * PATCH /api/files/move
+ * Move a file or folder to a different parent folder by ID.
+ */
+files.patch("/move", zValidator("json", MoveBody), async (c) => {
+  const { id, parentId } = c.req.valid("json")
+
+  const { resource } = await db.item(id).read()
+  if (!resource) throw new HTTPException(404, { message: "Item not found" })
+  if (resource.parentId === parentId) return c.json({ id, parentId })
+
+  const modifiedAt = new Date().toISOString()
+  await db.item(id).replace({
+    ...resource,
+    parentId,
+    modifiedAt,
+  })
+
+  return c.json({ id, parentId })
 })
 
 /**
@@ -306,41 +309,75 @@ files.patch("/rename", zValidator("json", RenameBody), async (c) => {
  * Delete a single file, or a folder and everything inside it.
  */
 files.delete("/", zValidator("json", DeleteBody), async (c) => {
-  const { path, isFolder, id } = c.req.valid("json") as unknown as { path?: string; isFolder?: boolean; id?: string }
+  const { id } = c.req.valid("json")
 
-  let store = await getBlobStore()
+  const store = await getBlobStore()
 
-  if (!isFolder) {
-    let row: any = null
-    if (id) row = await db.select().from(vaultEntries).where(eq(vaultEntries.id, id)).get()
-    else if (path) row = await db.select().from(vaultEntries).where(eq(vaultEntries.path, normalizePath(path))).get()
+  const { resource } = await db.item(id).read()
+  if (!resource) throw new HTTPException(404, { message: "Item not found" })
 
-    if (!row) throw new HTTPException(404, { message: "File not found" })
-    if (row.blobName) {
-      if (await store.exists(row.blobName)) {
-        await store.delete(row.blobName)
+  if (resource.type === "folder") {
+    // Delete all entries under this folder and their blobs.
+    const querySpec = {
+      query: "SELECT * FROM c WHERE c.parentId = @parentId",
+      parameters: [{ name: "@parentId", value: id }],
+    }
+    const { resources } = await db.items.query(querySpec).fetchAll()
+    let deletedCount = 0
+    for (const r of resources) {
+      if (r.blobName && (await store.exists(r.blobName))) {
+        await store.delete(r.blobName)
+        deletedCount++
       }
+      await db.item(r.id).delete()
     }
-    await db.delete(vaultEntries).where(eq(vaultEntries.id, row.id)).run()
-    return c.json({ deleted: 1 })
+    // Delete the folder itself
+    await db.item(id).delete()
+    return c.json({ deleted: deletedCount + 1 })
   }
 
-  const norm = normalizePath(path)
-  if (!norm) throw new HTTPException(400, { message: "Path is required for folder delete" })
-
-  // Delete all entries under this prefix and their blobs.
-  const rows = await db.select().from(vaultEntries)
-  const toDelete = rows.filter((r: any) => r.path === norm || r.path.startsWith(norm + "/"))
-  let deletedCount = 0
-  for (const r of toDelete) {
-    if (r.blobName && (await store.exists(r.blobName))) {
-      await store.delete(r.blobName)
-      deletedCount++
+  // Single file deletion
+  if (resource.blobName) {
+    if (await store.exists(resource.blobName)) {
+      await store.delete(resource.blobName)
     }
-    await db.delete(vaultEntries).where(eq(vaultEntries.id, r.id)).run()
   }
+  await db.item(id).delete()
+  return c.json({ deleted: 1 })
+})
 
-  return c.json({ deleted: deletedCount })
+/**
+ * GET /api/files/quick-links
+ * Get counts for Quick Links (starred, recent, tags, trash).
+ */
+files.get("/quick-links", async (c) => {
+  const { resources } = await db.items.readAll().fetchAll()
+
+  // Starred: isFavorite = "1" and not deleted
+  const starred = resources.filter((r: any) => r.isFavorite === "1" && !r.deletedAt).length
+
+  // Recent: files modified in last 7 days and not deleted
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const recent = resources.filter((r: any) => {
+    if (!r.modifiedAt || r.deletedAt) return false
+    return new Date(r.modifiedAt) > new Date(sevenDaysAgo)
+  }).length
+
+  // Tags: files with non-empty tags array and not deleted
+  const tags = resources.filter((r: any) => {
+    if (r.deletedAt) return false
+    try {
+      const parsed = r.tags ? JSON.parse(r.tags) : []
+      return Array.isArray(parsed) && parsed.length > 0
+    } catch {
+      return false
+    }
+  }).length
+
+  // Trash: soft-deleted items (deletedAt is not null)
+  const trash = resources.filter((r: any) => r.deletedAt).length
+
+  return c.json({ starred, recent, tags, trash })
 })
 
 export default files

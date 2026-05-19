@@ -4,10 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n azurite,api,web -c \"#fbbf24,#a78bfa,#22d3ee\" \"pnpm azurite\" \"pnpm dev:api\" \"pnpm dev:web\"",
+    "dev": "concurrently -n azurite,api,web -c \"#fbbf24,#a78bfa,#22d3ee\" \"docker compose up\" \"pnpm dev:api\" \"pnpm dev:web\"",
     "dev:web": "pnpm --filter @vault/web dev",
     "dev:api": "tsx watch apps/server/src/index.ts",
-    "azurite": "azurite-blob --silent --location ./.azurite-data --debug ./.azurite-data/debug.log --blobHost 127.0.0.1 --blobPort 10000",
     "seed": "tsx apps/server/scripts/seed.ts",
     "build": "pnpm --filter @vault/web build",
     "start": "tsx apps/server/src/index.ts",
@@ -23,7 +22,6 @@
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "@types/node": "^22.10.0",
-    "azurite": "^3.35.0",
     "concurrently": "^9.0.0",
     "tsx": "^4.21.0",
     "typescript": "~5.6.3",

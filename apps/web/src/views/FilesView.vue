@@ -5,57 +5,61 @@ import AppSidebar from "../components/AppSidebar.vue";
 import FileList from "../components/FileList.vue";
 import DetailsPanel from "../components/DetailsPanel.vue";
 import { useFiles } from "../composables/useFiles";
-import { routeToCurrentPath } from "../router";
+import { routeToEntityId } from "../router";
+import { client } from "@/lib/client";
 
 const route = useRoute();
 const router = useRouter();
 
-const currentPath = computed(() => routeToCurrentPath(route.params.path));
-const selectedPath = computed(() => (route.query.selected as string) || null);
+const currentEntityId = computed(() => routeToEntityId(route.params.entityId));
+const selectedId = computed(() => (route.query.selected as string) || null);
 
-const { entries, loading, error, refresh } = useFiles(currentPath);
+const { entries, loading, error, refresh } = useFiles(currentEntityId);
 
 const selectedFile = computed(
-  () => entries.value.find((e) => e.path === selectedPath.value) ?? null,
+  () => entries.value.find((e) => e.id === selectedId.value) ?? null,
 );
 
-function handleSelect(path: string) {
-  const entry = entries.value.find((e) => e.path === path);
+function handleSelect(id: string) {
+  const entry = entries.value.find((e) => e.id === id);
   if (entry?.type === "folder") {
-    router.push({ name: "files", params: { path: path.split("/") } });
+    router.push({ name: "content", params: { entityId: id } });
   } else {
     router.push({
-      name: "files",
-      params: { path: currentPath.value ? currentPath.value.split("/") : [] },
-      query: { selected: path },
+      name: "content",
+      params: { entityId: currentEntityId.value ?? undefined },
+      query: { selected: id },
     });
   }
 }
 
-function navigateTo(path: string) {
+function navigateTo(entityId: string | null) {
   router.push({
-    name: "files",
-    params: { path: path ? path.split("/") : [] },
+    name: "content",
+    params: entityId ? { entityId } : {},
   });
 }
 
-function handleSidebarSelect(id: string) {
-  navigateTo(id);
+async function handleCreateFolder() {
+  const name = prompt("Enter folder name:");
+  if (!name) return;
+  
+  try {
+    await client.createFolder({
+      parentId: currentEntityId.value ?? null,
+      name,
+    });
+    await refresh();
+  } catch (err) {
+    console.error("Failed to create folder:", err);
+    alert("Failed to create folder");
+  }
 }
-
-const breadcrumbs = computed(() => {
-  if (!currentPath.value) return [];
-  const parts = currentPath.value.split("/");
-  return parts.map((_, i) => ({
-    name: parts[i],
-    path: parts.slice(0, i + 1).join("/"),
-  }));
-});
 </script>
 
 <template>
   <main class="flex flex-1 overflow-hidden">
-    <AppSidebar :active-id="currentPath" @select="handleSidebarSelect" />
+    <AppSidebar />
     <div
       v-if="loading"
       class="grid flex-1 place-items-center text-muted-foreground text-sm"
@@ -71,12 +75,12 @@ const breadcrumbs = computed(() => {
     <FileList
       v-else
       :files="entries"
-      :selected-path="selectedPath ?? ''"
-      :current-path="currentPath"
-      :breadcrumbs="breadcrumbs"
+      :selected-id="selectedId ?? ''"
+      :current-entity-id="currentEntityId ?? ''"
       @select="handleSelect"
       @navigate="navigateTo"
       @upload-complete="refresh"
+      @create-folder="handleCreateFolder"
     />
     <DetailsPanel :file="selectedFile" />
   </main>

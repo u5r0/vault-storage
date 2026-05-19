@@ -1,9 +1,7 @@
 import argon2 from "argon2"
 import { sign, verify } from "hono/jwt"
-import { users, refreshTokens } from "../db/schema"
 import { db } from "../db"
 import { randomUUID } from "crypto"
-import { eq } from "drizzle-orm"
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me"
 const ACCESS_EXPIRES_SECS = Number(process.env.ACCESS_EXPIRES_SECONDS || 15 * 60)
@@ -47,8 +45,13 @@ export async function verifyToken(token: string) {
 }
 
 export async function createUser(email: string, password: string) {
-  const existing = await db.select().from(users).where(eq(users.email, email))
-  if (existing.length > 0) throw new Error("User exists")
+  // Check if user exists in Cosmos DB
+  const querySpec = {
+    query: "SELECT * FROM c WHERE c.type = 'user' AND c.email = @email",
+    parameters: [{ name: "@email", value: email }],
+  }
+  const { resources } = await db.items.query(querySpec).fetchAll()
+  if (resources.length > 0) throw new Error("User exists")
 
   const id = randomUUID()
   const passwordHash = await hashPassword(password)
@@ -58,24 +61,39 @@ export async function createUser(email: string, password: string) {
   const verificationToken = randomUUID()
   const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
 
-  await db
-    .insert(users)
-    .values({ id, email, passwordHash, createdAt, verified: "0", verificationToken, verificationExpires: verificationExpires.toISOString() })
-    .run()
+  const user = {
+    id,
+    type: "user",
+    email,
+    passwordHash,
+    createdAt,
+    verified: "0",
+    verificationToken,
+    verificationExpires: verificationExpires.toISOString(),
+  }
+
+  await db.items.create(user)
 
   return { id, email, createdAt, verificationToken }
 }
 
 export async function storeRefreshToken(jti: string, userId: string, expiresAt: Date) {
-  await db.insert(refreshTokens).values({ jti, userId, expiresAt: expiresAt.toISOString() }).run()
+  const token = {
+    id: jti,
+    type: "refresh_token",
+    userId,
+    expiresAt: expiresAt.toISOString(),
+  }
+  await db.items.create(token)
 }
 
 export async function findRefreshToken(jti: string) {
-  return db.select().from(refreshTokens).where(eq(refreshTokens.jti, jti)).get()
+  const { resource } = await db.item(jti).read()
+  return resource
 }
 
 export async function deleteRefreshToken(jti: string) {
-  await db.delete(refreshTokens).where(eq(refreshTokens.jti, jti)).run()
+  await db.item(jti).delete()
 }
 
 export async function rotateRefreshToken(oldJti: string, userId: string) {

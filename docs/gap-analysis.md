@@ -1,6 +1,6 @@
 # Gap Analysis
 
-Codebase review conducted 2026-05-17. Items ordered by priority.
+Codebase review conducted 2026-05-17. Updated 2026-05-19 for Cosmos DB and ID-based routing migration. Items ordered by priority.
 
 
 ## Critical
@@ -16,8 +16,18 @@ Phase B (error paths, `format.test.ts`) and Phase C (Playwright) tracked in [ADR
 ### 2. No authentication / authorization
 `.env.example` hints at JWT but no auth middleware, login/signup routes, or user concept. API is wide open.
 
-### 3. No metadata persistence
-Sidebar counts (Starred, Recent, Tags, Trash) are hardcoded. No database for user-specific metadata — stars, tags, trash state, recents. Backend only handles raw blob CRUD. **Coupled with the path-vs-ID decision** ([ADR 0003](adr/0003-path-as-identifier.md)) — adopting metadata persistence is the trigger for migrating off path-as-identifier.
+### 3. ~~No metadata persistence~~ — Architecture decided
+**Status:** Architecture decided (ADR 0007 amended 2026-05-19).
+
+Sidebar counts (Starred, Recent, Tags, Trash) are hardcoded. No database for user-specific metadata — stars, tags, trash state, recents. Backend only handles raw blob CRUD.
+
+**Decision:** Azure Cosmos DB with document model. Single collection stores both folders and files with `parentId` field for hierarchy. This enables:
+- Instant directory rendering via single query
+- Instant favorites/tag searching across entire hierarchy
+- O(1) folder moves (just update parentId)
+- Rich metadata support (tags, custom metadata, favorites)
+
+See [ADR 0007](adr/0007-auth-and-identity-migration.md) for full details.
 
 ### 4. Search is dead UI
 `AppHeader.vue` has `v-model="query"` but `query` is never consumed. No search API endpoint or filtering logic.

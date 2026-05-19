@@ -24,12 +24,16 @@ pnpm install
 # Copy environment variables
 cp .env.example .env
 
-# Start development servers (Azurite, API, web)
+# Start development servers (Azurite, Cosmos DB Emulator, API, web)
 pnpm dev
 
 # Seed sample data (optional)
 pnpm seed
 ```
+
+**Prerequisites:**
+- **Azure Cosmos DB Emulator** for local development (Docker-based). The emulator provides the full Cosmos DB feature set without requiring cloud resources. It runs alongside Azurite in the development environment.
+- **Azure Blob Storage** credentials (or Azurite for local emulation)
 
 ### Running Tests
 

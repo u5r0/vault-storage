@@ -1,6 +1,11 @@
 import type { ContainerClient } from "@azure/storage-blob"
-import type { BlobStore, BlobListItem, BlobMetadata, UploadOptions, DownloadResult } from "./storage"
-import { FOLDER_KEEP } from "./paths"
+import type { 
+  BlobStore, 
+  BlobListItem, 
+  BlobMetadata, 
+  UploadOptions, 
+  DownloadResult 
+} from "./storage"
 import { Readable } from "stream"
 
 /**
@@ -24,7 +29,7 @@ export class AzureBlobStore implements BlobStore {
       } else {
         // File
         const name = item.name.slice(prefix.length)
-        if (!name || name === FOLDER_KEEP) continue
+        if (!name) continue
 
         const props = item.properties
         yield {
@@ -66,9 +71,8 @@ export class AzureBlobStore implements BlobStore {
     }
 
     // Node stream (has pipe)
-    if (typeof (data as NodeJS.ReadableStream).pipe === "function") {
-      const nodeStream = data as NodeJS.ReadableStream
-      await block.uploadStream(nodeStream, 4 * 1024 * 1024, 5, headers)
+    if (typeof (data as any).pipe === "function") {
+      await block.uploadStream(data as any, 4 * 1024 * 1024, 5, headers)
       return
     }
 

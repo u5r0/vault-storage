@@ -4,14 +4,14 @@ import { client as defaultClient } from "@/lib/client"
 import type { VaultStore, VaultEntry } from "@vault/sdk"
 
 export function useFiles(
-  path: Ref<string> | string,
+  entityId: Ref<string | null> | string | null,
   client: VaultStore = defaultClient,
 ) {
-  const p = () => (typeof path === "string" ? path : path.value)
+  const id = () => (typeof entityId === "string" ? entityId : entityId?.value ?? null)
 
   const { data, loading, error, refresh } = useAsync(
-    () => client.listFiles({ path: p() }),
-    p,
+    () => client.listFiles({ entityId: id() ?? undefined }),
+    id,
   )
 
   const entries = computed<VaultEntry[]>(() => data.value?.entries ?? [])

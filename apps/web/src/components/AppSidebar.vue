@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { ref } from "vue"
+import { ref, onMounted } from "vue"
 import {
-  ChevronRight,
-  Folder,
   FolderOpen,
   Star,
   Clock,
@@ -10,90 +8,35 @@ import {
   Tag,
   HardDrive,
 } from "@lucide/vue"
-const sidebarTree = [
-  { id: "", name: "Root" },
-  { id: "Movies", name: "Movies" },
-  { id: "Pictures", name: "Pictures" },
-  { id: "Documents", name: "Documents" },
-]
+import { client } from "@/lib/client"
 
-const props = defineProps<{ activeId: string }>()
-const emit = defineEmits<{ (e: "select", id: string): void }>()
-
-const expanded = ref<Record<string, boolean>>({})
-function toggle(id: string) {
-  expanded.value[id] = !expanded.value[id]
-}
-
-const quickLinks = [
-  { id: "starred", name: "Starred", icon: Star, count: 12 },
-  { id: "recent", name: "Recent", icon: Clock, count: 24 },
-  { id: "tags", name: "Tags", icon: Tag, count: 8 },
-  { id: "trash", name: "Trash", icon: Trash2, count: 3 },
-]
+const quickLinks = ref([
+  { id: "starred", name: "Starred", icon: Star, count: 0 },
+  { id: "recent", name: "Recent", icon: Clock, count: 0 },
+  { id: "tags", name: "Tags", icon: Tag, count: 0 },
+  { id: "trash", name: "Trash", icon: Trash2, count: 0 },
+])
 
 const usedGB = 624
 const totalGB = 1200
+
+onMounted(async () => {
+  try {
+    const data = await client.getQuickLinks()
+    quickLinks.value[0].count = data.starred
+    quickLinks.value[1].count = data.recent
+    quickLinks.value[2].count = data.tags
+    quickLinks.value[3].count = data.trash
+  } catch (err) {
+    console.error("Failed to load quick links:", err)
+  }
+})
 </script>
 
 <template>
   <aside
     class="hidden h-full w-64 shrink-0 flex-col gap-6 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-background)]/60 px-3 py-5 md:flex"
   >
-    <!-- My files header -->
-    <div class="px-2">
-      <div class="mb-3 flex items-center gap-2">
-        <span
-          class="grid h-7 w-7 place-items-center rounded-[var(--radius-sm)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
-        >
-          <FolderOpen :size="15" :stroke-width="2" />
-        </span>
-        <h2 class="text-[15px] font-semibold tracking-tight">My files</h2>
-      </div>
-
-      <ul class="flex flex-col gap-0.5">
-        <li v-for="folder in sidebarTree" :key="folder.id">
-          <button
-            type="button"
-            @click="
-              () => {
-                toggle(folder.id)
-                emit('select', folder.id)
-              }
-            "
-            :class="[
-              'group flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 py-2 text-left text-[13.5px] transition',
-              props.activeId === folder.id
-                ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]'
-                : 'text-foreground/85 hover:bg-[var(--color-muted)]',
-            ]"
-          >
-            <ChevronRight
-              :size="14"
-              :stroke-width="2.25"
-              :class="[
-                'shrink-0 transition-transform',
-                expanded[folder.id] ? 'rotate-90' : '',
-                props.activeId === folder.id
-                  ? 'text-[var(--color-primary)]'
-                  : 'text-muted-foreground',
-              ]"
-            />
-            <Folder
-              :size="16"
-              :stroke-width="1.75"
-              :class="
-                props.activeId === folder.id
-                  ? 'text-[var(--color-primary)]'
-                  : 'text-muted-foreground group-hover:text-foreground'
-              "
-            />
-            <span class="truncate">{{ folder.name }}</span>
-          </button>
-        </li>
-      </ul>
-    </div>
-
     <!-- Quick links -->
     <div class="px-2">
       <h3

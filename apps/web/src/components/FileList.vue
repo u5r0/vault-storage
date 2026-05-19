@@ -9,7 +9,6 @@ import {
   LayoutGrid,
   List,
   Home,
-  ChevronRight,
   FolderOpen,
 } from "@lucide/vue"
 import { UppyContextProvider, Dropzone, FilesList, UploadButton } from "@uppy/vue"
@@ -21,15 +20,15 @@ import { useVaultUpload } from "@/composables/useVaultUpload"
 
 const props = defineProps<{
   files: VaultEntry[]
-  selectedPath: string
-  currentPath: string
-  breadcrumbs: { name: string; path: string }[]
+  selectedId: string
+  currentEntityId: string
 }>()
 
 const emit = defineEmits<{
-  select: [path: string]
-  navigate: [path: string]
+  select: [id: string]
+  navigate: [entityId: string | null]
   "upload-complete": []
+  "create-folder": []
 }>()
 
 const view = ref<"list" | "grid">("list")
@@ -37,7 +36,7 @@ const sortKey = ref<"name" | "modified" | "type" | "size">("name")
 const sortAsc = ref(true)
 
 const { uppy, hasPending } = useVaultUpload({
-  currentPath: toRef(props, "currentPath"),
+  currentEntityId: toRef(props, "currentEntityId"),
   onUploadComplete: () => emit("upload-complete"),
 })
 
@@ -67,6 +66,7 @@ const sorted = computed(() => {
 })
 
 const isEmpty = computed(() => props.files.length === 0)
+const isRoot = computed(() => !props.currentEntityId)
 
 const toolbarActions = [
   { id: "details", icon: ClipboardList, label: "Properties" },
@@ -84,7 +84,7 @@ const toolbarActions = [
     <div class="flex items-center gap-3 border-b border-[var(--color-border)] px-5 py-3.5">
       <button
         type="button"
-        @click="emit('navigate', '')"
+        @click="emit('navigate', null)"
         class="grid h-8 w-8 place-items-center rounded-[var(--radius-sm)] bg-[var(--color-primary-soft)] text-[var(--color-primary)] transition hover:opacity-80"
         aria-label="Root"
       >
@@ -92,22 +92,6 @@ const toolbarActions = [
       </button>
 
       <p class="text-[11.5px] text-muted-foreground">{{ props.files.length }} items</p>
-
-      <nav v-if="breadcrumbs.length" class="flex items-center gap-0.5 text-[13px]" aria-label="Breadcrumb">
-        <ChevronRight :size="12" :stroke-width="2" class="mx-0.5 text-muted-foreground" />
-        <template v-for="(crumb, i) in breadcrumbs" :key="crumb.path">
-          <button
-            v-if="i < breadcrumbs.length - 1"
-            type="button"
-            @click="emit('navigate', crumb.path)"
-            class="rounded-[var(--radius-xs)] px-1.5 py-0.5 text-muted-foreground transition hover:bg-[var(--color-muted)] hover:text-foreground"
-          >
-            {{ crumb.name }}
-          </button>
-          <span v-else class="px-1.5 font-medium">{{ crumb.name }}</span>
-          <ChevronRight v-if="i < breadcrumbs.length - 1" :size="12" :stroke-width="2" class="text-muted-foreground" />
-        </template>
-      </nav>
 
       <div class="ml-auto flex items-center gap-1">
         <div
@@ -190,8 +174,19 @@ const toolbarActions = [
           <div class="w-full max-w-md">
             <FolderOpen :size="28" :stroke-width="1.5" class="mx-auto text-muted-foreground/70" />
             <p class="mt-3 text-sm font-medium">This folder is empty</p>
-            <p class="mt-1 text-[12px] text-muted-foreground">Drop files here or browse to upload.</p>
-            <div class="vault-uppy mt-5">
+            <p v-if="isRoot" class="mt-1 text-[12px] text-muted-foreground">Create a folder to get started.</p>
+            <p v-else class="mt-1 text-[12px] text-muted-foreground">Drop files here or browse to upload.</p>
+            <div v-if="isRoot" class="mt-5">
+              <button
+                type="button"
+                @click="emit('create-folder')"
+                class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] transition hover:opacity-90"
+              >
+                <FolderOpen :size="16" :stroke-width="2" />
+                Create new folder
+              </button>
+            </div>
+            <div v-else class="vault-uppy mt-5">
               <Dropzone note="Up to 20 files" class="vault-uppy-dropzone" />
               <div class="mt-3 flex justify-center">
                 <UploadButton class="vault-uppy-upload" />
@@ -201,13 +196,13 @@ const toolbarActions = [
         </div>
 
         <ul v-else class="flex flex-col px-2 py-2">
-          <li v-for="file in sorted" :key="file.path">
+          <li v-for="file in sorted" :key="file.id">
             <button
               type="button"
-              @click="emit('select', file.path)"
+              @click="emit('select', file.id)"
               :class="[
                 'grid w-full grid-cols-[minmax(0,1fr)_180px_140px_100px] items-center gap-4 rounded-[var(--radius-md)] px-3 py-2.5 text-left text-[13.5px] transition',
-                selectedPath === file.path
+                selectedId === file.id
                   ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--color-primary)_20%,transparent)]'
                   : 'hover:bg-[var(--color-muted)]',
               ]"
@@ -216,14 +211,14 @@ const toolbarActions = [
                 <span
                   :class="[
                     'grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius-sm)]',
-                    selectedPath === file.path
+                    selectedId === file.id
                       ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
                       : 'bg-[var(--color-muted)] text-muted-foreground',
                   ]"
                 >
                   <FileIcon
                     :type="fileIconType(file)"
-                    :tone="selectedPath === file.path ? 'primary' : 'muted'"
+                    :tone="selectedId === file.id ? 'primary' : 'muted'"
                     :size="16"
                   />
                 </span>
@@ -239,7 +234,7 @@ const toolbarActions = [
         </ul>
 
         <div
-          v-if="!isEmpty"
+          v-if="!isEmpty && !isRoot"
           class="sticky bottom-0 mt-auto border-t border-[var(--color-border)] bg-[var(--color-background)]/95 px-5 py-3 backdrop-blur"
         >
           <div class="vault-uppy flex items-center gap-3">
@@ -255,8 +250,19 @@ const toolbarActions = [
           <div class="w-full max-w-md">
             <FolderOpen :size="28" :stroke-width="1.5" class="mx-auto text-muted-foreground/70" />
             <p class="mt-3 text-sm font-medium">This folder is empty</p>
-            <p class="mt-1 text-[12px] text-muted-foreground">Drop files here or browse to upload.</p>
-            <div class="vault-uppy mt-5">
+            <p v-if="isRoot" class="mt-1 text-[12px] text-muted-foreground">Create a folder to get started.</p>
+            <p v-else class="mt-1 text-[12px] text-muted-foreground">Drop files here or browse to upload.</p>
+            <div v-if="isRoot" class="mt-5">
+              <button
+                type="button"
+                @click="emit('create-folder')"
+                class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] transition hover:opacity-90"
+              >
+                <FolderOpen :size="16" :stroke-width="2" />
+                Create new folder
+              </button>
+            </div>
+            <div v-else class="vault-uppy mt-5">
               <Dropzone note="Up to 20 files" class="vault-uppy-dropzone" />
               <div class="mt-3 flex justify-center">
                 <UploadButton class="vault-uppy-upload" />
@@ -266,13 +272,13 @@ const toolbarActions = [
         </div>
 
         <ul v-else class="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3 xl:grid-cols-4">
-          <li v-for="file in sorted" :key="file.path">
+          <li v-for="file in sorted" :key="file.id">
             <button
               type="button"
-              @click="emit('select', file.path)"
+              @click="emit('select', file.id)"
               :class="[
                 'group flex h-full w-full flex-col items-start gap-3 rounded-[var(--radius-md)] border p-4 text-left transition',
-                selectedPath === file.path
+                selectedId === file.id
                   ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary-soft)]'
                   : 'border-[var(--color-border)] bg-[var(--color-card)] hover:border-[var(--color-primary)]/30 hover:shadow-[0_8px_24px_-12px_color-mix(in_oklch,var(--color-primary)_25%,transparent)]',
               ]"
@@ -280,7 +286,7 @@ const toolbarActions = [
               <span
                 :class="[
                   'grid h-10 w-10 place-items-center rounded-[var(--radius-sm)]',
-                  selectedPath === file.path
+                  selectedId === file.id
                     ? 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
                     : 'bg-[var(--color-muted)] text-muted-foreground group-hover:text-foreground',
                 ]"
@@ -298,7 +304,7 @@ const toolbarActions = [
         </ul>
 
         <div
-          v-if="!isEmpty"
+          v-if="!isEmpty && !isRoot"
           class="sticky bottom-0 mt-auto border-t border-[var(--color-border)] bg-[var(--color-background)]/95 px-5 py-3 backdrop-blur"
         >
           <div class="vault-uppy flex items-center gap-3">

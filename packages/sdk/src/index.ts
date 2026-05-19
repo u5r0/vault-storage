@@ -11,12 +11,17 @@ export type User = z.infer<typeof UserSchema>;
 
 export const VaultEntrySchema = z.object({
   id: z.string().uuid(),
-  ownerId: z.string().uuid(),
+  ownerId: z.string().uuid().nullable(),
+  parentId: z.string().nullable(),
   name: z.string(),
-  path: z.string(),
   type: z.enum(["file", "folder"]),
   size: z.number(),
   contentType: z.string().nullable(),
+  blobUrl: z.string().nullable(),
+  isFavorite: z.boolean().default(false),
+  tags: z.array(z.string()).default([]),
+  metadata: z.record(z.string(), z.any()).optional(),
+  createdAt: z.string(),
   modifiedAt: z.string().nullable(),
 });
 
@@ -37,38 +42,44 @@ export const LoginBody = z.object({
 export type LoginInput = z.infer<typeof LoginBody>;
 
 export const ListFilesQuery = z.object({
-  path: z.string().optional().default(""),
+  entityId: z.string().uuid().nullable().optional(),
 });
 export type ListFilesInput = z.infer<typeof ListFilesQuery>;
 
 export const CreateFolderBody = z.object({
-  path: z.string().optional().default(""),
+  parentId: z.string().uuid().nullable().optional(),
   name: z.string().min(1).max(255),
 });
 export type CreateFolderInput = z.infer<typeof CreateFolderBody>;
 
 export const RenameBody = z.object({
-  from: z.string().min(1),
-  to: z.string().min(1),
+  id: z.string().uuid(),
+  name: z.string().min(1),
 });
 export type RenameInput = z.infer<typeof RenameBody>;
 
+export const MoveBody = z.object({
+  id: z.string().uuid(),
+  parentId: z.string().uuid().nullable().optional(),
+});
+export type MoveInput = z.infer<typeof MoveBody>;
+
 export const DeleteBody = z.object({
-  path: z.string().min(1),
-  isFolder: z.boolean().optional().default(false),
+  id: z.string().uuid(),
 });
 export type DeleteInput = z.infer<typeof DeleteBody>;
 
 /* ======================== Response schemas ======================== */
 
 export const ListFilesResponse = z.object({
-  path: z.string(),
+  entityId: z.string().nullable(),
   entries: z.array(VaultEntrySchema),
 });
 export type ListFilesResult = z.infer<typeof ListFilesResponse>;
 
 export const CreateFolderResponse = z.object({
-  path: z.string(),
+  id: z.string().uuid(),
+  parentId: z.string().nullable(),
   type: z.literal("folder"),
 });
 export type CreateFolderResult = z.infer<typeof CreateFolderResponse>;
@@ -79,14 +90,29 @@ export const UploadResponse = z.object({
 export type UploadResult = z.infer<typeof UploadResponse>;
 
 export const RenameResponse = z.object({
-  path: z.string(),
+  id: z.string().uuid(),
+  name: z.string(),
 });
 export type RenameResult = z.infer<typeof RenameResponse>;
+
+export const MoveResponse = z.object({
+  id: z.string().uuid(),
+  parentId: z.string().nullable(),
+});
+export type MoveResult = z.infer<typeof MoveResponse>;
 
 export const DeleteResponse = z.object({
   deleted: z.number(),
 });
 export type DeleteResult = z.infer<typeof DeleteResponse>;
+
+export const QuickLinksResponse = z.object({
+  starred: z.number(),
+  recent: z.number(),
+  tags: z.number(),
+  trash: z.number(),
+});
+export type QuickLinksResult = z.infer<typeof QuickLinksResponse>;
 
 export const AuthResponse = z.object({
   user: UserSchema,
@@ -102,10 +128,12 @@ export interface VaultStore {
   me(): Promise<AuthResult>;
   listFiles(input?: Partial<ListFilesInput>): Promise<ListFilesResult>;
   createFolder(input: CreateFolderInput): Promise<CreateFolderResult>;
-  uploadFiles(input: { path?: string; files: File[] }): Promise<UploadResult>;
-  getDownloadUrl(path: string): string;
+  uploadFiles(input: { parentId?: string; files: File[] }): Promise<UploadResult>;
+  getDownloadUrl(id: string): string;
   renameFile(input: RenameInput): Promise<RenameResult>;
+  moveFile(input: MoveInput): Promise<MoveResult>;
   deleteFile(input: DeleteInput): Promise<DeleteResult>;
+  getQuickLinks(): Promise<QuickLinksResult>;
 }
 
 export class VaultClient implements VaultStore {
@@ -160,10 +188,9 @@ export class VaultClient implements VaultStore {
   async listFiles(
     input: Partial<ListFilesInput> = {},
   ): Promise<ListFilesResult> {
-    const path = input.path || "";
-    return this.request<ListFilesResult>(
-      `/api/files?path=${encodeURIComponent(path)}`,
-    );
+    const entityId = input.entityId ?? "";
+    const params = entityId ? `?entityId=${encodeURIComponent(entityId)}` : "";
+    return this.request<ListFilesResult>(`/api/files${params}`);
   }
 
   async createFolder(input: CreateFolderInput): Promise<CreateFolderResult> {
@@ -175,11 +202,11 @@ export class VaultClient implements VaultStore {
   }
 
   async uploadFiles(input: {
-    path?: string;
+    parentId?: string;
     files: File[];
   }): Promise<UploadResult> {
     const formData = new FormData();
-    if (input.path) formData.append("path", input.path);
+    if (input.parentId) formData.append("parentId", input.parentId);
     input.files.forEach((file) => formData.append("files", file));
 
     return this.request<UploadResult>(`/api/files/upload`, {
@@ -188,12 +215,20 @@ export class VaultClient implements VaultStore {
     });
   }
 
-  getDownloadUrl(path: string): string {
-    return `${this.baseUrl}/api/files/download?path=${encodeURIComponent(path)}`;
+  getDownloadUrl(id: string): string {
+    return `${this.baseUrl}/api/files/download?id=${encodeURIComponent(id)}`;
   }
 
   async renameFile(input: RenameInput): Promise<RenameResult> {
     return this.request<RenameResult>(`/api/files/rename`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  }
+
+  async moveFile(input: MoveInput): Promise<MoveResult> {
+    return this.request<MoveResult>(`/api/files/move`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
@@ -206,6 +241,10 @@ export class VaultClient implements VaultStore {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     });
+  }
+
+  async getQuickLinks(): Promise<QuickLinksResult> {
+    return this.request<QuickLinksResult>(`/api/files/quick-links`);
   }
 }
 
