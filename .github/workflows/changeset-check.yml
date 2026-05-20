@@ -1,0 +1,42 @@
+name: Changeset Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - run: pnpm install
+
+      - name: Check for changeset or No Changeset label
+        run: |
+          # Check if PR has "No Changeset" label
+          if gh pr view ${{ github.event.number }} --json labels -q '.labels[].name' | grep -q "No Changeset"; then
+            echo "PR has 'No Changeset' label - skipping changeset check"
+            exit 0
+          fi
+
+          # Check if changeset exists
+          if ! pnpm changeset status --since=origin/main; then
+            echo "❌ No changeset found. Add a changeset or add 'No Changeset' label."
+            exit 1
+          fi
+
+          echo "✅ Changeset found"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

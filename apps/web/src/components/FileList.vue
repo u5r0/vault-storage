@@ -9,14 +9,15 @@ import {
   LayoutGrid,
   List,
   Home,
-  FolderOpen,
 } from "@lucide/vue"
 import { UppyContextProvider, Dropzone, FilesList, UploadButton } from "@uppy/vue"
 import "@uppy/vue/css/style.css"
-import FileIcon from "./FileIcon.vue"
 import type { VaultEntry } from "@vault/sdk"
-import { formatSize, formatDate, typeLabel, fileIconType } from "@/lib/format"
+import { typeLabel } from "@/lib/format"
 import { useVaultUpload } from "@/composables/useVaultUpload"
+import FileListItem from "./FileListItem.vue"
+import FileGridItem from "./FileGridItem.vue"
+import FileEmptyState from "./FileEmptyState.vue"
 
 const props = defineProps<{
   files: VaultEntry[]
@@ -170,66 +171,19 @@ const toolbarActions = [
           </button>
         </div>
 
-        <div v-if="isEmpty" class="grid flex-1 place-items-center px-6 py-10 text-center">
-          <div class="w-full max-w-md">
-            <FolderOpen :size="28" :stroke-width="1.5" class="mx-auto text-muted-foreground/70" />
-            <p class="mt-3 text-sm font-medium">This folder is empty</p>
-            <p v-if="isRoot" class="mt-1 text-[12px] text-muted-foreground">Create a folder to get started.</p>
-            <p v-else class="mt-1 text-[12px] text-muted-foreground">Drop files here or browse to upload.</p>
-            <div v-if="isRoot" class="mt-5">
-              <button
-                type="button"
-                @click="emit('create-folder')"
-                class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] transition hover:opacity-90"
-              >
-                <FolderOpen :size="16" :stroke-width="2" />
-                Create new folder
-              </button>
-            </div>
-            <div v-else class="vault-uppy mt-5">
-              <Dropzone note="Up to 20 files" class="vault-uppy-dropzone" />
-              <div class="mt-3 flex justify-center">
-                <UploadButton class="vault-uppy-upload" />
-              </div>
-            </div>
-          </div>
-        </div>
+        <FileEmptyState
+          v-if="isEmpty"
+          :is-root="isRoot"
+          @create-folder="emit('create-folder')"
+        />
 
         <ul v-else class="flex flex-col px-2 py-2">
           <li v-for="file in sorted" :key="file.id">
-            <button
-              type="button"
-              @click="emit('select', file.id)"
-              :class="[
-                'grid w-full grid-cols-[minmax(0,1fr)_180px_140px_100px] items-center gap-4 rounded-[var(--radius-md)] px-3 py-2.5 text-left text-[13.5px] transition',
-                selectedId === file.id
-                  ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--color-primary)_20%,transparent)]'
-                  : 'hover:bg-[var(--color-muted)]',
-              ]"
-            >
-              <div class="flex min-w-0 items-center gap-3">
-                <span
-                  :class="[
-                    'grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius-sm)]',
-                    selectedId === file.id
-                      ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
-                      : 'bg-[var(--color-muted)] text-muted-foreground',
-                  ]"
-                >
-                  <FileIcon
-                    :type="fileIconType(file)"
-                    :tone="selectedId === file.id ? 'primary' : 'muted'"
-                    :size="16"
-                  />
-                </span>
-                <span class="min-w-0">
-                  <span class="block truncate font-medium">{{ file.name }}</span>
-                </span>
-              </div>
-              <span class="truncate text-muted-foreground">{{ formatDate(file.modifiedAt) }}</span>
-              <span class="truncate">{{ typeLabel(file) }}</span>
-              <span class="text-right tabular-nums text-foreground/85">{{ formatSize(file.size) }}</span>
-            </button>
+            <FileListItem
+              :file="file"
+              :selected="selectedId === file.id"
+              @select="emit('select', file.id)"
+            />
           </li>
         </ul>
 
@@ -246,60 +200,19 @@ const toolbarActions = [
 
       <!-- GRID VIEW -->
       <div v-else class="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div v-if="isEmpty" class="grid flex-1 place-items-center px-6 py-10 text-center">
-          <div class="w-full max-w-md">
-            <FolderOpen :size="28" :stroke-width="1.5" class="mx-auto text-muted-foreground/70" />
-            <p class="mt-3 text-sm font-medium">This folder is empty</p>
-            <p v-if="isRoot" class="mt-1 text-[12px] text-muted-foreground">Create a folder to get started.</p>
-            <p v-else class="mt-1 text-[12px] text-muted-foreground">Drop files here or browse to upload.</p>
-            <div v-if="isRoot" class="mt-5">
-              <button
-                type="button"
-                @click="emit('create-folder')"
-                class="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] transition hover:opacity-90"
-              >
-                <FolderOpen :size="16" :stroke-width="2" />
-                Create new folder
-              </button>
-            </div>
-            <div v-else class="vault-uppy mt-5">
-              <Dropzone note="Up to 20 files" class="vault-uppy-dropzone" />
-              <div class="mt-3 flex justify-center">
-                <UploadButton class="vault-uppy-upload" />
-              </div>
-            </div>
-          </div>
-        </div>
+        <FileEmptyState
+          v-if="isEmpty"
+          :is-root="isRoot"
+          @create-folder="emit('create-folder')"
+        />
 
         <ul v-else class="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3 xl:grid-cols-4">
           <li v-for="file in sorted" :key="file.id">
-            <button
-              type="button"
-              @click="emit('select', file.id)"
-              :class="[
-                'group flex h-full w-full flex-col items-start gap-3 rounded-[var(--radius-md)] border p-4 text-left transition',
-                selectedId === file.id
-                  ? 'border-[var(--color-primary)]/40 bg-[var(--color-primary-soft)]'
-                  : 'border-[var(--color-border)] bg-[var(--color-card)] hover:border-[var(--color-primary)]/30 hover:shadow-[0_8px_24px_-12px_color-mix(in_oklch,var(--color-primary)_25%,transparent)]',
-              ]"
-            >
-              <span
-                :class="[
-                  'grid h-10 w-10 place-items-center rounded-[var(--radius-sm)]',
-                  selectedId === file.id
-                    ? 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
-                    : 'bg-[var(--color-muted)] text-muted-foreground group-hover:text-foreground',
-                ]"
-              >
-                <FileIcon :type="fileIconType(file)" :size="20" />
-              </span>
-              <div class="min-w-0">
-                <p class="truncate text-[13.5px] font-medium">{{ file.name }}</p>
-                <p class="truncate text-[11.5px] text-muted-foreground">
-                  {{ typeLabel(file) }} · {{ formatSize(file.size) }}
-                </p>
-              </div>
-            </button>
+            <FileGridItem
+              :file="file"
+              :selected="selectedId === file.id"
+              @select="emit('select', file.id)"
+            />
           </li>
         </ul>
 

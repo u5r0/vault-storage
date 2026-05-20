@@ -3,15 +3,15 @@ import * as z from "zod";
 /* ======================== Entities ======================== */
 
 export const UserSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   email: z.string().email(),
   createdAt: z.string(),
 });
 export type User = z.infer<typeof UserSchema>;
 
 export const VaultEntrySchema = z.object({
-  id: z.string().uuid(),
-  ownerId: z.string().uuid().nullable(),
+  id: z.uuid(),
+  ownerId: z.uuid().nullable(),
   parentId: z.string().nullable(),
   name: z.string(),
   type: z.enum(["file", "folder"]),
@@ -42,30 +42,30 @@ export const LoginBody = z.object({
 export type LoginInput = z.infer<typeof LoginBody>;
 
 export const ListFilesQuery = z.object({
-  entityId: z.string().uuid().nullable().optional(),
+  entityId: z.uuid().nullable().optional(),
 });
 export type ListFilesInput = z.infer<typeof ListFilesQuery>;
 
 export const CreateFolderBody = z.object({
-  parentId: z.string().uuid().nullable().optional(),
+  parentId: z.uuid().nullable().optional(),
   name: z.string().min(1).max(255),
 });
 export type CreateFolderInput = z.infer<typeof CreateFolderBody>;
 
 export const RenameBody = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   name: z.string().min(1),
 });
 export type RenameInput = z.infer<typeof RenameBody>;
 
 export const MoveBody = z.object({
-  id: z.string().uuid(),
-  parentId: z.string().uuid().nullable().optional(),
+  id: z.uuid(),
+  parentId: z.uuid().nullable().optional(),
 });
 export type MoveInput = z.infer<typeof MoveBody>;
 
 export const DeleteBody = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
 });
 export type DeleteInput = z.infer<typeof DeleteBody>;
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue"
+import { useRouter } from "vue-router"
 import {
   Search,
   Settings,
@@ -8,16 +9,25 @@ import {
   Command,
   Plus,
   Upload,
+  LogOut,
 } from "@lucide/vue"
 import { useTheme, type ThemeMode } from "@/composables/useTheme"
+import { useAuth } from "@/composables/useAuth"
 
 const { mode, setMode } = useTheme()
+const { user, signOut } = useAuth()
+const router = useRouter()
 const query = ref("")
 
 const themes: { id: ThemeMode; icon: typeof Sun; label: string }[] = [
   { id: "light", icon: Sun, label: "Light" },
   { id: "dark", icon: Moon, label: "Dark" },
 ]
+
+async function handleSignOut() {
+  await signOut()
+  router.push("/login")
+}
 </script>
 
 <template>
@@ -117,7 +127,7 @@ const themes: { id: ThemeMode; icon: typeof Sun; label: string }[] = [
         </button>
       </div>
 
-      <!-- Settings + avatar -->
+      <!-- Settings + avatar + sign out -->
       <button
         type="button"
         aria-label="Settings"
@@ -128,13 +138,23 @@ const themes: { id: ThemeMode; icon: typeof Sun; label: string }[] = [
 
       <button
         type="button"
+        @click="handleSignOut"
+        aria-label="Sign out"
+        class="grid h-10 w-10 place-items-center rounded-[var(--radius-md)] text-muted-foreground transition hover:bg-[var(--color-muted)] hover:text-destructive"
+        title="Sign out"
+      >
+        <LogOut :size="18" :stroke-width="1.75" />
+      </button>
+
+      <button
+        type="button"
         aria-label="Account"
         class="relative grid h-10 w-10 place-items-center overflow-hidden rounded-full ring-2 ring-[var(--color-border)] transition hover:ring-[var(--color-primary)]"
       >
         <span
           class="grid h-full w-full place-items-center bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] text-sm font-semibold text-[var(--color-primary-foreground)]"
         >
-          ED
+          {{ user?.email?.charAt(0).toUpperCase() || "U" }}
         </span>
         <span
           class="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-[var(--color-background)]"

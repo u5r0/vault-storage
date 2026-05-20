@@ -23,17 +23,33 @@ export const cosmosClient = client
 
 // Initialize database and container if they don't exist
 export async function initializeDatabase() {
-  try {
-    const { database: dbResult } = await client.databases.createIfNotExists({
-      id: DATABASE_NAME,
-    })
-    const { container: containerResult } = await dbResult.containers.createIfNotExists({
-      id: CONTAINER_NAME,
-    })
-    console.log(`[Cosmos DB] Database '${DATABASE_NAME}' and container '${CONTAINER_NAME}' initialized`)
-  } catch (error: any) {
-    console.error(`[Cosmos DB] Failed to initialize:`, error.message)
-    throw error
+  const timeout = 30000 // 30 seconds timeout
+  const startTime = Date.now()
+  
+  while (true) {
+    try {
+      const { database: dbResult } = await client.databases.createIfNotExists({
+        id: DATABASE_NAME,
+      })
+      const { container: containerResult } = await dbResult.containers.createIfNotExists({
+        id: CONTAINER_NAME,
+      })
+      console.log(`[Cosmos DB] Database '${DATABASE_NAME}' and container '${CONTAINER_NAME}' initialized`)
+      return
+    } catch (error: any) {
+      if (Date.now() - startTime > timeout) {
+        console.error(`[Cosmos DB] Failed to initialize after ${timeout}ms:`, error.message)
+        throw new Error(`Cosmos DB initialization timeout: ${error.message}`)
+      }
+      // If connection refused, wait and retry
+      if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
+        console.log(`[Cosmos DB] Waiting for emulator to be ready...`)
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        continue
+      }
+      console.error(`[Cosmos DB] Failed to initialize:`, error.message)
+      throw error
+    }
   }
 }
 

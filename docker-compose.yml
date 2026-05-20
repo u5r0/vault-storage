@@ -1,4 +1,19 @@
 services:
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: vault-mailpit
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    environment:
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+    command: ["--smtp-auth-allow-insecure"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8025"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:3.32.0
     container_name: vault-azurite

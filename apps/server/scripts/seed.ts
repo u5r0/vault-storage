@@ -10,10 +10,20 @@
  */
 import "dotenv/config"
 import { createVaultClient } from "@vault/sdk"
-import { nanoid } from "nanoid"
+import { v4 as uuidv4 } from "uuid"
+import { hashPassword } from "../src/lib/auth"
+import { db } from "../src/db"
+import { getContainer } from "../src/lib/azure"
 
 const API_URL = process.env.SEED_API_URL || `http://localhost:${process.env.PORT || 3001}`
 const client = createVaultClient(API_URL)
+
+// Demo user details for development/testing
+const DEMO_USER = {
+  email: "demo@vault.app",
+  password: "demo123456",
+  name: "Demo User",
+}
 
 type FolderSpec = {
   name: string
@@ -117,10 +127,143 @@ async function uploadFile(spec: FileSpec) {
   console.log(`  + file    ${spec.name} under ${spec.parentId || "root"}`)
 }
 
+async function withRetry<T>(fn: () => Promise<T>, operation: string, maxRetries = 5): Promise<T> {
+  let lastError: Error = new Error("Max retries exceeded")
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (e: any) {
+      lastError = e
+      if (e.code === 429 || e.message?.includes("429") || e.message?.includes("Too many")) {
+        const delay = Math.pow(2, attempt) * 1000 // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+        console.log(`    ${operation} rate limited, retry ${attempt + 1}/${maxRetries} in ${delay}ms...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      } else {
+        throw e // Non-rate-limit errors should fail immediately
+      }
+    }
+  }
+  throw lastError
+}
+
+async function cleanup() {
+  console.log("Cleaning up existing data...")
+
+  // Delete all blobs from Azure container
+  try {
+    const container = await getContainer()
+    console.log("  Deleting blobs...")
+    for await (const blob of container.listBlobsFlat()) {
+      await container.deleteBlob(blob.name)
+    }
+    console.log("  Blobs deleted")
+  } catch (e: any) {
+    console.log(`  Blob cleanup failed: ${e.message}`)
+  }
+
+  // Delete all documents from Cosmos DB (except demo user) with retry
+  try {
+    console.log("  Deleting documents...")
+    const { resources } = await withRetry(
+      () => db.items.query("SELECT * FROM c").fetchAll(),
+      "Query"
+    )
+    console.log(`    Found ${resources.length} documents`)
+    for (const item of resources) {
+      try {
+        if (item.email !== DEMO_USER.email) {
+          // Use email as partition key for users, id for other documents
+          const partitionKey = item.email || item.id
+          await withRetry(
+            () => db.item(item.id, partitionKey).delete(),
+            `Delete ${item.id}`
+          )
+        }
+      } catch (deleteError: any) {
+        if (deleteError.code !== 404) {
+          console.log(`    Failed to delete ${item.id}: ${deleteError.message}`)
+        }
+      }
+    }
+    console.log("  Documents deleted (demo user preserved)")
+  } catch (e: any) {
+    console.log(`  Document cleanup failed: ${e.message}`)
+    console.log(`  Continuing anyway...`)
+  }
+
+  console.log("Cleanup complete.\n")
+}
+
+async function createDemoUserIfMissing() {
+  try {
+    // First check if user exists and update it if missing type field
+    const querySpec = {
+      query: "SELECT * FROM c WHERE c.email = @email",
+      parameters: [{ name: "@email", value: DEMO_USER.email }],
+    }
+    const { resources } = await db.items.query(querySpec).fetchAll()
+    const existingUser = resources[0]
+
+    if (existingUser) {
+      // Update existing user to add type field if missing
+      if (!existingUser.type) {
+        const passwordHash = await hashPassword(DEMO_USER.password)
+        await db.item(existingUser.id, DEMO_USER.email).replace({
+          ...existingUser,
+          type: "user",
+          passwordHash,
+          verified: "1",
+        })
+        console.log(`  Demo user updated with type field: ${DEMO_USER.email}`)
+      } else {
+        console.log(`  Demo user already exists with correct schema: ${DEMO_USER.email}`)
+      }
+      return
+    }
+
+    // Create verified user directly in database (bypasses magic link)
+    const passwordHash = await hashPassword(DEMO_USER.password)
+    const userId = uuidv4()
+    await db.items.create({
+      id: userId,
+      type: "user",
+      email: DEMO_USER.email,
+      passwordHash,
+      verified: "1",
+      createdAt: new Date().toISOString(),
+    })
+    console.log(`  Demo user created: ${DEMO_USER.email}`)
+  } catch (e: any) {
+    if (e.code === 409) {
+      console.log(`  Demo user already exists: ${DEMO_USER.email}`)
+    } else if (e.code === 429) {
+      console.log(`  Rate limited - retrying in 1s...`)
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      await createDemoUserIfMissing()
+    } else {
+      console.log(`  Demo user creation failed: ${e.message}`)
+      console.log(`  Error code: ${e.code}`)
+      console.log(`  Continuing anyway...`)
+    }
+  }
+}
+
 async function main() {
   console.log(`Seeding ${API_URL}…`)
   await waitForApi()
   console.log("API ready.\n")
+
+  // Cleanup existing data
+  await cleanup()
+
+  // Create demo user directly in database (bypasses magic link verification)
+  console.log("Creating demo user...")
+  await createDemoUserIfMissing()
+
+  console.log("\nDemo user credentials:")
+  console.log(`  Email:    ${DEMO_USER.email}`)
+  console.log(`  Password: ${DEMO_USER.password}`)
+  console.log(`  Name:     ${DEMO_USER.name}\n`)
 
   console.log("Root folders:")
   for (const f of folders) await createFolderIfMissing(f)

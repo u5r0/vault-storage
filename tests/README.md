@@ -34,5 +34,5 @@ Integration runs spawn `azurite-blob --inMemoryPersistence` on a random free por
 
 ## Conventions
 
-- **Explicit imports, no Vitest globals.** Always `import { describe, it, expect, ... } from "vitest"`. We do not set `test.globals` and do not add `"vitest/globals"` to any tsconfig `types` array. See [ADR 0005 § Style decision](../docs/adr/0005-testing-strategy.md#style-decision-explicit-imports-no-vitest-globals).
+- **Explicit imports, no Vitest globals.** Always `import { describe, it, expect, ... } from "vitest"`. We do not set `test.globals` and do not add `"vitest/globals"` to any tsconfig `types` array. See [ADR 0004 § Style decision](../docs/adr/0004-testing-strategy.md#style-decision-explicit-imports-no-vitest-globals).
 - **TypeScript project**: `tsconfig.test.json` owns this directory, `vitest.config.ts`, and all co-located `*.test.ts`. If you add a new test location, extend its `include`.

@@ -8,7 +8,7 @@ import type { TestProject } from "vitest/node"
  * connection string so per-worker `setupFiles` (azurite.env.ts) can set
  * `AZURE_STORAGE_CONNECTION_STRING` before the server modules load.
  *
- * See ADR 0010 - Docker-based Azurite and Cosmos emulator.
+ * See ADR 0006 - Cosmos DB and ID-based routing.
  */
 
 const ACCOUNT_NAME = "devstoreaccount1"
@@ -30,7 +30,7 @@ export default async function setup(project: TestProject) {
   project.provide("azuriteContainer", `vault-test-${Date.now()}`)
 
   return async () => {
-    // No cleanup needed - docker-compose manages Azurite lifecycle
+    // No cleanup needed for Azurite - docker-compose manages lifecycle
   }
 }
 

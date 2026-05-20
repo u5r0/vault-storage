@@ -33,7 +33,7 @@
   --color-accent: oklch(0.78 0.15 70);
   --color-accent-foreground: oklch(0.22 0.05 70);
 
-  --color-destructive: oklch(0.62 0.18 25);
+  --color-destructive: oklch(0.68 0.16 35);
   --color-destructive-foreground: oklch(0.99 0 0);
 }
 

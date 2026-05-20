@@ -48,7 +48,7 @@ Thumbs.db
 *.temp
 
 # Changesets
-.changeset/*.json
+.changeset/*.md
 
 # AI agent tooling
 .kiro/

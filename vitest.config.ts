@@ -6,10 +6,8 @@ const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 /**
  * Two projects:
  *  - `unit`        — fast, no fixtures, picks up *.test.ts co-located with source.
- *  - `integration` — boots Azurite in-memory in a global setup; talks to the
- *                    Hono app via `app.request(...)`.
- *
- * See ADR 0005 for the testing strategy.
+ *  - `integration` — boots Azurite/Cosmos DB in global setup; talks to the
+ *                    Hono app via `app.request(...)`. Organized by feature.
  */
 export default defineConfig({
   resolve: {
@@ -38,7 +36,7 @@ export default defineConfig({
           include: ["tests/integration/**/*.test.ts"],
           globalSetup: ["./tests/setup/azurite.global.ts"],
           setupFiles: ["./tests/setup/azurite.env.ts"],
-          testTimeout: 20_000,
+          testTimeout: 30_000,
           hookTimeout: 30_000,
           fileParallelism: false,
         },

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppSidebar from "../components/AppSidebar.vue";
 import FileList from "../components/FileList.vue";
 import DetailsPanel from "../components/DetailsPanel.vue";
+import FolderModal from "../components/FolderModal.vue";
 import { useFiles } from "../composables/useFiles";
 import { routeToEntityId } from "../router";
 import { client } from "@/lib/client";
@@ -19,6 +20,8 @@ const { entries, loading, error, refresh } = useFiles(currentEntityId);
 const selectedFile = computed(
   () => entries.value.find((e) => e.id === selectedId.value) ?? null,
 );
+
+const folderModalOpen = ref(false);
 
 function handleSelect(id: string) {
   const entry = entries.value.find((e) => e.id === id);
@@ -40,19 +43,20 @@ function navigateTo(entityId: string | null) {
   });
 }
 
-async function handleCreateFolder() {
-  const name = prompt("Enter folder name:");
-  if (!name) return;
-  
+function handleCreateFolder() {
+  folderModalOpen.value = true;
+}
+
+async function handleFolderConfirm(name: string) {
   try {
     await client.createFolder({
       parentId: currentEntityId.value ?? null,
       name,
     });
+    folderModalOpen.value = false;
     await refresh();
   } catch (err) {
     console.error("Failed to create folder:", err);
-    alert("Failed to create folder");
   }
 }
 </script>
@@ -83,5 +87,10 @@ async function handleCreateFolder() {
       @create-folder="handleCreateFolder"
     />
     <DetailsPanel :file="selectedFile" />
+    <FolderModal
+      :open="folderModalOpen"
+      @close="folderModalOpen = false"
+      @confirm="handleFolderConfirm"
+    />
   </main>
 </template>

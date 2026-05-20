@@ -4,7 +4,7 @@ Thank you for your interest in contributing to Vault Storage! This document prov
 
 ## Development Status
 
-**Note:** This project is under active development and not yet production-ready. Please review [docs/gap-analysis.md](docs/gap-analysis.md) to understand the current state and planned features before contributing.
+**Note:** This project is under active development and not yet production-ready. Please review [docs/roadmap.md](docs/roadmap.md) to understand the current state and planned features before contributing.
 
 ## Getting Started
 
@@ -29,6 +29,12 @@ pnpm dev
 
 # Seed sample data (optional)
 pnpm seed
+
+**Demo credentials created by seed:**
+- Email: `demo@vault.app`
+- Password: `demo123456`
+
+The seed script creates a demo user and populates the storage with sample folders (Movies, Documents, Music) and files.
 ```
 
 **Prerequisites:**
@@ -70,20 +76,22 @@ pnpm test:watch
 
 Before making significant changes, please review the Architecture Decision Records (ADRs) in `docs/adr/`:
 
-- [ADR 0001: SDK as Shared Contract](docs/adr/0001-sdk-as-shared-contract.md) - API contract design
-- [ADR 0002: Monorepo Layout](docs/adr/0002-monorepo-layout.md) - Project structure
-- [ADR 0003: Path as Identifier](docs/adr/0003-path-as-identifier.md) - File identification strategy
-- [ADR 0004: Azurite for Local Dev](docs/adr/0004-azurite-for-local-dev.md) - Local development setup
-- [ADR 0005: Testing Strategy](docs/adr/0005-testing-strategy.md) - Testing approach
+- [ADR 0001: Authentication System](docs/adr/0001-authentication.md) - Email/password login, magic links, JWT tokens
+- [ADR 0002: Password Requirements](docs/adr/0002-password-requirements.md) - Password strength and validation rules
+- [ADR 0003: Email Infrastructure](docs/adr/0003-email-infrastructure.md) - Email delivery via Mailpit/SMTP
+- [ADR 0004: Testing Strategy](docs/adr/0004-testing-strategy.md) - Vitest integration tests with Azurite
+- [ADR 0005: SDK as Shared Contract](docs/adr/0005-sdk-as-shared-contract.md) - API contract design
+- [ADR 0006: Cosmos DB and ID-Based Routing](docs/adr/0006-cosmos-db-and-id-based-routing.md) - Database and routing architecture
+- [ADR 0007: Monorepo Layout](docs/adr/0007-monorepo-layout.md) - Project structure
 
 ## Important Constraints
 
-**Do not implement the following features until ADR 0003 is revisited:**
-- Star/tag/trash features
+**ID-based routing is implemented** (ADR 0006). The following features are now available for implementation:
+- Star/tag/trash features (metadata persistence via Cosmos DB)
 - Share functionality
-- Any metadata persistence
+- Rich metadata support
 
-These features depend on migrating from path-based identifiers to opaque IDs. See [ADR 0003](docs/adr/0003-path-as-identifier.md) for details.
+See the [roadmap](docs/roadmap.md) for current priorities and upcoming features.
 
 ## Submitting Changes
 

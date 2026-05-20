@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { stream } from "hono/streaming"
 import { HTTPException } from "hono/http-exception"
 import { zValidator } from "@hono/zod-validator"
+import { RateLimiterMemory } from "rate-limiter-flexible"
 import {
   ListFilesQuery,
   CreateFolderBody,
@@ -12,9 +13,11 @@ import {
 } from "@vault/sdk"
 import { env, getBlobStore } from "../lib/azure"
 import { Readable } from "stream"
-import { nanoid } from "nanoid"
+import { v4 as uuidv4 } from "uuid"
 import { db } from "../db"
 import type { CosmosClient } from "@azure/cosmos"
+import { getCookie } from "hono/cookie"
+import { verify } from "hono/jwt"
 
 // Validate that a name doesn't contain path separators or control characters
 function isSafeName(name: string): boolean {
@@ -24,6 +27,61 @@ function isSafeName(name: string): boolean {
   if (/[\x00-\x1f]/.test(name)) return false
   if (name === "." || name === "..") return false
   return true
+}
+
+// Helper to get user ID from JWT token
+const getUserId = async (c: any): Promise<string | null> => {
+  const token = getCookie(c, "access")
+  if (!token) return null
+
+  try {
+    const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me"
+    const decoded = await verify(token, JWT_SECRET, "HS256") as any
+    return decoded.sub || decoded.id || null
+  } catch {
+    return null
+  }
+}
+
+// Layer 2: Volumetric rate limiting (byte-based for storage)
+const volumetricRateLimiter = new RateLimiterMemory({
+  points: 500 * 1024 * 1024, // 500MB in bytes
+  duration: 900, // per 15 minutes (900 seconds)
+})
+
+// Layer 3: IP-based rate limiting (emergency brake)
+const ipRateLimiter = new RateLimiterMemory({
+  points: 1000, // 1000 requests
+  duration: 60, // per minute
+})
+
+// Helper to get client IP
+const getClientIP = (c: any): string => {
+  return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || 
+         c.req.header("x-real-ip") || 
+         "unknown"
+}
+
+// Middleware for volumetric rate limiting on upload
+const volumetricRateLimitMiddleware = async (c: any, next: any) => {
+  // Always check IP emergency brake first
+  try {
+    await ipRateLimiter.consume(getClientIP(c))
+  } catch (ipRej) {
+    throw new HTTPException(429, { message: "Too many requests from this IP. Please try again later." })
+  }
+
+  // Get user ID for volumetric limiting
+  const userId = await getUserId(c)
+  if (userId) {
+    try {
+      await volumetricRateLimiter.consume(userId)
+    } catch (volRej) {
+      throw new HTTPException(429, { message: "Upload limit exceeded. Max 500MB per 15 minutes." })
+    }
+  }
+
+  await next()
 }
 
 const files = new Hono()
@@ -81,7 +139,7 @@ files.post("/folder", zValidator("json", CreateFolderBody), async (c) => {
     throw new HTTPException(400, { message: "Invalid folder name" })
   }
 
-  const id = nanoid()
+  const id = uuidv4()
   const createdAt = new Date().toISOString()
 
   const folder = {
@@ -110,7 +168,7 @@ files.post("/folder", zValidator("json", CreateFolderBody), async (c) => {
  * Upload one or more files via multipart/form-data.
  * Form fields: `parentId` (string, optional), `files` (one or more File entries).
  */
-files.post("/upload", async (c) => {
+files.post("/upload", volumetricRateLimitMiddleware, async (c) => {
   const form = await c.req.parseBody({ all: true })
   const parentId = typeof form.parentId === "string" ? form.parentId : null
   const store = await getBlobStore()
@@ -139,7 +197,7 @@ files.post("/upload", async (c) => {
       })
     }
 
-    const id = nanoid()
+    const id = uuidv4()
     const blobName = `vault/blobs/${id}`
     const createdAt = new Date().toISOString()
 

@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n azurite,api,web -c \"#fbbf24,#a78bfa,#22d3ee\" \"docker compose up\" \"pnpm dev:api\" \"pnpm dev:web\"",
+    "dev": "docker compose up -d && concurrently -n api,web -c \"#a78bfa,#22d3ee\" \"pnpm dev:api\" \"pnpm dev:web\"",
     "dev:web": "pnpm --filter @vault/web dev",
     "dev:api": "tsx watch apps/server/src/index.ts",
     "seed": "tsx apps/server/scripts/seed.ts",
@@ -23,6 +23,7 @@
     "@changesets/cli": "^2.31.0",
     "@types/node": "^22.10.0",
     "concurrently": "^9.0.0",
+    "msw": "^2.14.6",
     "tsx": "^4.21.0",
     "typescript": "~5.6.3",
     "vitest": "^4.1.6"
