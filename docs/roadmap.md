@@ -13,7 +13,7 @@ EpicWeb-based testing strategy with Vitest. Phase A complete (18 integration tes
 ### 2. Metadata persistence not implemented
 Azure Cosmos DB architecture decided but not implemented. No user metadata (stars, tags, trash, recents). See [ADR 0006](adr/0006-cosmos-db-and-id-based-routing.md).
 
-**Status:** Cosmos DB connection configured in backend but metadata schema and CRUD operations not implemented. Need to design metadata entity schema and create endpoints.
+**Status:** Cosmos DB connection configured in backend but metadata schema and CRUD operations not implemented. Need to design metadata entity schema, create endpoints, and add integration tests for Cosmos DB operations.
 
 ### 3. Search is dead UI
 `AppHeader.vue` has `v-model="query"` but `query` is never consumed. No search API endpoint or filtering logic.
