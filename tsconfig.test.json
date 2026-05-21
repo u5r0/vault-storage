@@ -10,7 +10,10 @@
     "isolatedModules": true,
     "strict": true,
     "noEmit": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": {
+      "@vault/sdk": ["./packages/sdk/src/index.ts"]
+    }
   },
   "include": [
     "tests/**/*.ts",

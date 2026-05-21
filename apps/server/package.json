@@ -21,7 +21,7 @@
     "nodemailer": "^8.0.7",
     "rate-limiter-flexible": "^11.1.0",
     "uuid": "^11.0.3",
-    "zod": "^4.4.3"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

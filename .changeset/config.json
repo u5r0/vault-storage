@@ -8,7 +8,8 @@
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": [
-    "vault-storage"
+    "@vault/server",
+    "@vault/web"
   ],
   "packages": ["apps/*", "packages/*"]
 }

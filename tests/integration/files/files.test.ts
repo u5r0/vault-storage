@@ -184,6 +184,56 @@ describe("DELETE /api/files", () => {
   })
 })
 
+describe("PATCH /api/files/move", () => {
+  it("moves a file into a folder", async () => {
+    const app = getApp()
+    const folderRes = await app.request("/api/files/folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ parentId: null, name: "Archive" }),
+    })
+    const folder = (await folderRes.json()) as { id: string }
+    const { uploaded } = await uploadText(null, "report.txt", "contents")
+    const fileId = uploaded[0].id
+
+    const res = await app.request("/api/files/move", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: fileId, parentId: folder.id }),
+    })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ id: fileId, parentId: folder.id })
+
+    const root = await listRoot()
+    expect(root.entries.find((e: VaultEntry) => e.name === "report.txt")).toBeUndefined()
+
+    const inside = await listAt(folder.id)
+    expect(inside.entries.find((e: VaultEntry) => e.name === "report.txt")).toBeDefined()
+  })
+
+  it("moves a file back to root (parentId: null)", async () => {
+    const app = getApp()
+    const folderRes = await app.request("/api/files/folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ parentId: null, name: "Temp" }),
+    })
+    const folder = (await folderRes.json()) as { id: string }
+    const { uploaded } = await uploadText(folder.id, "note.txt", "hi")
+    const fileId = uploaded[0].id
+
+    const res = await app.request("/api/files/move", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: fileId, parentId: null }),
+    })
+    expect(res.status).toBe(200)
+
+    const root = await listRoot()
+    expect(root.entries.find((e: VaultEntry) => e.name === "note.txt")).toBeDefined()
+  })
+})
+
 describe("File API error paths", () => {
   it("returns 404 for non-existent file download", async () => {
     const app = getApp()

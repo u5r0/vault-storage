@@ -2,6 +2,9 @@ packages:
   - "apps/*"
   - "packages/*"
 
+catalog:
+  zod: "^4.4.3"
+
 allowBuilds:
   argon2: true
   better-sqlite3: true

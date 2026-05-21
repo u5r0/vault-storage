@@ -28,20 +28,33 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Start Azurite
-        run: docker compose up -d azurite
+      - name: Start services
+        run: docker compose up -d azurite cosmos
 
       - name: Wait for Azurite
         run: |
           for i in {1..30}; do
-            if docker inspect --format='{{.State.Health.Status}}' vault-azurite 2>/dev/null | grep -q healthy; then
-              echo "Azurite is healthy"
+            if curl -s http://localhost:10000/devstoreaccount1?comp=list -o /dev/null; then
+              echo "Azurite ready"
               exit 0
             fi
-            sleep 1
+            sleep 2
           done
-          echo "Azurite failed to become healthy"
+          echo "Azurite failed to start"
           docker logs vault-azurite
+          exit 1
+
+      - name: Wait for Cosmos DB
+        run: |
+          for i in {1..90}; do
+            if curl -fsk https://localhost:8081/_explorer/emulator.pem -o /dev/null; then
+              echo "Cosmos DB ready"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Cosmos DB failed to start"
+          docker logs vault-cosmos
           exit 1
 
 #      - name: Run unit tests

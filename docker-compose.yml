@@ -9,7 +9,7 @@ services:
       - MP_SMTP_AUTH_ACCEPT_ANY=1
     command: ["--smtp-auth-allow-insecure"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8025"]
+      test: ["CMD-SHELL", "curl -fs http://localhost:8025 -o /dev/null"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,7 +28,7 @@ services:
       - azurite_data:/data
     command: "azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --skipApiVersionCheck"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:10000/devstoreaccount1?comp=list"]
+      test: ["CMD-SHELL", "curl -s http://localhost:10000/devstoreaccount1?comp=list -o /dev/null"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -49,7 +49,7 @@ services:
     volumes:
       - cosmos_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/_explorer/emulator.pem"]
+      test: ["CMD-SHELL", "curl -fsk https://localhost:8081/_explorer/emulator.pem -o /dev/null"]
       interval: 10s
       timeout: 5s
       retries: 5
