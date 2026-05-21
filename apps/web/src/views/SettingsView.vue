@@ -95,7 +95,7 @@ function saveSettings() {
           <!-- Sidebar Navigation -->
           <aside class="lg:w-64 shrink-0">
             <nav
-              class="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-card)] p-2 lg:sticky lg:top-24"
+              class="flex flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-card)] p-4 lg:sticky lg:top-24"
             >
               <button
                 v-for="section in settingsSections"
@@ -119,14 +119,11 @@ function saveSettings() {
           </aside>
 
           <!-- Settings Content -->
-          <div class="flex-1">
+          <div class="flex-1 gap-2">
             <!-- Account Settings -->
-            <div
-              v-if="activeSection === 'account'"
-              class="space-y-6"
-            >
               <div
-                class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] p-6"
+                v-if="activeSection === 'account'"
+                class="mb-4 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] p-6"
               >
                 <h2 class="mb-4 text-lg font-semibold">Account Information</h2>
                 <div class="space-y-4">
@@ -149,7 +146,6 @@ function saveSettings() {
                   </div>
                 </div>
               </div>
-            </div>
 
             <!-- Notification Settings -->
             <div

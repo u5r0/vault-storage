@@ -10,6 +10,7 @@ import {
   Plus,
   Upload,
   LogOut,
+  User,
 } from "@lucide/vue"
 import { useTheme, type ThemeMode } from "@/composables/useTheme"
 import { useAuth } from "@/composables/useAuth"
@@ -18,6 +19,15 @@ const { mode, setMode } = useTheme()
 const { user, signOut } = useAuth()
 const router = useRouter()
 const query = ref("")
+const dropdownOpen = ref(false)
+
+function toggleDropdown() {
+  dropdownOpen.value = !dropdownOpen.value
+}
+
+function closeDropdown() {
+  dropdownOpen.value = false
+}
 
 const themes: { id: ThemeMode; icon: typeof Sun; label: string }[] = [
   { id: "light", icon: Sun, label: "Light" },
@@ -127,40 +137,69 @@ async function handleSignOut() {
         </button>
       </div>
 
-      <!-- Settings + avatar + sign out -->
-      <button
-        type="button"
-        aria-label="Settings"
-        class="grid h-10 w-10 place-items-center rounded-[var(--radius-md)] text-muted-foreground transition hover:bg-[var(--color-muted)] hover:text-foreground"
-      >
-        <Settings :size="18" :stroke-width="1.75" />
-      </button>
-
-      <button
-        type="button"
-        @click="handleSignOut"
-        aria-label="Sign out"
-        class="grid h-10 w-10 place-items-center rounded-[var(--radius-md)] text-muted-foreground transition hover:bg-[var(--color-muted)] hover:text-destructive"
-        title="Sign out"
-      >
-        <LogOut :size="18" :stroke-width="1.75" />
-      </button>
-
-      <button
-        type="button"
-        aria-label="Account"
-        class="relative grid h-10 w-10 place-items-center overflow-hidden rounded-full ring-2 ring-[var(--color-border)] transition hover:ring-[var(--color-primary)]"
-      >
-        <span
-          class="grid h-full w-full place-items-center bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] text-sm font-semibold text-[var(--color-primary-foreground)]"
+      <!-- Avatar + dropdown -->
+      <div class="relative">
+        <button
+          type="button"
+          aria-label="Account"
+          @click="toggleDropdown"
+          class="relative grid h-10 w-10 place-items-center overflow-hidden rounded-full ring-2 ring-[var(--color-border)] transition hover:ring-[var(--color-primary)]"
         >
-          {{ user?.email?.charAt(0).toUpperCase() || "U" }}
-        </span>
-        <span
-          class="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-[var(--color-background)]"
-          aria-hidden="true"
-        />
-      </button>
+          <span
+            class="grid h-full w-full place-items-center bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] text-sm font-semibold text-[var(--color-primary-foreground)]"
+          >
+            {{ user?.email?.charAt(0).toUpperCase() || "U" }}
+          </span>
+          <span
+            class="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-[var(--color-background)]"
+            aria-hidden="true"
+          />
+        </button>
+
+        <!-- Dropdown menu -->
+        <div
+          v-if="dropdownOpen"
+          v-click-outside="closeDropdown"
+          class="absolute right-0 top-12 z-50 min-w-48 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-card)] shadow-lg"
+        >
+          <!-- User info -->
+          <div class="border-b border-[var(--color-border)] px-4 py-3">
+            <p class="text-sm font-medium">{{ user?.email }}</p>
+          </div>
+
+          <!-- Nav items -->
+          <div class="p-1">
+            <button
+              type="button"
+              @click="() => { router.push('/profile'); closeDropdown() }"
+              class="flex w-full items-center gap-2.5 rounded-[var(--radius-sm)] px-3 py-2 text-sm transition hover:bg-[var(--color-muted)]"
+            >
+              <User :size="15" :stroke-width="2" />
+              Profile
+            </button>
+            <button
+              type="button"
+              @click="() => { router.push('/settings'); closeDropdown() }"
+              class="flex w-full items-center gap-2.5 rounded-[var(--radius-sm)] px-3 py-2 text-sm transition hover:bg-[var(--color-muted)]"
+            >
+              <Settings :size="15" :stroke-width="2" />
+              Settings
+            </button>
+          </div>
+
+          <!-- Sign out -->
+          <div class="border-t border-[var(--color-border)] p-1">
+            <button
+              type="button"
+              @click="handleSignOut"
+              class="flex w-full items-center gap-2.5 rounded-[var(--radius-sm)] px-3 py-2 text-sm text-destructive transition hover:bg-[var(--color-muted)]"
+            >
+              <LogOut :size="15" :stroke-width="2" />
+              Sign out
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </header>
 </template>
