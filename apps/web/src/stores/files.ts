@@ -14,6 +14,9 @@ export const useFilesStore = defineStore("files", () => {
   const sortAsc = ref(true)
   const selectedId = ref<string | null>(null)
 
+  // Used by AppHeader to trigger folder creation from outside the files route
+  const createFolderRequested = ref<string | null>(null)
+
   const toggleSort = computed(() => !sortAsc.value)
 
   function setViewMode(mode: ViewMode) {
@@ -34,5 +37,18 @@ export const useFilesStore = defineStore("files", () => {
     selectedId.value = id
   }
 
-  return { viewMode, sortKey, sortAsc, selectedId, toggleSort, setViewMode, setSortKey, setSelectedId }
+  function requestCreateFolder(name: string) {
+    createFolderRequested.value = name
+  }
+
+  function clearCreateFolderRequest() {
+    createFolderRequested.value = null
+  }
+
+  return {
+    viewMode, sortKey, sortAsc, selectedId, toggleSort,
+    createFolderRequested,
+    setViewMode, setSortKey, setSelectedId,
+    requestCreateFolder, clearCreateFolderRequest,
+  }
 })

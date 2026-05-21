@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { client } from "@/lib/client"
 import { routeToEntityId } from "@/router"
+import { useFilesStore } from "@/stores/files"
 import { useFiles } from "../composables/useFiles"
 import FileList from "../components/FileList.vue"
 import DetailsPanel from "../components/DetailsPanel.vue"
@@ -10,6 +11,7 @@ import FolderModal from "../components/FolderModal.vue"
 
 const route  = useRoute()
 const router = useRouter()
+const filesStore = useFilesStore()
 
 const currentEntityId = computed(() => routeToEntityId(route.params.entityId))
 const selectedId      = computed(() => (route.query.selected as string) || null)
@@ -21,6 +23,13 @@ const selectedFile = computed(
 )
 
 const folderModalOpen = ref(false)
+
+// Handle folder creation triggered from AppHeader drawer
+watch(() => filesStore.createFolderRequested, async (name) => {
+  if (!name) return
+  await createFolder(name)
+  filesStore.clearCreateFolderRequest()
+})
 
 function handleSelect(id: string) {
   const entry = entries.value.find((e) => e.id === id)
@@ -39,7 +48,7 @@ function navigateTo(entityId: string | null) {
   router.push({ name: "content", params: entityId ? { entityId } : {} })
 }
 
-async function handleFolderConfirm(name: string) {
+async function createFolder(name: string) {
   try {
     await client.createFolder({ parentId: currentEntityId.value ?? null, name })
     folderModalOpen.value = false
@@ -66,13 +75,12 @@ async function handleFolderConfirm(name: string) {
       @select="handleSelect"
       @navigate="navigateTo"
       @upload-complete="refresh"
-      @create-folder="folderModalOpen = true"
-    />
+      @create-folder="folderModalOpen = true"    />
     <DetailsPanel :file="selectedFile" />
     <FolderModal
       :open="folderModalOpen"
       @close="folderModalOpen = false"
-      @confirm="handleFolderConfirm"
+      @confirm="createFolder"
     />
   </main>
 </template>
