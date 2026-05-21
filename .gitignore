@@ -15,9 +15,6 @@ coverage/
 # Azurite local emulator data
 .azurite-data/
 
-# Local SQLite dev database
-data/
-
 # Local tooling
 .vscode/
 .idea/
@@ -46,6 +43,7 @@ Thumbs.db
 *.log
 *.tmp
 *.temp
+*.code-workspace
 
 # Changesets
 .changeset/*.md

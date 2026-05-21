@@ -3,8 +3,9 @@ import { cors } from "hono/cors"
 import { logger } from "hono/logger"
 import { HTTPException } from "hono/http-exception"
 import { env, isConfigured } from "./lib/azure"
-import files from "./routes/files"
-import auth from "./routes/auth"
+import { createIpLimiter } from "./lib/rate-limiter"
+import files from "./controllers/files"
+import auth from "./controllers/auth"
 
 /**
  * Build the Hono app. Kept separate from `index.ts` so tests can
@@ -17,6 +18,20 @@ export function createApp(opts: { withLogger?: boolean } = {}) {
   const app = new Hono()
 
   if (opts.withLogger) app.use("*", logger())
+
+  const ipLimiter = createIpLimiter()
+  app.use("*", async (c, next) => {
+    const ip =
+      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+      c.req.header("x-real-ip") ??
+      "unknown"
+    try {
+      await ipLimiter.consume(ip)
+    } catch {
+      return c.json({ error: "Too many requests" }, 429)
+    }
+    await next()
+  })
 
   app.use(
     "*",

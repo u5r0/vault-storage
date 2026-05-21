@@ -5,8 +5,8 @@ const COSMOS_KEY = process.env.COSMOS_DB_KEY || "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWE
 const DATABASE_NAME = process.env.COSMOS_DB_DATABASE || "vault"
 const CONTAINER_NAME = process.env.COSMOS_DB_CONTAINER || "vault_entries"
 
-// Allow self-signed certificates for local Cosmos DB emulator
-if (COSMOS_ENDPOINT.includes("localhost")) {
+// Allow self-signed certificates for local Cosmos DB emulator (not in test — azurite setup handles this)
+if (COSMOS_ENDPOINT.includes("localhost") && process.env.NODE_ENV !== "test") {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
 }
 

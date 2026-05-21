@@ -57,10 +57,6 @@ export async function createUser(email: string, password: string) {
   const passwordHash = await hashPassword(password)
   const createdAt = new Date().toISOString()
 
-  // generate verification token
-  const verificationToken = randomUUID()
-  const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24h
-
   const user = {
     id,
     type: "user",
@@ -68,13 +64,11 @@ export async function createUser(email: string, password: string) {
     passwordHash,
     createdAt,
     verified: "0",
-    verificationToken,
-    verificationExpires: verificationExpires.toISOString(),
   }
 
   await db.items.create(user)
 
-  return { id, email, createdAt, verificationToken }
+  return { id, email, createdAt }
 }
 
 export async function storeRefreshToken(jti: string, userId: string, expiresAt: Date) {
