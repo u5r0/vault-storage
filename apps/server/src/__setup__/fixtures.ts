@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, afterEach } from 'vitest'
+import { beforeAll, afterEach } from 'vitest'
 
 /**
  * Test fixtures following Epic Web patterns.
@@ -16,7 +16,7 @@ let blobStore: any
  */
 export async function setupApp() {
   if (!app) {
-    const { createApp } = await import('../apps/server/src/app')
+    const { createApp } = await import('../app')
     app = createApp()
   }
   return app
@@ -27,7 +27,7 @@ export async function setupApp() {
  */
 export async function setupDb() {
   if (!db) {
-    const { db: dbInstance } = await import('../apps/server/src/db')
+    const { db: dbInstance } = await import('../db')
     db = dbInstance
   }
   return db
@@ -38,7 +38,7 @@ export async function setupDb() {
  */
 export async function setupBlobStore() {
   if (!blobStore) {
-    const { getBlobStore } = await import('../apps/server/src/lib/azure')
+    const { getBlobStore } = await import('../lib/azure')
     blobStore = await getBlobStore()
   }
   return blobStore
@@ -76,6 +76,20 @@ export async function clearDatabase() {
     if (resource.id) {
       await db.item(resource.id).delete()
     }
+  }
+}
+
+/**
+ * Cleanup only file/folder/spent_token entries — preserves users and refresh tokens.
+ * Used by useFilesFixture so a registered user can persist across tests in a suite.
+ */
+export async function clearFileEntries() {
+  const db = await setupDb()
+  const { resources } = await db.items
+    .query("SELECT * FROM c WHERE c.type = 'file' OR c.type = 'folder' OR c.type = 'spent_token'")
+    .fetchAll()
+  for (const resource of resources) {
+    await db.item(resource.id).delete()
   }
 }
 
@@ -119,8 +133,24 @@ export function useFilesFixture() {
 
   afterEach(async () => {
     await clearBlobStore()
-    await clearDatabase()
+    await clearFileEntries()
   })
 
   return () => appInstance
+}
+
+/**
+ * Extract a valid `Cookie` request header string from a response's Set-Cookie headers.
+ *
+ * `headers.get("set-cookie")` joins multiple Set-Cookie values with ", " which embeds
+ * cookie attributes (Path, HttpOnly, SameSite…) into the string. Sending that verbatim
+ * as a Cookie header breaks cookie parsers for any cookie that isn't first in the list.
+ * This helper pulls only the name=value part from every Set-Cookie entry.
+ */
+export function parseCookies(res: Response): string {
+  const getSetCookie = (res.headers as any).getSetCookie
+  const parts: string[] = typeof getSetCookie === "function"
+    ? getSetCookie.call(res.headers)
+    : (res.headers.get("set-cookie") ?? "").split(/,(?=\s*[^;,\s]+=)/)
+  return parts.map((s) => s.split(";")[0].trim()).join("; ")
 }

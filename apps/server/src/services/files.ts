@@ -194,9 +194,9 @@ export class FilesService {
       for (const r of resources) {
         if (r.blobName && (await store.exists(r.blobName))) {
           await store.delete(r.blobName)
-          deletedCount++
         }
         await db.item(r.id).delete()
+        deletedCount++
       }
       await db.item(id).delete()
       return { deleted: deletedCount + 1 }

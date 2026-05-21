@@ -142,6 +142,7 @@ export class VaultClient implements VaultStore {
   private async request<T>(path: string, options?: RequestInit): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...options,
+      credentials: "include",
       headers: {
         ...options?.headers,
       },

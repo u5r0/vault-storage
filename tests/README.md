@@ -1,38 +1,38 @@
 # tests/
 
-Cross-cutting test fixtures and integration suites. See [ADR 0005](../docs/adr/0005-testing-strategy.md) for the full strategy.
+Reserved for **cross-cutting** tests that span multiple packages or require a fully running server over the network. See [ADR 0017](../docs/adr/0017-test-layout-co-location.md) for the rationale.
 
-## Layout
+## What lives here
 
 ```
 tests/
-  setup/
-    azurite.global.ts   Vitest globalSetup — spawns Azurite once per run
-    azurite.env.ts      Per-worker setupFiles — sets AZURE_STORAGE_* env
-  integration/
-    files.test.ts       Happy-path coverage of /api/files routes
+  e2e/      ← Playwright end-to-end tests (deferred — see ADR 0016 § "Not Doing")
+  README.md
 ```
 
-Unit tests live next to the code they cover (e.g. `apps/server/src/lib/paths.test.ts`).
+## Where tests actually live
+
+All tests are co-located with the code they exercise, inside the package they belong to:
+
+| Test type | Location | Vitest project |
+|---|---|---|
+| Server unit (services, lib, middleware) | `apps/server/src/**/*.test.ts` | `unit` |
+| Server integration (HTTP surface, real Cosmos + Azurite) | `apps/server/src/controllers/*.test.ts` | `integration` |
+| Server test infrastructure | `apps/server/src/__setup__/` | (setup files) |
+| Frontend unit (components, composables, stores) | `apps/web/src/**/*.test.ts` | `unit` |
+| SDK | `packages/sdk/src/**/*.test.ts` | `unit` |
 
 ## Running
 
 ```bash
-pnpm test               # unit + integration
-pnpm test:unit          # vitest run --project unit
-pnpm test:integration   # vitest run --project integration
-pnpm test:watch         # interactive
+pnpm test                        # unit + integration
+pnpm vitest run --project unit   # unit only (no infrastructure needed)
+pnpm vitest run --project integration  # requires docker compose up
 ```
-
-Integration runs spawn `azurite-blob --inMemoryPersistence` on a random free port. No host Azurite or persisted data needed.
 
 ## Adding tests
 
-- **Pure-function logic** → unit test co-located with source.
-- **HTTP behaviour or anything that touches the BlobStore** → integration test under `tests/integration/`. Import `createApp` lazily from `apps/server/src/app.ts` inside `beforeAll` (so per-worker env is set first) and call `app.request(...)`.
-- Reset container state in `beforeEach` with `store.deletePrefix("")`.
-
-## Conventions
-
-- **Explicit imports, no Vitest globals.** Always `import { describe, it, expect, ... } from "vitest"`. We do not set `test.globals` and do not add `"vitest/globals"` to any tsconfig `types` array. See [ADR 0004 § Style decision](../docs/adr/0004-testing-strategy.md#style-decision-explicit-imports-no-vitest-globals).
-- **TypeScript project**: `tsconfig.test.json` owns this directory, `vitest.config.ts`, and all co-located `*.test.ts`. If you add a new test location, extend its `include`.
+- **Server business logic** → co-locate in `apps/server/src/services/` or `lib/` as `*.test.ts`. Mock the DB.
+- **Server HTTP surface** → co-locate in `apps/server/src/controllers/` as `*.test.ts`. Uses real Azurite + Cosmos emulator via `__setup__/`.
+- **Frontend** → co-locate with the component/composable/store under `apps/web/src/`.
+- **True cross-cutting or full-stack e2e** → add to `tests/e2e/` with its own config.

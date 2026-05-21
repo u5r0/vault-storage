@@ -265,6 +265,11 @@ async function main() {
   console.log(`  Password: ${DEMO_USER.password}`)
   console.log(`  Name:     ${DEMO_USER.name}\n`)
 
+  // Log in to get auth cookies for subsequent file operations
+  console.log("Logging in as demo user...")
+  await client.login({ email: DEMO_USER.email, password: DEMO_USER.password })
+  console.log("Logged in successfully.\n")
+
   console.log("Root folders:")
   for (const f of folders) await createFolderIfMissing(f)
 
