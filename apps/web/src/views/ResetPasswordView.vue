@@ -56,8 +56,7 @@ async function handleResetPassword() {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center grain px-4">
-    <div class="w-full max-w-md">
+  <div class="w-full max-w-md">
       <!-- Logo/Brand -->
       <div class="mb-8 text-center">
         <div
@@ -176,6 +175,5 @@ async function handleResetPassword() {
           Back to login
         </button>
       </div>
-    </div>
   </div>
 </template>

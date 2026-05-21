@@ -1,13 +1,21 @@
 import { createApp } from "vue"
+import { createPinia } from "pinia"
 import { router } from "./router"
 import App from "./App.vue"
-import store, { key } from "./store"
+import { registerGlobals } from "./components/register"
+import { useAuthStore } from "./stores/auth"
+import { useUIStore } from "./stores/ui"
 import "./style.css"
 
 const app = createApp(App)
-app.use(router).use(store, key)
+const pinia = createPinia()
 
-// Check auth state on app mount (await to ensure auth is verified before routing)
-await store.dispatch("auth/checkAuth")
+app.use(pinia).use(router)
+registerGlobals(app)
+
+const authStore = useAuthStore()
+useUIStore()
+
+await authStore.checkAuth()
 
 app.mount("#app")

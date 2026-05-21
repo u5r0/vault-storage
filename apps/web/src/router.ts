@@ -6,18 +6,20 @@ import ForgotPasswordView from "./views/ForgotPasswordView.vue"
 import ResetPasswordView from "./views/ResetPasswordView.vue"
 import ProfileView from "./views/ProfileView.vue"
 import SettingsView from "./views/SettingsView.vue"
-import store from "./store"
+import AppLayout from "./layouts/AppLayout.vue"
+import AuthLayout from "./layouts/AuthLayout.vue"
+import { useAuthStore } from "./stores/auth"
 
 const routes: RouteRecordRaw[] = [
-  { path: "/login", name: "login", component: LoginView },
-  { path: "/signup", name: "signup", component: SignupView },
-  { path: "/forgot-password", name: "forgot-password", component: ForgotPasswordView },
-  { path: "/reset-password", name: "reset-password", component: ResetPasswordView },
-  { path: "/verify", name: "verify", component: FilesView }, // Will redirect after token verification
+  { path: "/login", name: "login", component: LoginView, meta: { layout: AuthLayout } },
+  { path: "/signup", name: "signup", component: SignupView, meta: { layout: AuthLayout } },
+  { path: "/forgot-password", name: "forgot-password", component: ForgotPasswordView, meta: { layout: AuthLayout } },
+  { path: "/reset-password", name: "reset-password", component: ResetPasswordView, meta: { layout: AuthLayout } },
+  { path: "/verify", name: "verify", component: FilesView, meta: { layout: AuthLayout } },
   { path: "/", redirect: "/contents" },
-  { path: "/contents/:entityId?", name: "content", component: FilesView, props: true },
-  { path: "/profile", name: "profile", component: ProfileView },
-  { path: "/settings", name: "settings", component: SettingsView },
+  { path: "/contents/:entityId?", name: "content", component: FilesView, props: true, meta: { layout: AppLayout } },
+  { path: "/profile", name: "profile", component: ProfileView, meta: { layout: AppLayout } },
+  { path: "/settings", name: "settings", component: SettingsView, meta: { layout: AppLayout } },
 ]
 
 export const router = createRouter({
@@ -26,21 +28,13 @@ export const router = createRouter({
 })
 
 // Route guard: redirect to login if not authenticated
-router.beforeEach(async (to, from, next) => {
-  const isAuthenticated = store.getters["auth/isAuthenticated"]
-  const loading = store.getters["auth/loading"]
-  
+router.beforeEach((to, _from, next) => {
+  const authStore = useAuthStore()
   const publicRoutes = ["login", "signup", "forgot-password", "reset-password", "verify"]
-  
-  // If auth check is in progress, wait for it
-  if (loading) {
-    await store.dispatch("auth/checkAuth")
-    return next(to)
-  }
-  
-  if (!publicRoutes.includes(to.name as string) && !isAuthenticated) {
+
+  if (!publicRoutes.includes(to.name as string) && !authStore.isAuthenticated) {
     next({ name: "login" })
-  } else if (to.name === "login" && isAuthenticated) {
+  } else if (to.name === "login" && authStore.isAuthenticated) {
     next({ name: "content" })
   } else {
     next()

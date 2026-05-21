@@ -87,8 +87,7 @@ async function handleSignup() {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center grain px-4">
-    <div class="w-full max-w-md">
+  <div class="w-full max-w-md">
       <!-- Logo/Brand -->
       <div class="mb-8 text-center">
         <div
@@ -345,6 +344,5 @@ async function handleSignup() {
           Sign in
         </router-link>
       </p>
-    </div>
   </div>
 </template>

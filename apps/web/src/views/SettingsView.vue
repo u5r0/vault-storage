@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue"
-import { useRouter } from "vue-router"
 import {
-  ArrowLeft,
   User,
   Bell,
   Shield,
@@ -17,7 +15,6 @@ import {
 } from "@lucide/vue"
 import { useTheme, type ThemeMode } from "@/composables/useTheme"
 
-const router = useRouter()
 const { mode, setMode } = useTheme()
 
 const activeSection = ref("account")
@@ -60,10 +57,6 @@ const storageInfo = ref({
   files: 147,
 })
 
-function handleBack() {
-  router.back()
-}
-
 function saveSettings() {
   // TODO: Implement actual save
   console.log("Settings saved")
@@ -71,25 +64,7 @@ function saveSettings() {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col">
-    <!-- Header -->
-    <header
-      class="sticky top-0 z-30 w-full border-b border-[var(--color-border)] glass"
-    >
-      <div class="flex h-16 items-center gap-3 px-4 md:px-6">
-        <button
-          type="button"
-          @click="handleBack"
-          class="grid h-9 w-9 place-items-center rounded-[var(--radius-md)] text-muted-foreground transition hover:bg-[var(--color-muted)] hover:text-foreground"
-        >
-          <ArrowLeft :size="18" :stroke-width="1.75" />
-        </button>
-        <h1 class="text-lg font-semibold">Settings</h1>
-      </div>
-    </header>
-
-    <!-- Content -->
-    <main class="flex-1 px-4 py-6 md:px-6">
+  <main class="flex-1 overflow-y-auto px-4 py-6 md:px-6">
       <div class="mx-auto max-w-4xl">
         <div class="flex flex-col gap-6 lg:flex-row">
           <!-- Sidebar Navigation -->
@@ -438,6 +413,5 @@ function saveSettings() {
           </div>
         </div>
       </div>
-    </main>
-  </div>
+  </main>
 </template>

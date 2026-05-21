@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from "vue"
-import { useRouter } from "vue-router"
 import {
   User,
   Mail,
@@ -9,11 +8,9 @@ import {
   Briefcase,
   Camera,
   Save,
-  ArrowLeft,
 } from "@lucide/vue"
 import { useAuth } from "@/composables/useAuth"
 
-const router = useRouter()
 const { user } = useAuth()
 
 const name = ref("Demo User")
@@ -25,10 +22,6 @@ const company = ref("")
 const avatarUrl = ref("")
 const isEditing = ref(false)
 const loading = ref(false)
-
-function handleBack() {
-  router.back()
-}
 
 async function handleSave() {
   loading.value = true
@@ -45,25 +38,7 @@ async function handleSave() {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col">
-    <!-- Header -->
-    <header
-      class="sticky top-0 z-30 w-full border-b border-[var(--color-border)] glass"
-    >
-      <div class="flex h-16 items-center gap-3 px-4 md:px-6">
-        <button
-          type="button"
-          @click="handleBack"
-          class="grid h-9 w-9 place-items-center rounded-[var(--radius-md)] text-muted-foreground transition hover:bg-[var(--color-muted)] hover:text-foreground"
-        >
-          <ArrowLeft :size="18" :stroke-width="1.75" />
-        </button>
-        <h1 class="text-lg font-semibold">Profile</h1>
-      </div>
-    </header>
-
-    <!-- Content -->
-    <main class="flex-1 px-4 py-8 md:px-6">
+  <main class="flex-1 overflow-y-auto px-4 py-8 md:px-6">
       <div class="mx-auto max-w-3xl">
         <!-- Profile Header -->
         <div
@@ -226,6 +201,5 @@ async function handleSave() {
           </div>
         </div>
       </div>
-    </main>
-  </div>
+  </main>
 </template>

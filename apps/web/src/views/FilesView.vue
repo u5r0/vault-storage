@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import AppSidebar from "../components/AppSidebar.vue";
 import FileList from "../components/FileList.vue";
 import DetailsPanel from "../components/DetailsPanel.vue";
 import FolderModal from "../components/FolderModal.vue";
@@ -63,7 +62,6 @@ async function handleFolderConfirm(name: string) {
 
 <template>
   <main class="flex flex-1 overflow-hidden">
-    <AppSidebar />
     <div
       v-if="loading"
       class="grid flex-1 place-items-center text-muted-foreground text-sm"
