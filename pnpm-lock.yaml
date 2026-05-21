@@ -148,9 +148,16 @@ importers:
 
   packages/sdk:
     dependencies:
+      tough-cookie:
+        specifier: ^6.0.1
+        version: 6.0.1
       zod:
         specifier: 'catalog:'
         version: 4.4.3
+    devDependencies:
+      '@types/tough-cookie':
+        specifier: ^4.0.5
+        version: 4.0.5
 
 packages:
 
@@ -1002,6 +1009,9 @@ packages:
 
   '@types/statuses@2.0.6':
     resolution: {integrity: sha512-xMAgYwceFhRA2zY+XbEA7mxYbA093wdiW8Vu6gZPGWy9cmOyU9XesH1tNcEWsKFd5Vzrqx5T3D38PWx1FIIXkA==}
+
+  '@types/tough-cookie@4.0.5':
+    resolution: {integrity: sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA==}
 
   '@typespec/ts-http-runtime@0.3.5':
     resolution: {integrity: sha512-yURCknZhvywvQItHMMmFSo+fq5arCUIyz/CVk7jD89MSai7dkaX8ufjCWp3NttLojoTVbcE72ri+be/TnEbMHw==}
@@ -2942,6 +2952,8 @@ snapshots:
       '@types/node': 22.19.17
 
   '@types/statuses@2.0.6': {}
+
+  '@types/tough-cookie@4.0.5': {}
 
   '@typespec/ts-http-runtime@0.3.5':
     dependencies:

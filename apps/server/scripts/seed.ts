@@ -170,15 +170,13 @@ async function cleanup() {
     )
     console.log(`    Found ${resources.length} documents`)
     for (const item of resources) {
+      // Preserve the demo user across re-runs so login still works
+      if (item.type === "user" && item.email === DEMO_USER.email) continue
       try {
-        if (item.email !== DEMO_USER.email) {
-          // Use email as partition key for users, id for other documents
-          const partitionKey = item.email || item.id
-          await withRetry(
-            () => db.item(item.id, partitionKey).delete(),
-            `Delete ${item.id}`
-          )
-        }
+        await withRetry(
+          () => db.item(item.id).delete(),
+          `Delete ${item.id}`
+        )
       } catch (deleteError: any) {
         if (deleteError.code !== 404) {
           console.log(`    Failed to delete ${item.id}: ${deleteError.message}`)
