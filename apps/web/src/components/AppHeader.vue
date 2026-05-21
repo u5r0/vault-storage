@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue"
+import { ref, computed, inject } from "vue"
 import { useRouter } from "vue-router"
 import {
   Search,
@@ -7,19 +7,45 @@ import {
   Sun,
   Moon,
   Command,
-  Plus,
+  FolderPlus,
   Upload,
   LogOut,
   User,
 } from "@lucide/vue"
-import { useTheme, type ThemeMode } from "@/composables/useTheme"
-import { useAuth } from "@/composables/useAuth"
+import { useUIStore, type ThemeMode } from "@/stores/ui"
+import { useAuthStore } from "@/stores/auth"
+import { UPPY_KEY } from "@/modules/upload/composables/useVaultUpload"
 
-const { mode, setMode } = useTheme()
-const { user, signOut } = useAuth()
+const ui   = useUIStore()
+const auth = useAuthStore()
+
+const mode    = computed(() => ui.theme)
+const setMode = (m: typeof ui.theme) => ui.setTheme(m)
+const user    = computed(() => auth.user)
 const router = useRouter()
 const query = ref("")
 const dropdownOpen = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+// Inject the active uppy instance provided by the FileList's useVaultUpload
+const activeUppy = inject(UPPY_KEY, ref(null))
+
+function openFilePicker() {
+  fileInputRef.value?.click()
+}
+
+function onFilesSelected(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (!input.files?.length || !activeUppy.value) return
+  const files = Array.from(input.files).map((file) => ({
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    data: file,
+  }))
+  activeUppy.value.addFiles(files)
+  input.value = ""
+}
 
 function toggleDropdown() {
   dropdownOpen.value = !dropdownOpen.value
@@ -35,7 +61,7 @@ const themes: { id: ThemeMode; icon: typeof Sun; label: string }[] = [
 ]
 
 async function handleSignOut() {
-  await signOut()
+  await auth.signOut()
   router.push("/login")
 }
 </script>
@@ -96,19 +122,29 @@ async function handleSignOut() {
 
       <!-- Quick actions -->
       <div class="hidden items-center gap-1.5 md:flex">
+        <!-- Hidden file input wired to the active uppy instance -->
+        <input
+          ref="fileInputRef"
+          type="file"
+          multiple
+          class="sr-only"
+          @change="onFilesSelected"
+        />
         <button
-          class="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 text-sm font-medium transition hover:bg-[var(--color-muted)]"
           type="button"
+          @click="openFilePicker"
+          :disabled="!activeUppy"
+          class="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 py-2 text-sm font-medium text-[var(--color-primary-foreground)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Upload :size="15" :stroke-width="2" />
           Upload
         </button>
         <button
-          class="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 py-2 text-sm font-medium text-[var(--color-primary-foreground)] transition hover:opacity-90"
+          class="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 text-sm font-medium transition hover:bg-[var(--color-muted)]"
           type="button"
         >
-          <Plus :size="15" :stroke-width="2.5" />
-          New
+          <FolderPlus :size="15" :stroke-width="2" />
+          New folder
         </button>
       </div>
 

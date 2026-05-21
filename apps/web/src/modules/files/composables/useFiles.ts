@@ -1,5 +1,5 @@
 import { computed, type Ref } from "vue"
-import { useAsync } from "./useAsync"
+import { useAsync } from "@/composables/useAsync"
 import { client as defaultClient } from "@/lib/client"
 import type { VaultStore, VaultEntry } from "@vault/sdk"
 
