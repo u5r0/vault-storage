@@ -9,21 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-
-    services:
-      azurite:
-        image: mcr.microsoft.com/azure-storage/azurite:3.32.0
-        ports:
-          - 10000:10000
-        env:
-          AZURITE_ACCOUNTS: devstoreaccount1:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==
-          AZURITE_LOCATOR: 127.0.0.1
-        options: >-
-          --health-cmd "curl -f http://localhost:10000/devstoreaccount1?comp=list"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
+          
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -41,6 +27,22 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Start Azurite
+        run: docker compose up -d azurite
+
+      - name: Wait for Azurite
+        run: |
+          for i in {1..30}; do
+            if docker inspect --format='{{.State.Health.Status}}' vault-azurite 2>/dev/null | grep -q healthy; then
+              echo "Azurite is healthy"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Azurite failed to become healthy"
+          docker logs vault-azurite
+          exit 1
 
 #      - name: Run unit tests
 #        run: pnpm test:unit

@@ -84,21 +84,14 @@ Before making significant changes, please review the Architecture Decision Recor
 - [ADR 0006: Cosmos DB and ID-Based Routing](docs/adr/0006-cosmos-db-and-id-based-routing.md) - Database and routing architecture
 - [ADR 0007: Monorepo Layout](docs/adr/0007-monorepo-layout.md) - Project structure
 
-## Important Constraints
-
-**ID-based routing is implemented** (ADR 0006). The following features are now available for implementation:
-- Star/tag/trash features (metadata persistence via Cosmos DB)
-- Share functionality
-- Rich metadata support
 
 See the [roadmap](docs/roadmap.md) for current priorities and upcoming features.
 
 ## Submitting Changes
 
 1. Ensure all tests pass: `pnpm test`
-2. Commit your changes with clear messages
-3. Push to your fork: `git push origin feature/your-feature-name`
-4. Open a pull request with a description of your changes
+2. Push to your fork: `git push origin feature/your-feature-name`
+3. Open a pull request with a description of your changes
 
 ## Pull Request Guidelines
 
