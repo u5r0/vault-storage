@@ -8,6 +8,10 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "tough-cookie": "^6.0.1",
     "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/tough-cookie": "^4.0.5"
   }
 }
