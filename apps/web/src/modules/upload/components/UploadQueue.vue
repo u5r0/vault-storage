@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Uppy from "@uppy/core"
 import { X } from "@lucide/vue"
-import type { UploadFile } from "../composables/useVaultUpload"
+import type { UploadFile } from "@/stores/upload"
 
 defineProps<{
   uppy: Uppy

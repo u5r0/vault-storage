@@ -1,80 +1,131 @@
 # Roadmap
 
-Codebase review conducted 2026-05-17. Updated 2026-05-20 for test status, auth implementation, and Vuex state management. Items ordered by priority.
+Last reviewed: 2026-05-22. Items ordered by priority within each tier.
 
+---
+
+## What's Done
+
+These features are implemented and working:
+
+- **Authentication** — Register (Argon2id), login, magic links, email verification, password reset, JWT access/refresh tokens, account lockout (5 attempts → 30min)
+- **File storage** — Upload, download, create folder, rename, move, delete (Azure Blob + Cosmos DB)
+- **Frontend architecture** — Vertical slice modules (auth, files, upload, settings, profile), Pinia stores, global v-* primitives, layout system
+- **Headless upload** — Uppy core (no @uppy/vue)
+- **Theme system** — Light/dark with CSS custom properties, persisted to localStorage
+- **Testing** — Vitest dual-project (unit + integration), Azurite + Cosmos emulator in CI
+- **SDK** — Shared Zod schemas, VaultClient (browser + Node.js), VaultStore interface contract
+- **Rate limiting** — Three layers (per-email, volumetric upload, IP emergency brake)
+- **Quick links API** — Starred/recent/tags/trash counts served from Cosmos DB
+
+---
 
 ## Critical
 
-### 1. Tests — Phase B pending
-EpicWeb-based testing strategy with Vitest. Phase A complete (18 integration tests green). Phase B error path tests needed: password reset, invalid credentials, invalid tokens, unauthenticated access, file/auth API error paths. See [ADR 0004](adr/0004-testing-strategy.md) and [ADR 0012b (private)](adr-private/0012b-testing-refactoring-epic-web-patterns.md).
+### 1. Search
 
-**Status:** Auth tests partially complete. Need to add password reset flow and error path tests.
+`AppHeader.vue` has a search input wired to a local `query` ref that goes nowhere. No backend endpoint, no filtering logic.
 
-### 2. Metadata persistence not implemented
-Azure Cosmos DB architecture decided but not implemented. No user metadata (stars, tags, trash, recents). See [ADR 0006](adr/0006-cosmos-db-and-id-based-routing.md).
+**Needs:**
+- `GET /api/files/search?q=<term>` endpoint querying Cosmos DB `CONTAINS()` on name
+- Frontend: debounced search input → API call → display results (route or overlay)
+- Consider full-text search (Azure AI Search) as a future upgrade path
 
-**Status:** Cosmos DB connection configured in backend but metadata schema and CRUD operations not implemented. Need to design metadata entity schema, create endpoints, and add integration tests for Cosmos DB operations.
+### 2. Pagination
 
-### 3. Search is dead UI
-`AppHeader.vue` has `v-model="query"` but `query` is never consumed. No search API endpoint or filtering logic.
+`GET /api/files` returns all entries in a folder. No limit.
 
-**Status:** UI exists but no backend implementation. Need to implement search API with Cosmos DB queries and wire up frontend.
+**Needs:**
+- Continuation token-based pagination (Cosmos DB native pattern)
+- Frontend: infinite scroll or "load more" in FileList
+- Reasonable default page size (50–100 entries)
+
+### 3. Metadata features are read-only stubs
+
+The backend serves `quickLinks` counts and stores `isFavorite`/`tags`/`deletedAt` fields, but there are no mutation endpoints for starring, tagging, or soft-deleting.
+
+**Needs:**
+- `PATCH /api/files/star` — toggle `isFavorite`
+- `PATCH /api/files/tag` — add/remove tags
+- `DELETE /api/files` (soft) — set `deletedAt` instead of hard delete (or add `/trash` and `/restore` endpoints)
+- Frontend views for starred, recent, tagged, and trash (sidebar links go nowhere today)
+
+---
 
 ## Functional
 
-### 4. No pagination on list endpoint
-`GET /api/files` returns all entries. No pagination.
+### 4. Context menu / actions
 
-**Status:** Returns all entities without limit. Need to implement cursor-based or offset-based pagination for large datasets.
+Toolbar buttons (Properties, Tags, Star, Delete) have no click handlers. No right-click context menu.
 
-### 5. Upload implementation needs review
-Uppy components integrated. May be over-engineered. Consider simplifying to native file input + progress tracking.
+**Needs:**
+- Wire toolbar buttons to call the corresponding API endpoint
+- Context menu component (right-click or long-press on mobile)
+- Confirmation dialog for destructive actions (delete)
 
-**Status:** Working but complex. Need to evaluate if simplification is needed or if current implementation is acceptable.
+### 5. Share
 
-### 6. No context menu / right-click
-Toolbar buttons have no handlers. No right-click menu.
+Share button in DetailsPanel has no handler.
 
-**Status:** UI buttons exist but no functionality. Need to implement context menu with actions (rename, delete, share, download).
+**Needs:**
+- Backend: share link generation (signed URL or token-gated access)
+- Permission model (read-only link vs. collaborator access)
+- Frontend: modal with generated link + copy button
 
-### 7. Share button does nothing
-Share button has no handler.
+### 6. Storage stats
 
-**Status:** UI exists but no backend. Need to implement share link generation and access control.
+AppSidebar shows hardcoded storage usage.
 
-### 8. Storage stats are hardcoded
-No API endpoint for actual usage.
+**Needs:**
+- `GET /api/files/stats` endpoint — total bytes stored, file count
+- Frontend: display real values in sidebar
 
-**Status:** Hardcoded values in AppSidebar. Need to implement storage usage calculation from Azure Blob Storage.
+### 7. Mobile responsiveness
 
-### 9. No keyboard shortcuts
-No global keyboard shortcut handler.
+No hamburger menu or responsive sidebar. Desktop-only layout.
 
-**Status:** No implementation. Need to add keyboard shortcuts for common actions (upload, search, navigation).
+**Needs:**
+- Sidebar toggle (hamburger icon in AppHeader on small screens)
+- Responsive grid breakpoints for FileGridItem
+- Touch-friendly context actions
 
-### 10. No mobile sidebar toggle
-No hamburger menu or mobile drawer.
+### 8. Loading states
 
-**Status:** Desktop-only layout. Need responsive design with mobile sidebar toggle.
+Only a `<v-spinner>` during initial load. No skeleton placeholders.
 
-### 11. No loading skeletons
-Only "Loading…" text, no skeleton placeholders.
+**Needs:**
+- Skeleton screens for file list rows/grid cards
+- Optimistic UI for rename/move/delete (update local state, revert on error)
 
-**Status:** Basic loading state. Need to implement skeleton screens for better UX during data loading.
+---
 
-## Completed
+## Nice-to-Have
 
-### 12. Authentication system ✅
-Email/password login, magic links, password reset, email verification implemented. Vuex store for state management. See [ADR 0001](adr/0001-authentication.md) and [ADR 0014 (private)](adr-private/0014-frontend-state-management.md).
+### 9. Keyboard shortcuts
 
-**Status:** Fully implemented with httpOnly cookie-based session security.
+No global shortcuts.
 
-### 13. ID-based routing ✅
-Entity ID-based URLs implemented per ADR 0006. Frontend uses `/contents/:entityId` routing.
+**Candidates:** `/` for search focus, `Ctrl+U` for upload, `Delete` for selected file, arrow keys for navigation.
 
-**Status:** Complete. Backend and frontend both use UUID-based entity identifiers.
+### 10. Breadcrumb navigation
 
-### 14. Monorepo layout ✅
-pnpm workspace structure implemented. See [ADR 0007](adr/0007-monorepo-layout.md).
+Currently only a "Home" button. No path breadcrumbs showing folder hierarchy.
 
-**Status:** Complete with apps/server, apps/web, and packages/sdk.
+### 11. File preview
+
+No in-app preview for images, PDFs, or text files. Downloads are the only option.
+
+### 12. Drag-to-move
+
+Files can be dragged in to upload but cannot be dragged between folders within the app.
+
+### 13. Multi-select
+
+No shift-click or ctrl-click selection for bulk actions.
+
+---
+
+## Technical Debt
+
+- **`tough-cookie` in SDK** — Only needed for Node.js test client. Consider making it a peer/optional dependency or moving VaultClient out of the shared SDK.
+- **Test coverage gaps** — Phase B error-path tests not yet written (invalid tokens, password reset flow, unauthenticated access).

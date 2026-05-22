@@ -1,5 +1,4 @@
-// Upload module — no routes, exports composable and components for use within other modules.
-export { useVaultUpload } from "./composables/useVaultUpload"
-export { default as UploadDropZone } from "./components/UploadDropZone.vue"
-export { default as UploadQueue }    from "./components/UploadQueue.vue"
-export { default as UploadTrigger }  from "./components/UploadTrigger.vue"
+// Upload module — no routes. State lives in `stores/upload.ts` so it can be
+// shared between AppHeader and the active route. Only the queue component
+// surfaces from this module; everything else is driven by the store.
+export { default as UploadQueue } from "./components/UploadQueue.vue"

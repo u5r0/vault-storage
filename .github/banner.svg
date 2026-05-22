@@ -1,0 +1,283 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0e1826"/>
+      <stop offset="100%" stop-color="#0a1220"/>
+    </linearGradient>
+    <linearGradient id="primary" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#15a394"/>
+      <stop offset="100%" stop-color="#2dd4bf"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d4a04a"/>
+      <stop offset="100%" stop-color="#f0c270"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#172033"/>
+      <stop offset="100%" stop-color="#0f1828"/>
+    </linearGradient>
+    <linearGradient id="title" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#cbd5e1"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#15a394" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#15a394" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#d4a04a" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#d4a04a" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#ffffff" fill-opacity="0.04"/>
+    </pattern>
+    <filter id="cardShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="20" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+    <clipPath id="frameClip">
+      <rect x="0" y="0" width="540" height="320" rx="14"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="400" fill="url(#bg)"/>
+  <rect width="1200" height="400" fill="url(#dots)"/>
+
+  <!-- Ambient glows -->
+  <circle cx="160" cy="380" r="280" fill="url(#glow1)"/>
+  <circle cx="1100" cy="60" r="220" fill="url(#glow2)"/>
+
+  <!-- ============ LEFT: Brand block (x: 120 → 540) ============ -->
+  <g transform="translate(120, 90)">
+
+    <!-- Eyebrow pill -->
+    <g>
+      <rect width="148" height="28" rx="14" fill="#15a394" fill-opacity="0.1" stroke="#15a394" stroke-opacity="0.35" stroke-width="1"/>
+      <circle cx="16" cy="14" r="3.5" fill="#2dd4bf"/>
+      <circle cx="16" cy="14" r="3.5" fill="#2dd4bf" opacity="0.4">
+        <animate attributeName="r" values="3.5;7;3.5" dur="2.4s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.4;0;0.4" dur="2.4s" repeatCount="indefinite"/>
+      </circle>
+      <text x="30" y="18" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="11" font-weight="600" fill="#5eead4" letter-spacing="0.4">Personal storage</text>
+    </g>
+
+    <!-- Logo + wordmark -->
+    <g transform="translate(0, 56)">
+      <rect x="0" y="0" width="52" height="52" rx="12" fill="url(#primary)"/>
+      <path d="M14 21A4 4 0 0 1 18 17h5.2a3 3 0 0 1 2.12.88l1.84 1.84a3 3 0 0 0 2.12.88H34A4 4 0 0 1 38 24.6V35a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4z"
+            fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="68" y="36" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="40" font-weight="700" fill="url(#title)" letter-spacing="-1.4">Vault Storage</text>
+    </g>
+
+    <!-- Tagline -->
+    <text x="0" y="156" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="17" font-weight="400" fill="#94a3b8" letter-spacing="0.1">Simple, secure file storage</text>
+    <text x="0" y="180" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="17" font-weight="400" fill="#94a3b8" letter-spacing="0.1">for your personal documents.</text>
+
+    <!-- Feature row -->
+    <g transform="translate(0, 214)" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="500" fill="#cbd5e1">
+      <g>
+        <circle cx="7" cy="7" r="7" fill="#15a394" fill-opacity="0.15"/>
+        <path d="M4 7l2 2 4-4" stroke="#2dd4bf" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <text x="22" y="11">End-to-end encrypted</text>
+      </g>
+      <g transform="translate(180, 0)">
+        <circle cx="7" cy="7" r="7" fill="#15a394" fill-opacity="0.15"/>
+        <path d="M4 7l2 2 4-4" stroke="#2dd4bf" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <text x="22" y="11">Self-hostable</text>
+      </g>
+    </g>
+
+  </g>
+
+  <!-- ============ RIGHT: App mockup (x: 540 → 1080) ============ -->
+  <g transform="translate(540, 40)" filter="url(#cardShadow)">
+    <g clip-path="url(#frameClip)">
+      <!-- Window background -->
+      <rect width="540" height="320" fill="url(#card)"/>
+
+      <!-- Title bar -->
+      <rect width="540" height="34" fill="#0c1424"/>
+      <circle cx="18" cy="17" r="4" fill="#ef4444" opacity="0.85"/>
+      <circle cx="34" cy="17" r="4" fill="#eab308" opacity="0.85"/>
+      <circle cx="50" cy="17" r="4" fill="#22c55e" opacity="0.85"/>
+      <rect x="180" y="9" width="180" height="16" rx="4" fill="#ffffff" fill-opacity="0.04"/>
+      <text x="270" y="20" font-family="ui-monospace, monospace" font-size="9" fill="#64748b" text-anchor="middle">vault.app/contents</text>
+
+      <!-- Sidebar -->
+      <rect x="0" y="34" width="156" height="286" fill="#0a1220"/>
+
+      <!-- Brand row inside app -->
+      <g transform="translate(14, 48)">
+        <rect width="22" height="22" rx="6" fill="url(#primary)"/>
+        <path d="M6 9.5A2 2 0 0 1 8 7.5h2.4a1.4 1.4 0 0 1 1 .4l.8.8a1.4 1.4 0 0 0 1 .4H15A2 2 0 0 1 17 11v5a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="32" y="11" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#f1f5f9">Vault</text>
+        <text x="32" y="22" font-family="ui-sans-serif, system-ui, sans-serif" font-size="8" fill="#64748b">Personal</text>
+      </g>
+
+      <!-- Sidebar header -->
+      <text x="22" y="100" font-family="ui-sans-serif, system-ui, sans-serif" font-size="8" font-weight="700" fill="#475569" letter-spacing="1.2">LIBRARY</text>
+
+      <!-- Sidebar items -->
+      <g transform="translate(10, 110)" font-family="ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#cbd5e1">
+        <!-- Starred (active) -->
+        <g>
+          <rect width="136" height="26" rx="6" fill="#15a394" fill-opacity="0.12"/>
+          <path d="M14 19l-3.5 1.8.7-3.9-2.8-2.8 3.9-.5L14 11l1.7 3.6 3.9.5-2.8 2.8.7 3.9z" fill="#2dd4bf" opacity="0.85"/>
+          <text x="28" y="18" fill="#2dd4bf" font-weight="600">Starred</text>
+          <rect x="106" y="9" width="20" height="11" rx="5" fill="#15a394" fill-opacity="0.18"/>
+          <text x="116" y="17" font-size="8" fill="#5eead4" text-anchor="middle" font-weight="600">12</text>
+        </g>
+        <g transform="translate(0, 30)">
+          <path d="M14 11a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 2v3l2 1" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <text x="28" y="18">Recent</text>
+          <text x="116" y="17" font-size="8" fill="#64748b" text-anchor="middle">38</text>
+        </g>
+        <g transform="translate(0, 60)">
+          <path d="M11.5 11.5h3.5l5 5-4.5 4.5-5-5v-3.5a1 1 0 0 1 1-1z" stroke="#94a3b8" stroke-width="1.2" stroke-linejoin="round" fill="none"/>
+          <circle cx="13.5" cy="13.5" r="0.8" fill="#94a3b8"/>
+          <text x="28" y="18">Tags</text>
+          <text x="116" y="17" font-size="8" fill="#64748b" text-anchor="middle">7</text>
+        </g>
+        <g transform="translate(0, 90)">
+          <path d="M9.5 13h9m-7-2.2h5l.5 1.2h2v1m-9 0v6.5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V13" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+          <text x="28" y="18">Trash</text>
+          <text x="116" y="17" font-size="8" fill="#64748b" text-anchor="middle">3</text>
+        </g>
+      </g>
+
+      <!-- Storage card -->
+      <g transform="translate(14, 250)">
+        <rect width="128" height="58" rx="8" fill="#172033" stroke="#1e293b" stroke-width="1"/>
+        <g transform="translate(10, 10)">
+          <rect width="18" height="18" rx="5" fill="#15a394" fill-opacity="0.18"/>
+          <path d="M5 12h8M5 8.5h8M9 8.5v3.5" stroke="#2dd4bf" stroke-width="1.2" stroke-linecap="round"/>
+          <text x="26" y="9" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#e2e8f0">Storage</text>
+          <text x="26" y="18" font-family="ui-sans-serif, system-ui, sans-serif" font-size="7.5" fill="#64748b">624 / 1200 GB</text>
+        </g>
+        <rect x="10" y="38" width="108" height="4" rx="2" fill="#1e293b"/>
+        <rect x="10" y="38" width="56" height="4" rx="2" fill="url(#primary)"/>
+      </g>
+
+      <!-- Sidebar divider -->
+      <line x1="156" y1="34" x2="156" y2="320" stroke="#1e293b" stroke-width="1"/>
+
+      <!-- Main toolbar -->
+      <g transform="translate(156, 34)">
+        <rect width="384" height="44" fill="#0d162a"/>
+        <!-- Search -->
+        <rect x="14" y="11" width="200" height="22" rx="6" fill="#0a1220" stroke="#1e293b" stroke-width="1"/>
+        <circle cx="26" cy="22" r="3.6" stroke="#64748b" stroke-width="1.2" fill="none"/>
+        <line x1="29" y1="25" x2="32" y2="28" stroke="#64748b" stroke-width="1.2" stroke-linecap="round"/>
+        <text x="40" y="25" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#475569">Search files…</text>
+
+        <!-- New folder button -->
+        <rect x="240" y="11" width="64" height="22" rx="6" fill="transparent" stroke="#1e293b" stroke-width="1"/>
+        <text x="272" y="25" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#cbd5e1" text-anchor="middle">+ Folder</text>
+
+        <!-- Upload button (primary) -->
+        <rect x="312" y="11" width="60" height="22" rx="6" fill="url(#primary)"/>
+        <path d="M324 22v-5m0 0l-2 2m2-2l2 2" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <text x="350" y="25" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#ffffff" text-anchor="middle">Upload</text>
+      </g>
+
+      <!-- Breadcrumb -->
+      <g transform="translate(170, 90)">
+        <text font-family="ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#94a3b8" font-weight="600">My Files</text>
+        <text x="60" font-family="ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#475569">/</text>
+        <text x="72" font-family="ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#94a3b8">Documents</text>
+        <text x="200" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#475569">12 items</text>
+      </g>
+
+      <!-- File grid: 4 columns × 2 rows (cards) -->
+      <g transform="translate(170, 108)">
+        <!-- row 1 -->
+        <g>
+          <!-- Folder card -->
+          <rect width="84" height="86" rx="10" fill="#172033" stroke="#1e293b" stroke-width="1"/>
+          <path d="M10 30A4 4 0 0 1 14 26h8a3 3 0 0 1 2.1.9l1.5 1.5a3 3 0 0 0 2.1.9h6.3A4 4 0 0 1 38 33.3v6.4a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4z" fill="#15a394" fill-opacity="0.2" stroke="#2dd4bf" stroke-width="1.4" stroke-linejoin="round"/>
+          <text x="42" y="62" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#e2e8f0" text-anchor="middle">Projects</text>
+          <text x="42" y="74" font-family="ui-sans-serif, system-ui, sans-serif" font-size="7" fill="#64748b" text-anchor="middle">14 items</text>
+        </g>
+        <g transform="translate(92, 0)">
+          <rect width="84" height="86" rx="10" fill="#172033" stroke="#1e293b" stroke-width="1"/>
+          <path d="M10 30A4 4 0 0 1 14 26h8a3 3 0 0 1 2.1.9l1.5 1.5a3 3 0 0 0 2.1.9h6.3A4 4 0 0 1 38 33.3v6.4a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4z" fill="#d4a04a" fill-opacity="0.18" stroke="#f0c270" stroke-width="1.4" stroke-linejoin="round"/>
+          <text x="42" y="62" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#e2e8f0" text-anchor="middle">Photos</text>
+          <text x="42" y="74" font-family="ui-sans-serif, system-ui, sans-serif" font-size="7" fill="#64748b" text-anchor="middle">238 items</text>
+        </g>
+        <g transform="translate(184, 0)">
+          <rect width="84" height="86" rx="10" fill="#172033" stroke="#1e293b" stroke-width="1"/>
+          <!-- Doc icon -->
+          <g transform="translate(28, 18)">
+            <rect width="28" height="34" rx="3" fill="#0c1424" stroke="#334155" stroke-width="1"/>
+            <line x1="6" y1="10" x2="22" y2="10" stroke="#475569" stroke-width="1"/>
+            <line x1="6" y1="16" x2="22" y2="16" stroke="#475569" stroke-width="1"/>
+            <line x1="6" y1="22" x2="18" y2="22" stroke="#475569" stroke-width="1"/>
+            <rect x="-4" y="-4" width="14" height="6" rx="2" fill="#15a394"/>
+            <text x="3" y="0" font-family="ui-sans-serif, sans-serif" font-size="5" fill="#fff" text-anchor="middle" font-weight="700">PDF</text>
+          </g>
+          <text x="42" y="62" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#e2e8f0" text-anchor="middle">Resume.pdf</text>
+          <text x="42" y="74" font-family="ui-sans-serif, system-ui, sans-serif" font-size="7" fill="#64748b" text-anchor="middle">2.4 MB</text>
+        </g>
+        <g transform="translate(276, 0)">
+          <rect width="84" height="86" rx="10" fill="#172033" stroke="#1e293b" stroke-width="1"/>
+          <g transform="translate(28, 18)">
+            <rect width="28" height="34" rx="3" fill="#0c1424" stroke="#334155" stroke-width="1"/>
+            <line x1="6" y1="10" x2="22" y2="10" stroke="#475569" stroke-width="1"/>
+            <line x1="6" y1="16" x2="22" y2="16" stroke="#475569" stroke-width="1"/>
+            <line x1="6" y1="22" x2="18" y2="22" stroke="#475569" stroke-width="1"/>
+            <rect x="-4" y="-4" width="14" height="6" rx="2" fill="#d4a04a"/>
+            <text x="3" y="0" font-family="ui-sans-serif, sans-serif" font-size="5" fill="#fff" text-anchor="middle" font-weight="700">DOC</text>
+          </g>
+          <text x="42" y="62" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#e2e8f0" text-anchor="middle">Notes.docx</text>
+          <text x="42" y="74" font-family="ui-sans-serif, system-ui, sans-serif" font-size="7" fill="#64748b" text-anchor="middle">128 KB</text>
+        </g>
+
+        <!-- row 2 -->
+        <g transform="translate(0, 96)">
+          <rect width="84" height="86" rx="10" fill="#172033" stroke="#15a394" stroke-width="1.5" stroke-opacity="0.5"/>
+          <g transform="translate(28, 18)">
+            <rect width="28" height="34" rx="3" fill="#0c1424" stroke="#334155" stroke-width="1"/>
+            <circle cx="14" cy="14" r="4" fill="#2dd4bf" opacity="0.6"/>
+            <path d="M4 32l8-8 6 6 4-4 6 6" stroke="#15a394" stroke-width="1.4" fill="none"/>
+          </g>
+          <text x="42" y="62" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#e2e8f0" text-anchor="middle">cover.png</text>
+          <text x="42" y="74" font-family="ui-sans-serif, system-ui, sans-serif" font-size="7" fill="#64748b" text-anchor="middle">Selected</text>
+        </g>
+        <g transform="translate(92, 96)">
+          <rect width="84" height="86" rx="10" fill="#172033" stroke="#1e293b" stroke-width="1"/>
+          <g transform="translate(28, 18)">
+            <rect width="28" height="34" rx="3" fill="#0c1424" stroke="#334155" stroke-width="1"/>
+            <line x1="6" y1="10" x2="22" y2="10" stroke="#475569" stroke-width="1"/>
+            <line x1="6" y1="16" x2="22" y2="16" stroke="#475569" stroke-width="1"/>
+            <line x1="6" y1="22" x2="14" y2="22" stroke="#475569" stroke-width="1"/>
+          </g>
+          <text x="42" y="62" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#e2e8f0" text-anchor="middle">Budget.xlsx</text>
+          <text x="42" y="74" font-family="ui-sans-serif, system-ui, sans-serif" font-size="7" fill="#64748b" text-anchor="middle">42 KB</text>
+        </g>
+        <g transform="translate(184, 96)">
+          <rect width="84" height="86" rx="10" fill="#172033" stroke="#1e293b" stroke-width="1"/>
+          <g transform="translate(28, 18)">
+            <rect width="28" height="34" rx="3" fill="#0c1424" stroke="#334155" stroke-width="1"/>
+            <path d="M10 8l5 8-3 4 5 6h-12z" fill="#94a3b8" opacity="0.4"/>
+          </g>
+          <text x="42" y="62" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#e2e8f0" text-anchor="middle">Archive.zip</text>
+          <text x="42" y="74" font-family="ui-sans-serif, system-ui, sans-serif" font-size="7" fill="#64748b" text-anchor="middle">18.7 MB</text>
+        </g>
+        <!-- Upload-in-progress card -->
+        <g transform="translate(276, 96)">
+          <rect width="84" height="86" rx="10" fill="#172033" stroke="#15a394" stroke-width="1" stroke-dasharray="3 3" stroke-opacity="0.6"/>
+          <g transform="translate(34, 22)">
+            <circle cx="8" cy="8" r="8" fill="#15a394" fill-opacity="0.15"/>
+            <path d="M8 12V4m0 0l-3 3m3-3l3 3" stroke="#2dd4bf" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </g>
+          <text x="42" y="62" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#5eead4" text-anchor="middle">Uploading…</text>
+          <rect x="14" y="70" width="56" height="3" rx="1.5" fill="#1e293b"/>
+          <rect x="14" y="70" width="38" height="3" rx="1.5" fill="url(#primary)"/>
+        </g>
+      </g>
+    </g>
+
+    <!-- Frame border -->
+    <rect width="540" height="320" rx="14" fill="none" stroke="#1e293b" stroke-width="1"/>
+  </g>
+</svg>

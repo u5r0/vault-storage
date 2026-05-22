@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, inject } from "vue"
+import { ref, computed } from "vue"
 import { useRouter } from "vue-router"
 import {
   Search, Settings, Sun, Moon, Command,
@@ -8,28 +8,37 @@ import {
 import { useUIStore, type ThemeMode } from "@/stores/ui"
 import { useAuthStore } from "@/stores/auth"
 import { useFilesStore } from "@/stores/files"
-import { UPPY_KEY } from "@/modules/upload/composables/useVaultUpload"
+import { useUploadStore } from "@/stores/upload"
 
-const ui    = useUIStore()
-const auth  = useAuthStore()
-const files = useFilesStore()
+const ui     = useUIStore()
+const auth   = useAuthStore()
+const files  = useFilesStore()
+const upload = useUploadStore()
 const router = useRouter()
 
-const mode    = computed(() => ui.theme)
-const user    = computed(() => auth.user)
+const mode = computed(() => ui.theme)
+const user = computed(() => auth.user)
 
 // ── Upload ────────────────────────────────────────────────────────────────────
 const fileInputRef = ref<HTMLInputElement | null>(null)
-const activeUppy   = inject(UPPY_KEY, ref(null))
+
+const uploadDisabled = computed(
+  () => upload.currentEntityId === null && !files.allowRootUploads,
+)
 
 function openFilePicker() {
+  if (uploadDisabled.value) return
   fileInputRef.value?.click()
 }
 
 function onFilesSelected(e: Event) {
   const input = e.target as HTMLInputElement
-  if (!input.files?.length || !activeUppy.value) return
-  activeUppy.value.addFiles(
+  if (!input.files?.length) return
+  if (uploadDisabled.value) {
+    input.value = ""
+    return
+  }
+  upload.addFiles(
     Array.from(input.files).map((f) => ({ name: f.name, type: f.type, size: f.size, data: f })),
   )
   input.value = ""
@@ -132,9 +141,12 @@ const query = ref("")
         <button
           type="button"
           @click="openFilePicker"
-          class="hidden items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 py-2 text-sm font-medium text-[var(--color-primary-foreground)] transition hover:opacity-90 md:inline-flex"
-          :class="{ 'opacity-40 cursor-not-allowed': !activeUppy }"
-          :aria-disabled="!activeUppy"
+          :aria-disabled="uploadDisabled"
+          :title="uploadDisabled ? 'Open a folder to upload, or enable root uploads in Settings' : 'Upload'"
+          :class="[
+            'hidden items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 py-2 text-sm font-medium text-[var(--color-primary-foreground)] transition md:inline-flex',
+            uploadDisabled ? 'cursor-not-allowed opacity-40' : 'hover:opacity-90',
+          ]"
         >
           <Upload :size="15" :stroke-width="2" />
           Upload

@@ -4,15 +4,23 @@ import { defineStore } from "pinia"
 export type ViewMode = "list" | "grid"
 export type SortKey = "name" | "modified" | "type" | "size"
 
-const STORAGE_KEY = "vault.viewMode"
+const STORAGE_KEY_VIEW = "vault.viewMode"
+const STORAGE_KEY_ROOT_UPLOADS = "vault.allowRootUploads"
 
 export const useFilesStore = defineStore("files", () => {
   const viewMode = ref<ViewMode>(
-    (localStorage.getItem(STORAGE_KEY) as ViewMode) ?? "list",
+    (localStorage.getItem(STORAGE_KEY_VIEW) as ViewMode) ?? "list",
   )
   const sortKey = ref<SortKey>("name")
   const sortAsc = ref(true)
   const selectedId = ref<string | null>(null)
+
+  // Whether dropping or uploading at the root is permitted. Off by default —
+  // matches the intuition that root is a "library" rather than a folder you
+  // dump things into. Users can opt in from Settings → Files.
+  const allowRootUploads = ref<boolean>(
+    localStorage.getItem(STORAGE_KEY_ROOT_UPLOADS) === "1",
+  )
 
   // Used by AppHeader to trigger folder creation from outside the files route
   const createFolderRequested = ref<string | null>(null)
@@ -21,7 +29,7 @@ export const useFilesStore = defineStore("files", () => {
 
   function setViewMode(mode: ViewMode) {
     viewMode.value = mode
-    localStorage.setItem(STORAGE_KEY, mode)
+    localStorage.setItem(STORAGE_KEY_VIEW, mode)
   }
 
   function setSortKey(key: SortKey) {
@@ -37,6 +45,11 @@ export const useFilesStore = defineStore("files", () => {
     selectedId.value = id
   }
 
+  function setAllowRootUploads(allow: boolean) {
+    allowRootUploads.value = allow
+    localStorage.setItem(STORAGE_KEY_ROOT_UPLOADS, allow ? "1" : "0")
+  }
+
   function requestCreateFolder(name: string) {
     createFolderRequested.value = name
   }
@@ -47,8 +60,10 @@ export const useFilesStore = defineStore("files", () => {
 
   return {
     viewMode, sortKey, sortAsc, selectedId, toggleSort,
+    allowRootUploads,
     createFolderRequested,
     setViewMode, setSortKey, setSelectedId,
+    setAllowRootUploads,
     requestCreateFolder, clearCreateFolderRequest,
   }
 })

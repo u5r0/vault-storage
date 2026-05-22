@@ -1,5 +1,9 @@
 # Vault Storage
 
+<p align="center">
+  <img src=".github/banner.svg" alt="Vault Storage" width="100%" />
+</p>
+
 A modern file storage and management application built with Vue.js, Hono, Azure Blob Storage, and Cosmos DB.
 
 ## Status
@@ -20,7 +24,7 @@ This project is currently in active development. Core features are functional bu
 
 ## Tech Stack
 
-- **Frontend**: Vue 3, Vuex, Tailwind CSS, Vue Router, Uppy (file uploads)
+- **Frontend**: Vue 3, Pinia, Tailwind CSS, Vue Router, Uppy (file uploads)
 - **Backend**: Hono (Node.js), TypeScript
 - **Storage**: Azure Blob Storage, Azure Cosmos DB
 - **Authentication**: Argon2id password hashing, JWT tokens, magic links
@@ -32,11 +36,10 @@ This project is currently in active development. Core features are functional bu
 ```
 vault-storage/
 ├── apps/
-│   ├── web/          # Vue.js frontend application
-│   └── server/       # Hono backend API (+ scripts/seed.ts)
-├── packages/sdk/     # Shared SDK with Zod schemas
-├── tests/            # Vitest integration tests
-└── docs/             # Architecture decisions and documentation
+│   ├── web/          # Vue.js frontend (vertical slice modules)
+│   └── server/       # Hono backend API
+├── packages/sdk/     # Shared Zod schemas + VaultClient
+└── docs/             # ADRs and roadmap
 ```
 
 ## Getting Started
