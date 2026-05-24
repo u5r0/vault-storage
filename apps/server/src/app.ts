@@ -58,6 +58,11 @@ export function createApp(opts: { withLogger?: boolean } = {}) {
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) {
+      // Honor a custom Response if the thrower attached one (e.g. structured
+      // error codes like { error: "email_not_verified" }). Otherwise fall back
+      // to the default `{ error: <message> }` JSON shape the rest of the app
+      // relies on.
+      if (err.res) return err.res
       return c.json({ error: err.message }, err.status)
     }
     console.error("[server] unexpected error:", err)

@@ -103,3 +103,57 @@ export async function sendPasswordResetEmail(email: string, token: string) {
     html,
   })
 }
+
+
+export async function sendAccountLockedEmail(email: string) {
+  const resetUrl = `${APP_URL}/forgot-password`
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Your Vault Account Has Been Temporarily Locked</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; padding: 20px 0; border-bottom: 1px solid #eee; }
+        .logo { font-size: 24px; font-weight: bold; color: #0d9488; }
+        .content { padding: 30px 0; }
+        .button { display: inline-block; padding: 12px 24px; background: #0d9488; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+        .button:hover { background: #0f766e; }
+        .alert { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
+        .footer { text-align: center; padding: 20px 0; border-top: 1px solid #eee; color: #666; font-size: 14px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <div class="logo">📁 Vault</div>
+        </div>
+        <div class="content">
+          <h2>Account temporarily locked</h2>
+          <p>We detected 5 failed login attempts on your Vault account (<strong>${email}</strong>).</p>
+          <p>For your safety, we've temporarily locked the account for 30 minutes. You'll be able to sign in again automatically after that.</p>
+          <div class="alert">
+            <strong>If this wasn't you,</strong> we recommend resetting your password immediately.
+          </div>
+          <a href="${resetUrl}" class="button">Reset password</a>
+          <p>If you forgot your password and the lockout was your own attempts, you can wait 30 minutes or use the link above to reset.</p>
+        </div>
+        <div class="footer">
+          <p>&copy; 2026 Vault. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  await transporter.sendMail({
+    from: EMAIL_FROM,
+    to: email,
+    subject: "Your Vault Account Has Been Temporarily Locked",
+    html,
+  })
+}

@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-05-20
 **Updated:** 2026-05-20 (Rate limiting strategy)
+**Amended:** 2026-05-24 (ADR 0019 — rate-limit numbers reconciled with code; secrets split clarified)
 
 ## Decision
 
@@ -21,7 +22,9 @@ Implement a complete authentication system with the following features:
 
 **Backend:**
 - Password hashing: Argon2id (memoryCost: 65536, timeCost: 3, parallelism: 4)
-- Token signing: HMAC-SHA256 with `AUTH_SECRET`
+- Token signing — two distinct secrets:
+  - `AUTH_SECRET` — HMAC-SHA256 for magic-link tokens (`apps/server/src/lib/magic-link.ts`)
+  - `JWT_SECRET` — HS256 for access and refresh JWTs (`apps/server/src/lib/auth.ts`, `apps/server/src/lib/cookies.ts`)
 - Session tokens: JWT (access: 15min, refresh: 7 days)
 - Rate limiting: `rate-limiter-flexible` with multi-layered strategy
 - Email delivery: Mailpit (dev), configurable SMTP (prod)
@@ -34,17 +37,27 @@ Implement a complete authentication system with the following features:
 
 ## Rate Limiting Strategy
 
-Multi-layered approach to balance security with user experience:
+Multi-layered approach to balance security with user experience.
 
 **Layer 1: Identity-Based (Primary Filter)**
-- Auth endpoints: Email-based limiting (20 requests per 15 minutes per email)
-- Storage endpoints: User-ID based limiting (500MB per 15 minutes per user)
-- Prevents single-user abuse regardless of IP sharing
+
+Per-bucket limits as configured in `apps/server/src/lib/rate-limiter.ts`:
+
+| Endpoint            | Limit                          |
+|---------------------|--------------------------------|
+| `register`          | 5 per 15 min per email         |
+| `login`             | 10 per 15 min per email        |
+| `magic-link`        | 5 per 15 min per email         |
+| `password-reset`    | 5 per 60 min per email         |
+| `resend-verification` | 5 per 15 min per email (shares the magic-link bucket) |
+| Per-user requests   | 200 per minute per user        |
+| Storage uploads     | 500 MB per 15 min per user     |
+
+Identity-based limiting (email or user ID) prevents single-user abuse regardless of IP sharing.
 
 **Layer 2: Volumetric/Byte-Based (Storage Protection)**
-- Upload endpoints: Limit total megabytes uploaded per window
+- Upload endpoints: 500 MB per 15-minute rolling window per user
 - Protects storage backend and cloud budget from draining
-- 500MB upload limit per 15-minute rolling window per user
 
 **Layer 3: IP-Based (Emergency Brake)**
 - All endpoints: 1000 requests per minute per IP
@@ -68,4 +81,6 @@ Multi-layered approach to balance security with user experience:
 
 ## References
 
-- Private ADR: `docs/adr-private/0011-auth-implementation-status-and-email-verification.md`
+- Private ADRs (in `build-reasoning/adr-vault-storage/`):
+  - `0011-auth-implementation-status-and-email-verification.md` — implementation status and magic-link design
+  - `0019-signup-workflow-fixes-and-adr-alignment.md` — signup-workflow fixes, ADR alignment, timing-safe failure paths

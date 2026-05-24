@@ -1,28 +1,27 @@
 <script setup lang="ts">
 import { ref, computed } from "vue"
 import { useRouter } from "vue-router"
-import { Lock, Mail, Eye, EyeOff, User } from "@lucide/vue"
+import { Lock, Mail, Eye, EyeOff, User, Check, Circle } from "@lucide/vue"
 import { useAuthStore } from "@/stores/auth"
 import BrandMark from "../components/BrandMark.vue"
 import AuthCard from "../components/AuthCard.vue"
 import ErrorBanner from "../components/ErrorBanner.vue"
+import { validatePassword } from "../lib/passwordRules"
 
 const router = useRouter()
 const auth = useAuthStore()
 
-const name               = ref("")
-const email              = ref("")
-const password           = ref("")
-const confirmPassword    = ref("")
-const agreeToTerms       = ref(false)
-const error              = ref("")
-const showPassword       = ref(false)
+const name                = ref("")
+const email               = ref("")
+const password            = ref("")
+const confirmPassword     = ref("")
+const agreeToTerms        = ref(false)
+const error               = ref("")
+const showPassword        = ref(false)
 const showConfirmPassword = ref(false)
 
-import { validatePassword } from "../lib/passwordRules"
-
-// Strength derived from shared rules (ADR 0002)
-const validation = computed(() => validatePassword(password.value))
+// Shared with @vault/sdk passwordSchema (server-side parity per ADR 0019 §C1).
+const validation     = computed(() => validatePassword(password.value))
 const strength       = computed(() => validation.value.strength)
 const strengthLabel  = computed(() => validation.value.strengthLabel)
 const strengthColor  = computed(() => [
@@ -33,22 +32,25 @@ const strengthColor  = computed(() => [
   "oklch(0.65 0.18 150)",
 ][strength.value])
 
+// Submit gated on the shared password rules (no bare-length check) plus the
+// form-only requirements (email, confirm match, terms accepted).
+// Name is optional per ADR 0019 §D3.
+const passwordsMatch = computed(() => password.value === confirmPassword.value)
 const isValid = computed(() =>
-  name.value.trim().length > 0 &&
   email.value.includes("@") &&
-  password.value.length >= 12 &&
-  password.value === confirmPassword.value &&
+  validation.value.valid &&
+  passwordsMatch.value &&
   agreeToTerms.value,
 )
 
 async function handleSignup() {
   error.value = ""
-  if (password.value !== confirmPassword.value) { error.value = "Passwords do not match."; return }
-  if (password.value.length < 12) { error.value = "Password must be at least 12 characters."; return }
+  if (!passwordsMatch.value) { error.value = "Passwords do not match."; return }
+  if (!validation.value.valid) { error.value = validation.value.errors[0]; return }
   if (!agreeToTerms.value) { error.value = "You must agree to the terms of service."; return }
   try {
-    await auth.signUp(email.value, password.value)
-    router.push("/contents")
+    await auth.signUp(email.value, password.value, name.value.trim() || undefined)
+    router.push({ name: "check-email", query: { email: email.value } })
   } catch (err: any) {
     error.value = err.message || "Signup failed. Please try again."
   }
@@ -61,12 +63,15 @@ async function handleSignup() {
 
     <AuthCard>
       <form @submit.prevent="handleSignup" class="space-y-5">
-        <!-- Name -->
+        <!-- Name (optional per ADR 0019 §D3) -->
         <div class="space-y-2">
-          <label for="name" class="block text-sm font-medium">Full name</label>
+          <label for="name" class="block text-sm font-medium">
+            Full name
+            <span class="text-muted-foreground/70 font-normal">(optional)</span>
+          </label>
           <div class="relative">
             <User :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" :stroke-width="2" />
-            <v-input id="name" v-model="name" placeholder="John Doe" required :has-prefix="true" />
+            <v-input id="name" v-model="name" placeholder="John Doe" :has-prefix="true" />
           </div>
         </div>
 
@@ -91,8 +96,8 @@ async function handleSignup() {
               <EyeOff v-else :size="16" :stroke-width="2" />
             </button>
           </div>
-          <p class="text-[11px] text-muted-foreground">Recommended: 16+ characters. Minimum: 12.</p>
-          <!-- Strength bar -->
+
+          <!-- Strength bar (shown once user starts typing) -->
           <div v-if="password" class="space-y-1.5">
             <div class="flex gap-1">
               <div v-for="i in 4" :key="i"
@@ -103,6 +108,24 @@ async function handleSignup() {
               Password strength: <strong>{{ strengthLabel }}</strong>
             </p>
           </div>
+
+          <!-- Realtime hint checklist (ADR 0019 §C2) -->
+          <ul class="space-y-1 text-[11px]">
+            <li v-for="hint in validation.hints" :key="hint.id"
+                class="flex items-center gap-1.5"
+                :class="hint.satisfied
+                  ? 'text-[var(--color-foreground)]'
+                  : (hint.required ? 'text-muted-foreground' : 'text-muted-foreground/70')">
+              <Check v-if="hint.satisfied" :size="12" :stroke-width="2.5"
+                :style="{ color: 'oklch(0.65 0.18 150)' }" />
+              <Circle v-else :size="12" :stroke-width="2"
+                class="text-muted-foreground/50" />
+              <span>
+                {{ hint.message }}
+                <span v-if="!hint.required" class="text-muted-foreground/70">(optional)</span>
+              </span>
+            </li>
+          </ul>
         </div>
 
         <!-- Confirm password -->
@@ -118,7 +141,7 @@ async function handleSignup() {
               <EyeOff v-else :size="16" :stroke-width="2" />
             </button>
           </div>
-          <p v-if="confirmPassword && confirmPassword !== password"
+          <p v-if="confirmPassword && !passwordsMatch"
             class="text-[11px] text-[var(--color-destructive)]">Passwords do not match</p>
         </div>
 

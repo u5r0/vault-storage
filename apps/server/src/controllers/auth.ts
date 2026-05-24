@@ -1,7 +1,12 @@
 import { Hono } from "hono"
-import { z } from "zod"
 import { getCookie } from "hono/cookie"
 import { verify } from "hono/jwt"
+import {
+  RegisterBody,
+  LoginBody,
+  ResendVerificationBody,
+  ResetPasswordBody,
+} from "@vault/sdk"
 import {
   createRegisterLimiter,
   createLoginLimiter,
@@ -20,22 +25,36 @@ const loginLimiter         = createLoginLimiter()
 const magicLinkLimiter     = createMagicLinkLimiter()
 const passwordResetLimiter = createPasswordResetLimiter()
 
-const RegisterBody = z.object({ email: z.string().email(), password: z.string().min(12).max(100) })
-const LoginBody    = z.object({ email: z.string().email(), password: z.string() })
+const REGISTER_ACK_MESSAGE =
+  "If the email is not already registered, a verification email has been sent."
+const RESEND_ACK_MESSAGE =
+  "If the email is registered and unverified, a verification email has been sent."
 
 app.post("/register", async (c) => {
   const body = await c.req.json().catch(() => null)
   const parsed = RegisterBody.safeParse(body)
-  if (!parsed.success) return c.json({ error: "Invalid input" }, 400)
-  const { email, password } = parsed.data
+  if (!parsed.success) {
+    return c.json({ error: "Invalid input", issues: parsed.error.issues }, 400)
+  }
+  const { email, password, name } = parsed.data
   const early = await consumeEmailLimit(registerLimiter, email, c)
   if (early) return early
-  try {
-    const user = await authService.register(email, password)
-    return c.json({ user: { id: user.userId, email: user.email, createdAt: user.createdAt } })
-  } catch (e: any) {
-    return c.json({ error: e.message || "Registration failed" }, 400)
+  await authService.register(email, password, name)
+  return c.json({ ok: true, message: REGISTER_ACK_MESSAGE })
+})
+
+app.post("/resend-verification", async (c) => {
+  const body = await c.req.json().catch(() => null)
+  const parsed = ResendVerificationBody.safeParse(body)
+  if (!parsed.success) {
+    return c.json({ error: "Invalid input", issues: parsed.error.issues }, 400)
   }
+  const { email } = parsed.data
+  // Shares the magic-link bucket per ADR 0001 amendment.
+  const early = await consumeEmailLimit(magicLinkLimiter, email, c)
+  if (early) return early
+  await authService.resendVerification(email)
+  return c.json({ ok: true, message: RESEND_ACK_MESSAGE })
 })
 
 app.post("/login", async (c) => {
@@ -57,12 +76,20 @@ app.post("/refresh", async (c) => {
   if (!token) return c.json({ error: "Unauthenticated" }, 401)
   try {
     const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me"
-    const payload = await verify(token, JWT_SECRET, "HS256") as any
-    if (!payload || payload.type !== "refresh") return c.json({ error: "Unauthenticated" }, 401)
+    const payload = (await verify(token, JWT_SECRET, "HS256")) as any
+    if (!payload || payload.type !== "refresh") {
+      return c.json({ error: "Unauthenticated" }, 401)
+    }
     await authService.validateAndConsumeRefreshToken(payload.jti)
+    // ADR 0019 §B3a-iii: enforce lockout on the refresh path so a session that
+    // started before the lockout cannot ride out access-token TTL.
+    const user = await authService.getUser(payload.sub)
+    if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+      clearAuthCookies(c)
+      return c.json({ error: "Account temporarily locked" }, 403)
+    }
     const tokens = await issueTokens(payload.sub, payload.email)
     setAuthCookies(c, tokens)
-    const user = await authService.getUser(payload.sub)
     return c.json({ user })
   } catch {
     return c.json({ error: "Unauthenticated" }, 401)
@@ -74,7 +101,7 @@ app.post("/logout", async (c) => {
   if (token) {
     try {
       const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me"
-      const payload = await verify(token, JWT_SECRET, "HS256") as any
+      const payload = (await verify(token, JWT_SECRET, "HS256")) as any
       if (payload?.jti) await authService.logout(payload.jti)
     } catch { /* ignore */ }
   }
@@ -97,16 +124,18 @@ app.post("/magic-link", async (c) => {
   return c.json({ message: "If user exists, magic link sent" })
 })
 
+/**
+ * Consume a magic-link token. Both branches (email-verification, login)
+ * issue session cookies per ADR 0019 §B6 — clicking the link is sufficient
+ * proof of identity for a first session.
+ */
 app.get("/verify", async (c) => {
   const token = c.req.query("token")
   if (!token) return c.json({ error: "Missing token" }, 400)
   const result = await authService.consumeVerificationToken(token)
-  if (result.type === "email-verification") {
-    return c.json({ user: { id: result.userId, email: result.email, createdAt: result.createdAt, verified: true } })
-  }
-  const tokens = await issueTokens(result.userId, result.email)
+  const tokens = await issueTokens(result.user.id, result.user.email)
   setAuthCookies(c, tokens)
-  return c.json({ user: { id: result.userId, email: result.email } })
+  return c.json({ user: result.user })
 })
 
 app.post("/forgot-password", async (c) => {
@@ -121,12 +150,11 @@ app.post("/forgot-password", async (c) => {
 
 app.post("/reset-password", async (c) => {
   const body = await c.req.json().catch(() => null)
-  const token = body?.token
-  const password = body?.password
-  if (!token || !password) return c.json({ error: "Token and password required" }, 400)
-  if (typeof password !== "string" || password.length < 12) {
-    return c.json({ error: "Password must be at least 12 characters" }, 400)
+  const parsed = ResetPasswordBody.safeParse(body)
+  if (!parsed.success) {
+    return c.json({ error: "Invalid input", issues: parsed.error.issues }, 400)
   }
+  const { token, password } = parsed.data
   await authService.resetPassword(token, password)
   return c.json({ message: "Password reset successfully" })
 })

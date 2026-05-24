@@ -44,7 +44,7 @@ export async function verifyToken(token: string) {
   }
 }
 
-export async function createUser(email: string, password: string) {
+export async function createUser(email: string, password: string, name?: string) {
   // Check if user exists in Cosmos DB
   const querySpec = {
     query: "SELECT * FROM c WHERE c.type = 'user' AND c.email = @email",
@@ -62,13 +62,17 @@ export async function createUser(email: string, password: string) {
     type: "user",
     email,
     passwordHash,
+    name: name ?? null,
     createdAt,
     verified: "0",
+    failedLoginAttempts: 0,
+    lockedUntil: null,
+    lastLoginAt: null,
   }
 
   await db.items.create(user)
 
-  return { id, email, createdAt }
+  return { id, email, name: user.name, createdAt }
 }
 
 export async function storeRefreshToken(jti: string, userId: string, expiresAt: Date) {
@@ -88,6 +92,27 @@ export async function findRefreshToken(jti: string) {
 
 export async function deleteRefreshToken(jti: string) {
   await db.item(jti).delete()
+}
+
+/**
+ * Delete every refresh-token document for a given user. Called by
+ * resetPassword (ADR 0019 §B2) so changing the password invalidates all
+ * existing sessions.
+ *
+ * Non-transactional: a crash mid-loop leaves stragglers, but the new password
+ * hash is what blocks attackers — these are belt-and-braces. A periodic
+ * sweep of expired tokens by `expiresAt` keeps the document count bounded.
+ */
+export async function deleteAllRefreshTokensForUser(userId: string) {
+  const { resources } = await db.items
+    .query({
+      query: "SELECT c.id FROM c WHERE c.type = 'refresh_token' AND c.userId = @uid",
+      parameters: [{ name: "@uid", value: userId }],
+    })
+    .fetchAll()
+  await Promise.all(
+    resources.map(({ id }: { id: string }) => db.item(id).delete().catch(() => {})),
+  )
 }
 
 export async function rotateRefreshToken(oldJti: string, userId: string) {

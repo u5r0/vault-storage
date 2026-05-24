@@ -16,7 +16,7 @@ export const router = createRouter({
   ],
 })
 
-const publicRoutes = new Set(["login", "signup", "forgot-password", "reset-password", "verify"])
+const publicRoutes = new Set(["login", "signup", "check-email", "forgot-password", "reset-password", "verify"])
 
 router.beforeEach((to, _from, next) => {
   const auth = useAuthStore()

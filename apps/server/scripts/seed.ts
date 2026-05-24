@@ -227,7 +227,11 @@ async function createDemoUserIfMissing() {
       type: "user",
       email: DEMO_USER.email,
       passwordHash,
+      name: DEMO_USER.name,
       verified: "1",
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      lastLoginAt: null,
       createdAt: new Date().toISOString(),
     })
     console.log(`  Demo user created: ${DEMO_USER.email}`)

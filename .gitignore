@@ -12,8 +12,9 @@ node_modules/
 dist/
 coverage/
 
-# Azurite local emulator data
+# local data
 .azurite-data/
+.vitest-attachments
 
 # Local tooling
 .vscode/

@@ -1,5 +1,6 @@
 import { CookieJar } from "tough-cookie";
 import type {
+  AckResult,
   AuthResult,
   CreateFolderInput,
   CreateFolderResult,
@@ -14,6 +15,7 @@ import type {
   RegisterInput,
   RenameInput,
   RenameResult,
+  ResendVerificationInput,
   UploadResult,
   VaultStore,
 } from "./schemas";
@@ -73,8 +75,16 @@ export class VaultClient implements VaultStore {
 
   /* ======================== Auth API ======================== */
 
-  async register(input: RegisterInput): Promise<AuthResult> {
-    return this.request<AuthResult>("/api/auth/register", {
+  async register(input: RegisterInput): Promise<AckResult> {
+    return this.request<AckResult>("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  }
+
+  async resendVerification(input: ResendVerificationInput): Promise<AckResult> {
+    return this.request<AckResult>("/api/auth/resend-verification", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),

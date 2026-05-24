@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks"
 import { HTTPException } from "hono/http-exception"
 import { db } from "../db"
 import {
@@ -6,9 +7,18 @@ import {
   hashPassword,
   findRefreshToken,
   deleteRefreshToken,
+  deleteAllRefreshTokensForUser,
 } from "../lib/auth"
 import { generateMagicLinkToken, verifyMagicLinkToken } from "../lib/magic-link"
-import { sendVerificationEmail, sendPasswordResetEmail } from "../lib/email"
+import {
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+  sendAccountLockedEmail,
+} from "../lib/email"
+import { stall } from "../lib/stall"
+
+const LOCKOUT_THRESHOLD = 5
+const LOCKOUT_DURATION_MS = 30 * 60 * 1000
 
 async function markNonceSpent(nonce: string) {
   try {
@@ -21,35 +31,122 @@ async function markNonceSpent(nonce: string) {
   }
 }
 
-export class AuthService {
-  async register(email: string, password: string) {
-    const user = await createUser(email, password)
-    const token = generateMagicLinkToken(user.id, user.email, "email-verification")
-    await sendVerificationEmail(user.email, token)
-    return { userId: user.id, email: user.email, createdAt: user.createdAt }
-  }
-
-  async loginWithPassword(email: string, password: string): Promise<{ userId: string }> {
-    const { resources } = await db.items.query({
+async function findUserByEmail(email: string) {
+  const { resources } = await db.items
+    .query({
       query: "SELECT * FROM c WHERE c.type = 'user' AND c.email = @email",
       parameters: [{ name: "@email", value: email }],
-    }).fetchAll()
-    const user = resources[0]
-    if (!user) throw new HTTPException(401, { message: "Invalid credentials" })
+    })
+    .fetchAll()
+  return resources[0] ?? null
+}
+
+/** Public-facing user shape returned by `/me`, `/login`, `/refresh`, `/verify`. */
+export interface PublicUser {
+  id: string
+  email: string
+  name: string | null
+  verified: boolean
+  lockedUntil: string | null
+  createdAt: string
+}
+
+function toPublicUser(user: any): PublicUser {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name ?? null,
+    verified: user.verified === "1",
+    lockedUntil: user.lockedUntil ?? null,
+    createdAt: user.createdAt,
+  }
+}
+
+export class AuthService {
+  /**
+   * Privacy-preserving registration (ADR 0019 §B4).
+   *
+   * Three branches, all returning the same `{ ok: true }` shape so the
+   * response never leaks whether the email is already registered:
+   * - new email → create user + send verification link
+   * - existing verified email → send a *login* magic link to the same address
+   * - existing unverified email → re-send a verification link
+   *
+   * The 200 path is the only path; validation failures (Zod) and rate-limit
+   * exhaustion produce 400/429 in the controller.
+   */
+  async register(email: string, password: string, name?: string): Promise<{ ok: true }> {
+    const existing = await findUserByEmail(email)
+    if (existing) {
+      const tokenType = existing.verified === "1" ? "login" : "email-verification"
+      const token = generateMagicLinkToken(existing.id, existing.email, tokenType)
+      await sendVerificationEmail(existing.email, token)
+      return { ok: true }
+    }
+    const user = await createUser(email, password, name)
+    const token = generateMagicLinkToken(user.id, user.email, "email-verification")
+    await sendVerificationEmail(user.email, token)
+    return { ok: true }
+  }
+
+  /**
+   * Password login with timing-safe failure paths (ADR 0019 §B3a).
+   *
+   * Check order: lock → verified → password. Every failure branch passes
+   * through `stall(timeStart)` so response time does not leak which branch
+   * was taken. The success path is unpadded.
+   */
+  async loginWithPassword(email: string, password: string): Promise<{ userId: string }> {
+    const timeStart = performance.now()
+
+    const user = await findUserByEmail(email)
+    if (!user) {
+      await stall(timeStart)
+      throw new HTTPException(401, { message: "Invalid credentials" })
+    }
 
     if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
-      throw new HTTPException(403, { message: "Account temporarily locked. Please try again later." })
+      await stall(timeStart)
+      throw new HTTPException(403, {
+        message: "Account temporarily locked. Please try again later.",
+      })
+    }
+
+    if (user.verified !== "1") {
+      await stall(timeStart)
+      throw new HTTPException(403, {
+        message: "Email not verified",
+        res: new Response(JSON.stringify({ error: "email_not_verified" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        }),
+      })
     }
 
     const ok = await verifyPassword(user.passwordHash, password)
     if (!ok) {
-      const failedAttempts = (user.failedLoginAttempts || 0) + 1
-      const lockedUntil = failedAttempts >= 5
-        ? new Date(Date.now() + 30 * 60 * 1000).toISOString()
+      const failedAttempts = (user.failedLoginAttempts ?? 0) + 1
+      const justLocked = failedAttempts >= LOCKOUT_THRESHOLD
+      const lockedUntil = justLocked
+        ? new Date(Date.now() + LOCKOUT_DURATION_MS).toISOString()
         : null
-      await db.item(user.id).replace({ ...user, failedLoginAttempts: failedAttempts, lockedUntil })
-      throw new HTTPException(lockedUntil ? 423 : 401, {
-        message: lockedUntil
+      await db.item(user.id).replace({
+        ...user,
+        failedLoginAttempts: failedAttempts,
+        lockedUntil,
+      })
+      // ADR 0019 §B3: lockout email on transition into locked state.
+      // Awaited so the auth response only returns once Mailpit has the
+      // message. The .catch() guarantees SMTP failures never block auth.
+      // Promise.resolve() guards against non-promise mocks in tests.
+      if (justLocked) {
+        await Promise.resolve(sendAccountLockedEmail(user.email)).catch(() => {
+          /* SMTP failures must not block the auth response */
+        })
+      }
+      await stall(timeStart)
+      throw new HTTPException(justLocked ? 423 : 401, {
+        message: justLocked
           ? "Too many failed attempts. Account locked for 30 minutes."
           : "Invalid credentials",
       })
@@ -64,10 +161,15 @@ export class AuthService {
     return { userId: user.id }
   }
 
-  async consumeVerificationToken(token: string): Promise<
-    | { type: "email-verification"; userId: string; email: string; createdAt: string }
-    | { type: "login"; userId: string; email: string }
-  > {
+  /**
+   * Consume a magic-link token. Returns the user info needed by the
+   * controller to build the response and (for both branches per ADR 0019
+   * §B6) issue session cookies.
+   */
+  async consumeVerificationToken(token: string): Promise<{
+    type: "email-verification" | "login"
+    user: PublicUser
+  }> {
     const data = verifyMagicLinkToken(token)
     if (!data || (data.type !== "email-verification" && data.type !== "login")) {
       throw new HTTPException(400, { message: "Invalid or expired token" })
@@ -76,38 +178,48 @@ export class AuthService {
     await markNonceSpent(data.nonce)
 
     const { resource: user } = await db.item(data.userId).read()
-    if (!user || user.type !== "user") throw new HTTPException(400, { message: "Invalid token" })
-
-    if (data.type === "email-verification") {
-      await db.item(user.id).replace({ ...user, verified: "1" })
-      return { type: "email-verification", userId: user.id, email: user.email, createdAt: user.createdAt }
+    if (!user || user.type !== "user") {
+      throw new HTTPException(400, { message: "Invalid token" })
     }
 
-    return { type: "login", userId: user.id, email: user.email }
+    if (data.type === "email-verification") {
+      const updated = { ...user, verified: "1" }
+      await db.item(user.id).replace(updated)
+      return { type: "email-verification", user: toPublicUser(updated) }
+    }
+
+    return { type: "login", user: toPublicUser(user) }
   }
 
   async requestMagicLink(email: string): Promise<void> {
-    const { resources } = await db.items.query({
-      query: "SELECT * FROM c WHERE c.type = 'user' AND c.email = @email",
-      parameters: [{ name: "@email", value: email }],
-    }).fetchAll()
-    const user = resources[0]
+    const user = await findUserByEmail(email)
     if (!user) return
     const token = generateMagicLinkToken(user.id, user.email, "login")
     await sendVerificationEmail(user.email, token)
   }
 
+  /**
+   * Resend the verification link to an unverified user (ADR 0019 §B5).
+   * Privacy-preserving: returns void regardless of whether the email exists
+   * or is already verified. The controller always responds 200.
+   */
+  async resendVerification(email: string): Promise<void> {
+    const user = await findUserByEmail(email)
+    if (!user || user.verified === "1") return
+    const token = generateMagicLinkToken(user.id, user.email, "email-verification")
+    await sendVerificationEmail(user.email, token)
+  }
+
   async requestPasswordReset(email: string): Promise<void> {
-    const { resources } = await db.items.query({
-      query: "SELECT * FROM c WHERE c.type = 'user' AND c.email = @email",
-      parameters: [{ name: "@email", value: email }],
-    }).fetchAll()
-    const user = resources[0]
+    const user = await findUserByEmail(email)
     if (!user) return
     const token = generateMagicLinkToken(user.id, user.email, "password-reset")
     await sendPasswordResetEmail(user.email, token)
   }
 
+  /**
+   * Reset password and invalidate all existing refresh tokens (ADR 0019 §B2).
+   */
   async resetPassword(token: string, password: string): Promise<void> {
     const data = verifyMagicLinkToken(token)
     if (!data || data.type !== "password-reset") {
@@ -115,7 +227,10 @@ export class AuthService {
     }
     await markNonceSpent(data.nonce)
     const { resource: user } = await db.item(data.userId).read()
-    if (!user || user.type !== "user") throw new HTTPException(400, { message: "Invalid token" })
+    if (!user || user.type !== "user") {
+      throw new HTTPException(400, { message: "Invalid token" })
+    }
+    await deleteAllRefreshTokensForUser(user.id)
     const passwordHash = await hashPassword(password)
     await db.item(user.id).replace({ ...user, passwordHash })
   }
@@ -130,10 +245,12 @@ export class AuthService {
     await deleteRefreshToken(jti).catch(() => {})
   }
 
-  async getUser(userId: string): Promise<{ id: string; email: string; createdAt: string }> {
+  async getUser(userId: string): Promise<PublicUser> {
     const { resource: user } = await db.item(userId).read()
-    if (!user || user.type !== "user") throw new HTTPException(401, { message: "Unauthenticated" })
-    return { id: user.id, email: user.email, createdAt: user.createdAt }
+    if (!user || user.type !== "user") {
+      throw new HTTPException(401, { message: "Unauthenticated" })
+    }
+    return toPublicUser(user)
   }
 }
 

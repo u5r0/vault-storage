@@ -5,6 +5,9 @@ import * as z from "zod";
 export const UserSchema = z.object({
   id: z.uuid(),
   email: z.email(),
+  name: z.string().nullable(),
+  verified: z.boolean(),
+  lockedUntil: z.string().nullable(),
   createdAt: z.string(),
 });
 export type User = z.infer<typeof UserSchema>;
@@ -28,9 +31,24 @@ export type VaultEntry = z.infer<typeof VaultEntrySchema>;
 
 /* ======================== Request schemas ======================== */
 
+/**
+ * Password rules per ADR 0002 (length-first + minimal composition):
+ * - ≥ 12 characters
+ * - at least one letter (A–Z or a–z)
+ * - at least one digit (0–9)
+ * Same schema reused server-side (zValidator) and client-side (form validation).
+ */
+const passwordSchema = z
+  .string()
+  .min(12, "Password must be at least 12 characters")
+  .max(100, "Password must be at most 100 characters")
+  .regex(/[A-Za-z]/, "Password must contain a letter")
+  .regex(/\d/, "Password must contain a digit");
+
 export const RegisterBody = z.object({
   email: z.email(),
-  password: z.string().min(12).max(100),
+  password: passwordSchema,
+  name: z.string().min(1).max(80).optional(),
 });
 export type RegisterInput = z.infer<typeof RegisterBody>;
 
@@ -39,6 +57,15 @@ export const LoginBody = z.object({
   password: z.string(),
 });
 export type LoginInput = z.infer<typeof LoginBody>;
+
+export const ResendVerificationBody = z.object({ email: z.email() });
+export type ResendVerificationInput = z.infer<typeof ResendVerificationBody>;
+
+export const ResetPasswordBody = z.object({
+  token: z.string().min(1),
+  password: passwordSchema,
+});
+export type ResetPasswordInput = z.infer<typeof ResetPasswordBody>;
 
 export const ListFilesQuery = z.object({
   entityId: z.uuid().nullable().optional(),
@@ -118,10 +145,22 @@ export const AuthResponse = z.object({
 });
 export type AuthResult = z.infer<typeof AuthResponse>;
 
+/**
+ * Privacy-preserving response for register/resend-verification per ADR 0019.
+ * Returns the same shape regardless of whether the email is new, registered,
+ * verified, or unverified — never echoes user existence.
+ */
+export const AckResponse = z.object({
+  ok: z.literal(true),
+  message: z.string(),
+});
+export type AckResult = z.infer<typeof AckResponse>;
+
 /* ======================== Store contract ======================== */
 
 export interface VaultStore {
-  register(input: RegisterInput): Promise<AuthResult>;
+  register(input: RegisterInput): Promise<AckResult>;
+  resendVerification(input: ResendVerificationInput): Promise<AckResult>;
   login(input: LoginInput): Promise<AuthResult>;
   logout(): Promise<void>;
   me(): Promise<AuthResult>;

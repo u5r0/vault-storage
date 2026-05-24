@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue"
+import { ref, computed, onMounted } from "vue"
 import { useRouter, useRoute } from "vue-router"
-import { Lock, Eye, EyeOff } from "@lucide/vue"
+import { Lock, Eye, EyeOff, Check, Circle } from "@lucide/vue"
 import { useAuthStore } from "@/stores/auth"
 import BrandMark from "../components/BrandMark.vue"
 import AuthCard from "../components/AuthCard.vue"
 import ErrorBanner from "../components/ErrorBanner.vue"
+import { validatePassword } from "../lib/passwordRules"
 
 const router = useRouter()
 const route  = useRoute()
@@ -18,6 +19,24 @@ const showConfirmPassword = ref(false)
 const error               = ref("")
 const token               = ref("")
 
+const validation     = computed(() => validatePassword(password.value))
+const strength       = computed(() => validation.value.strength)
+const strengthLabel  = computed(() => validation.value.strengthLabel)
+const strengthColor  = computed(() => [
+  "",
+  "var(--color-destructive)",
+  "var(--color-accent)",
+  "oklch(0.75 0.15 120)",
+  "oklch(0.65 0.18 150)",
+][strength.value])
+
+const passwordsMatch = computed(() => password.value === confirmPassword.value)
+const isValid = computed(() =>
+  !!token.value &&
+  validation.value.valid &&
+  passwordsMatch.value,
+)
+
 onMounted(() => {
   token.value = (route.query.token as string) || ""
   if (!token.value) error.value = "Invalid or missing reset token."
@@ -26,8 +45,8 @@ onMounted(() => {
 async function handleSubmit() {
   error.value = ""
   if (!token.value) { error.value = "Invalid reset token."; return }
-  if (password.value !== confirmPassword.value) { error.value = "Passwords do not match."; return }
-  if (password.value.length < 12) { error.value = "Password must be at least 12 characters."; return }
+  if (!passwordsMatch.value) { error.value = "Passwords do not match."; return }
+  if (!validation.value.valid) { error.value = validation.value.errors[0]; return }
   try {
     await auth.resetPassword(token.value, password.value)
     router.push("/login")
@@ -55,7 +74,36 @@ async function handleSubmit() {
               <EyeOff v-else :size="16" :stroke-width="2" />
             </button>
           </div>
-          <p class="text-[11px] text-muted-foreground">Recommended: 16+ characters. Minimum: 12.</p>
+
+          <!-- Strength bar -->
+          <div v-if="password" class="space-y-1.5">
+            <div class="flex gap-1">
+              <div v-for="i in 4" :key="i"
+                class="h-1 flex-1 rounded-full transition-all duration-300"
+                :style="{ backgroundColor: i <= strength ? strengthColor : 'var(--color-border)' }" />
+            </div>
+            <p class="text-[11px]" :style="{ color: strengthColor }">
+              Password strength: <strong>{{ strengthLabel }}</strong>
+            </p>
+          </div>
+
+          <!-- Realtime hint checklist -->
+          <ul class="space-y-1 text-[11px]">
+            <li v-for="hint in validation.hints" :key="hint.id"
+                class="flex items-center gap-1.5"
+                :class="hint.satisfied
+                  ? 'text-[var(--color-foreground)]'
+                  : (hint.required ? 'text-muted-foreground' : 'text-muted-foreground/70')">
+              <Check v-if="hint.satisfied" :size="12" :stroke-width="2.5"
+                :style="{ color: 'oklch(0.65 0.18 150)' }" />
+              <Circle v-else :size="12" :stroke-width="2"
+                class="text-muted-foreground/50" />
+              <span>
+                {{ hint.message }}
+                <span v-if="!hint.required" class="text-muted-foreground/70">(optional)</span>
+              </span>
+            </li>
+          </ul>
         </div>
 
         <div class="space-y-2">
@@ -70,11 +118,13 @@ async function handleSubmit() {
               <EyeOff v-else :size="16" :stroke-width="2" />
             </button>
           </div>
+          <p v-if="confirmPassword && !passwordsMatch"
+            class="text-[11px] text-[var(--color-destructive)]">Passwords do not match</p>
         </div>
 
         <ErrorBanner v-if="error" :message="error" />
 
-        <v-button type="submit" :loading="auth.loading" :disabled="!token" wide>
+        <v-button type="submit" :loading="auth.loading" :disabled="!isValid" wide>
           Reset password
         </v-button>
       </form>

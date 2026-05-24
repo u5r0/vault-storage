@@ -1,4 +1,5 @@
 import { beforeAll, afterEach } from 'vitest'
+import { clearMailpit } from './mailpit'
 
 /**
  * Test fixtures following Epic Web patterns.
@@ -113,6 +114,7 @@ export function useAuthFixture() {
   })
 
   afterEach(async () => {
+    await clearMailpit()
     await clearUsers()
     await clearRefreshTokens()
   })
@@ -132,6 +134,7 @@ export function useFilesFixture() {
   })
 
   afterEach(async () => {
+    await clearMailpit()
     await clearBlobStore()
     await clearFileEntries()
   })
