@@ -7,12 +7,16 @@
       "@/*": ["./src/*"]
     },
     "strict": true,
-    "types": ["vitest/globals", "@vitest/browser/context"],
+    "types": [
+      // "vitest/globals", 
+      "@vitest/browser-playwright/context"
+    ],
     "noEmit": true
   },
   "include": [
     "src/**/*.test.ts",
     "src/**/*.browser.test.ts",
-    "src/__test__/**/*.ts"
+    "src/__test__/**/*.ts",
+    "src/env.d.ts"
   ]
 }
