@@ -9,3 +9,15 @@ export const authRoutes: RouteRecordRaw[] = [
   { path: "/reset-password",  name: "reset-password",  component: () => import("./routes/reset-password.vue"),  meta: { layout: AuthLayout } },
   { path: "/verify",          name: "verify",          component: () => import("./routes/verify.vue"),          meta: { layout: AuthLayout } },
 ]
+
+export {
+  useSignIn,
+  useSignOut,
+  useSignUp,
+  useRequestMagicLink,
+  useResendVerification,
+  useVerifyToken,
+  useForgotPassword,
+  useResetPassword,
+  AuthError,
+} from "./composables/useAuthMutations"

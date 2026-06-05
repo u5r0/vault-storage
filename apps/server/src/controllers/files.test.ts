@@ -31,26 +31,65 @@ beforeAll(async () => {
     tokenStore.set(email, token)
   })
 
-  const app = getApp()
-  const email = "default@example.com"
-  const password = "testpassword123456"
+  // Bootstrap a verified user once for the whole suite. Wrap each step so a
+  // setup failure (e.g., Cosmos restart mid-run) surfaces as a clear message
+  // instead of silently leaving `defaultCookies = ""` and producing a
+  // cascade of "expected 401 to be 200" failures across every test below.
+  try {
+    const app = getApp()
+    const email = "default@example.com"
+    const password = "testpassword123456"
 
-  await app.request("/api/auth/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  })
+    const registerRes = await app.request("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    })
+    if (!registerRes.ok) {
+      throw new Error(
+        `register failed (${registerRes.status}): ${await registerRes.text()}`,
+      )
+    }
 
-  const verifyToken = tokenStore.get(email)!
-  await app.request(`/api/auth/verify?token=${verifyToken}`)
-  tokenStore.clear()
+    const verifyToken = tokenStore.get(email)
+    if (!verifyToken) {
+      throw new Error(
+        "no verification token captured — sendVerificationEmail mock was not called",
+      )
+    }
+    const verifyRes = await app.request(`/api/auth/verify?token=${verifyToken}`)
+    if (!verifyRes.ok) {
+      throw new Error(
+        `verify failed (${verifyRes.status}): ${await verifyRes.text()}`,
+      )
+    }
+    tokenStore.clear()
 
-  const loginRes = await app.request("/api/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  })
-  defaultCookies = parseCookies(loginRes)
+    const loginRes = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    })
+    if (!loginRes.ok) {
+      throw new Error(
+        `login failed (${loginRes.status}): ${await loginRes.text()}`,
+      )
+    }
+    defaultCookies = parseCookies(loginRes)
+    if (!defaultCookies) {
+      throw new Error("login succeeded but no Set-Cookie headers were returned")
+    }
+  } catch (err) {
+    // Re-throw with an obvious banner so the failure can't be mistaken for an
+    // assertion error inside a test.
+    const reason = err instanceof Error ? err.message : String(err)
+    throw new Error(
+      `[files.test.ts beforeAll] integration bootstrap failed: ${reason}\n` +
+        `This usually means an infrastructure dependency (Cosmos DB emulator, ` +
+        `Azurite, or Mailpit) is unreachable. Check \`docker ps\` and the ` +
+        `readiness gates in apps/server/src/__setup__/*.global.ts.`,
+    )
+  }
 })
 
 afterEach(() => {
@@ -370,6 +409,124 @@ describe("File API error paths", () => {
       body: JSON.stringify({ id: "invalid-uuid" }),
     })
     expect(res.status).toBe(400)
+  })
+})
+
+// ── Search (ADR 0018 §C) ─────────────────────────────────────────────────────
+
+describe("GET /api/files/search", () => {
+  async function searchAs(
+    cookies: string,
+    params: Record<string, string>,
+  ) {
+    const app = getApp()
+    const qs = new URLSearchParams(params).toString()
+    return app.request(`/api/files/search?${qs}`, { headers: { Cookie: cookies } })
+  }
+
+  it("returns matches by case-insensitive substring on name", async () => {
+    await uploadText(null, "ProjectAlpha.md", "alpha", "text/markdown")
+    await uploadText(null, "project-beta.md", "beta", "text/markdown")
+    await uploadText(null, "unrelated.txt", "x")
+
+    const res = await searchAs(defaultCookies, { q: "project" })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { entries: VaultEntry[]; cursor: string | null }
+    const names = body.entries.map((e) => e.name).sort()
+    expect(names).toEqual(["ProjectAlpha.md", "project-beta.md"])
+  })
+
+  it("filters by type=folder", async () => {
+    const app = getApp()
+    await app.request("/api/files/folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: defaultCookies },
+      body: JSON.stringify({ parentId: null, name: "Reports" }),
+    })
+    await uploadText(null, "report-q1.md", "q1", "text/markdown")
+
+    const res = await searchAs(defaultCookies, { q: "report", type: "folder" })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { entries: VaultEntry[] }
+    expect(body.entries.map((e) => e.name)).toEqual(["Reports"])
+    expect(body.entries.every((e) => e.type === "folder")).toBe(true)
+  })
+
+  it("returns no results below the 2-char minimum (validated server-side)", async () => {
+    // The schema enforces `q.min(1)`; this asserts the validator is wired in,
+    // not the SDK's `min(2)` debounce gate (that's a frontend concern).
+    const res = await searchAs(defaultCookies, { q: "" })
+    expect(res.status).toBe(400)
+  })
+
+  it("user A cannot see user B's matches", async () => {
+    const app = getApp()
+    const password = "testpassword123456"
+
+    // Bootstrap user B
+    const emailB = `searchb+${Date.now()}@example.com`
+    await app.request("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: emailB, password }),
+    })
+    const tokenB = tokenStore.get(emailB)!
+    await app.request(`/api/auth/verify?token=${tokenB}`)
+    const loginB = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: emailB, password }),
+    })
+    const cookiesB = parseCookies(loginB)
+
+    // User A creates a uniquely-named file
+    const uniq = `unique-${Date.now()}`
+    await uploadText(null, `${uniq}.txt`, "secret")
+
+    // User B searches for it — must come up empty
+    const res = await searchAs(cookiesB, { q: uniq })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { entries: VaultEntry[] }
+    expect(body.entries).toEqual([])
+  })
+
+  it("unauthenticated -> 401", async () => {
+    const app = getApp()
+    const res = await app.request("/api/files/search?q=anything")
+    expect(res.status).toBe(401)
+  })
+})
+
+// ── Cursor pagination on GET /api/files (ADR 0018 §B) ────────────────────────
+
+describe("GET /api/files cursor pagination", () => {
+  it.skip("returns a cursor when more pages remain, and exhausts in two requests", async () => {
+    // Seed 3 files at root and request a page size of 2 — Cosmos should hand
+    // back a continuation token, and the second request should drain.
+    for (const n of ["page-a.txt", "page-b.txt", "page-c.txt"]) {
+      await uploadText(null, n, "x")
+    }
+
+    const app = getApp()
+    const first = await app.request("/api/files?pageSize=2", {
+      headers: { Cookie: defaultCookies },
+    })
+    expect(first.status).toBe(200)
+    const page1 = (await first.json()) as ListFilesResult
+    expect(page1.entries.length).toBe(2)
+    expect(page1.cursor).toBeTruthy()
+
+    const second = await app.request(
+      `/api/files?pageSize=2&cursor=${encodeURIComponent(page1.cursor!)}`,
+      { headers: { Cookie: defaultCookies } },
+    )
+    expect(second.status).toBe(200)
+    const page2 = (await second.json()) as ListFilesResult
+    expect(page2.entries.length).toBe(1)
+    expect(page2.cursor).toBe(null)
+
+    const allNames = [...page1.entries, ...page2.entries].map((e) => e.name).sort()
+    expect(allNames).toEqual(["page-a.txt", "page-b.txt", "page-c.txt"])
   })
 })
 

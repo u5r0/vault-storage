@@ -9,4 +9,10 @@ export const filesRoutes: RouteRecordRaw[] = [
     props: true,
     meta: { layout: AppLayout },
   },
+  {
+    path: "/search",
+    name: "search",
+    component: () => import("./routes/search.vue"),
+    meta: { layout: AppLayout },
+  },
 ]

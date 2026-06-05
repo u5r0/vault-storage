@@ -1,22 +1,32 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
-import { client } from "@/lib/client"
+import { useQueryClient } from "@tanstack/vue-query"
 import { routeToEntityId } from "@/router"
-import { useFilesStore } from "@/stores/files"
+import { useUploadStore } from "@/stores/upload"
 import { useFiles } from "../composables/useFiles"
+import { useCreateFolder } from "../composables/useFileMutations"
+import { filesKeys } from "../lib/queryKeys"
 import FileList from "../components/FileList.vue"
 import DetailsPanel from "../components/DetailsPanel.vue"
 import FolderModal from "../components/FolderModal.vue"
 
-const route  = useRoute()
-const router = useRouter()
-const filesStore = useFilesStore()
+const route        = useRoute()
+const router       = useRouter()
+const uploadStore  = useUploadStore()
+const queryClient  = useQueryClient()
 
 const currentEntityId = computed(() => routeToEntityId(route.params.entityId))
 const selectedId      = computed(() => (route.query.selected as string) || null)
 
-const { entries, loading, error, refresh } = useFiles(currentEntityId)
+const {
+  entries,
+  isLoading,
+  error,
+  hasNextPage,
+  isFetchingNextPage,
+  fetchNextPage,
+} = useFiles(() => currentEntityId.value)
 
 const selectedFile = computed(
   () => entries.value.find((e) => e.id === selectedId.value) ?? null,
@@ -24,12 +34,28 @@ const selectedFile = computed(
 
 const folderModalOpen = ref(false)
 
-// Handle folder creation triggered from AppHeader drawer
-watch(() => filesStore.createFolderRequested, async (name) => {
-  if (!name) return
-  await createFolder(name)
-  filesStore.clearCreateFolderRequest()
-})
+const {
+  mutate: createFolderMutate,
+  isPending: isCreatingFolder,
+  error: createFolderError,
+} = useCreateFolder(() => currentEntityId.value)
+
+function createFolder(name: string) {
+  createFolderMutate(name, {
+    onSuccess: () => { folderModalOpen.value = false },
+  })
+}
+
+watch(
+  () => uploadStore.lastCompletedAt,
+  (val, prev) => {
+    if (val && val !== prev) {
+      queryClient.invalidateQueries({
+        queryKey: filesKeys.list(currentEntityId.value),
+      })
+    }
+  },
+)
 
 function handleSelect(id: string) {
   const entry = entries.value.find((e) => e.id === id)
@@ -47,21 +73,11 @@ function handleSelect(id: string) {
 function navigateTo(entityId: string | null) {
   router.push({ name: "content", params: entityId ? { entityId } : {} })
 }
-
-async function createFolder(name: string) {
-  try {
-    await client.createFolder({ parentId: currentEntityId.value ?? null, name })
-    folderModalOpen.value = false
-    await refresh()
-  } catch (err) {
-    console.error("Failed to create folder:", err)
-  }
-}
 </script>
 
 <template>
   <main class="flex flex-1 overflow-hidden">
-    <div v-if="loading" class="grid flex-1 place-items-center text-muted-foreground text-sm">
+    <div v-if="isLoading" class="grid flex-1 place-items-center text-muted-foreground text-sm">
       <v-spinner />
     </div>
     <div v-else-if="error" class="grid flex-1 place-items-center text-destructive text-sm">
@@ -72,13 +88,18 @@ async function createFolder(name: string) {
       :files="entries"
       :selected-id="selectedId ?? ''"
       :current-entity-id="currentEntityId ?? ''"
+      :has-next-page="!!hasNextPage"
+      :is-fetching-next-page="!!isFetchingNextPage"
       @select="handleSelect"
       @navigate="navigateTo"
-      @upload-complete="refresh"
-      @create-folder="folderModalOpen = true"    />
+      @load-more="fetchNextPage"
+      @create-folder="folderModalOpen = true"
+    />
     <DetailsPanel :file="selectedFile" />
     <FolderModal
       :open="folderModalOpen"
+      :is-pending="isCreatingFolder"
+      :server-error="createFolderError?.message ?? null"
       @close="folderModalOpen = false"
       @confirm="createFolder"
     />

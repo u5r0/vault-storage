@@ -20,16 +20,74 @@ function checkOwner(resource: any, ownerId: string) {
   }
 }
 
+/**
+ * Map a backend (Cosmos / Azure Storage) error onto an HTTPException.
+ *
+ * Throttling errors (Cosmos `code: 429`, Azure `statusCode: 429`)
+ * surface as 429 with:
+ *   - a distinguishable message ("Backend throttled") so it can be
+ *     told apart from middleware-layer 429s in logs and SDK errors
+ *   - a `Retry-After` header so SDK callers back off rather than
+ *     hammering the emulator/service into a deeper hole
+ *
+ * Cosmos rejections sometimes carry `retryAfterInMs`; fall back to a
+ * conservative 5s when missing. Anything else becomes a 500 with the
+ * original message preserved for debugging. `HTTPException`s from
+ * inner code are passed through untouched.
+ */
+function rethrowBackendError(err: unknown, contextMessage: string): never {
+  if (err instanceof HTTPException) throw err
+  const e = err as { code?: number; statusCode?: number; retryAfterInMs?: number }
+  const code = e?.code ?? e?.statusCode
+  if (code === 429) {
+    const retryAfterSec = Math.max(1, Math.ceil((e.retryAfterInMs ?? 5000) / 1000))
+    throw new HTTPException(429, {
+      message: "Backend throttled",
+      res: new Response(
+        JSON.stringify({ error: "Backend throttled" }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(retryAfterSec),
+          },
+        },
+      ),
+    })
+  }
+  const detail = err instanceof Error ? err.message : String(err)
+  throw new HTTPException(500, { message: `${contextMessage}: ${detail}` })
+}
+
 export class FilesService {
-  async list(parentId: string | null, ownerId: string): Promise<VaultEntry[]> {
-    const { resources } = await db.items.query({
-      query:
-        "SELECT * FROM c WHERE c.parentId = @parentId AND c.deletedAt = null AND (c.ownerId = @ownerId OR c.ownerId = null)",
-      parameters: [
-        { name: "@parentId", value: parentId ?? null },
-        { name: "@ownerId", value: ownerId },
-      ],
-    }).fetchAll()
+  async list(
+    parentId: string | null,
+    ownerId: string,
+    opts: { cursor?: string; pageSize?: number } = {},
+  ): Promise<{ entries: VaultEntry[]; cursor: string | null }> {
+    const pageSize = opts.pageSize ?? 100
+    const iterator = db.items.query(
+      {
+        query:
+          "SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND c.parentId = @parentId AND c.deletedAt = null AND (c.ownerId = @ownerId OR c.ownerId = null)",
+        parameters: [
+          { name: "@fileType", value: "file" },
+          { name: "@folderType", value: "folder" },
+          { name: "@parentId", value: parentId ?? null },
+          { name: "@ownerId", value: ownerId },
+        ],
+      },
+      { maxItemCount: pageSize, continuationToken: opts.cursor },
+    )
+
+    const resources: any[] = []
+    let continuationToken: string | undefined
+    while (resources.length < pageSize) {
+      const segment = await iterator.fetchNext()
+      resources.push(...segment.resources)
+      continuationToken = segment.continuationToken ?? undefined
+      if (!continuationToken) break
+    }
 
     const entries: VaultEntry[] = resources.map((r: any) => ({
       id: r.id,
@@ -48,10 +106,67 @@ export class FilesService {
 
     entries.sort((a, b) => {
       if (a.type !== b.type) return a.type === "folder" ? -1 : 1
-      return a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+      return (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" })
     })
 
-    return entries
+    return { entries, cursor: continuationToken ?? null }
+  }
+
+  async search(
+    ownerId: string,
+    q: string,
+    opts: { type?: "file" | "folder"; cursor?: string; pageSize?: number } = {},
+  ): Promise<{ entries: VaultEntry[]; cursor: string | null }> {
+    const pageSize = opts.pageSize ?? 50
+    const params: { name: string; value: string }[] = [
+      { name: "@fileType", value: "file" },
+      { name: "@folderType", value: "folder" },
+      { name: "@ownerId", value: ownerId },
+      { name: "@q", value: q },
+    ]
+    let typeClause = ""
+    if (opts.type) {
+      typeClause = " AND c.type = @type"
+      params.push({ name: "@type", value: opts.type })
+    }
+
+    const iterator = db.items.query(
+      {
+        // Scope to file/folder docs (parameterized — cosmium drops literal
+        // string equality) so non-file docs without a `name` can't slip into
+        // CONTAINS(LOWER(c.name), …) or the result set.
+        query: `SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND (c.ownerId = @ownerId OR c.ownerId = null) AND c.deletedAt = null AND CONTAINS(LOWER(c.name), LOWER(@q))${typeClause}`,
+        parameters: params,
+      },
+      { maxItemCount: pageSize, continuationToken: opts.cursor },
+    )
+
+    const resources: any[] = []
+    let continuationToken: string | undefined
+    while (resources.length < pageSize) {
+      const segment = await iterator.fetchNext()
+      resources.push(...segment.resources)
+      continuationToken = segment.continuationToken ?? undefined
+      if (!continuationToken) break
+      if (resources.length >= pageSize) break
+    }
+
+    const entries: VaultEntry[] = resources.slice(0, pageSize).map((r: any) => ({
+      id: r.id,
+      ownerId: r.ownerId ?? null,
+      parentId: r.parentId,
+      name: r.name,
+      type: r.type,
+      size: r.size ?? 0,
+      contentType: r.contentType ?? null,
+      blobUrl: r.blobName ?? null,
+      isFavorite: r.isFavorite === "1",
+      tags: r.tags ? JSON.parse(r.tags) : [],
+      createdAt: r.createdAt,
+      modifiedAt: r.modifiedAt ?? null,
+    }))
+
+    return { entries, cursor: continuationToken ?? null }
   }
 
   async createFolder(
@@ -64,21 +179,25 @@ export class FilesService {
     const id = uuidv4()
     const createdAt = new Date().toISOString()
 
-    await db.items.create({
-      id,
-      ownerId,
-      parentId: parentId ?? null,
-      name,
-      type: "folder",
-      size: 0,
-      contentType: null,
-      blobName: null,
-      isFavorite: "0",
-      tags: null,
-      deletedAt: null,
-      createdAt,
-      modifiedAt: null,
-    })
+    try {
+      await db.items.create({
+        id,
+        ownerId,
+        parentId: parentId ?? null,
+        name,
+        type: "folder",
+        size: 0,
+        contentType: null,
+        blobName: null,
+        isFavorite: "0",
+        tags: null,
+        deletedAt: null,
+        createdAt,
+        modifiedAt: null,
+      })
+    } catch (err) {
+      rethrowBackendError(err, `Create folder failed for ${name}`)
+    }
 
     return { id }
   }
@@ -142,8 +261,7 @@ export class FilesService {
           modifiedAt: createdAt,
         } as VaultEntry)
       } catch (err) {
-        if (err instanceof HTTPException) throw err
-        throw new HTTPException(500, { message: `Upload failed for ${file.name}` })
+        rethrowBackendError(err, `Upload failed for ${file.name}`)
       }
     }
 
@@ -168,7 +286,11 @@ export class FilesService {
     if (!resource) throw new HTTPException(404, { message: "Item not found" })
     checkOwner(resource, ownerId)
     if (resource.name === name) return
-    await db.item(id).replace({ ...resource, name, modifiedAt: new Date().toISOString() })
+    try {
+      await db.item(id).replace({ ...resource, name, modifiedAt: new Date().toISOString() })
+    } catch (err) {
+      rethrowBackendError(err, `Rename failed for ${id}`)
+    }
   }
 
   async move(id: string, parentId: string | null, ownerId: string): Promise<void> {
@@ -176,7 +298,11 @@ export class FilesService {
     if (!resource) throw new HTTPException(404, { message: "Item not found" })
     checkOwner(resource, ownerId)
     if (resource.parentId === parentId) return
-    await db.item(id).replace({ ...resource, parentId, modifiedAt: new Date().toISOString() })
+    try {
+      await db.item(id).replace({ ...resource, parentId, modifiedAt: new Date().toISOString() })
+    } catch (err) {
+      rethrowBackendError(err, `Move failed for ${id}`)
+    }
   }
 
   async delete(id: string, ownerId: string): Promise<{ deleted: number }> {
@@ -185,28 +311,32 @@ export class FilesService {
     if (!resource) throw new HTTPException(404, { message: "Item not found" })
     checkOwner(resource, ownerId)
 
-    if (resource.type === "folder") {
-      const { resources } = await db.items.query({
-        query: "SELECT * FROM c WHERE c.parentId = @parentId",
-        parameters: [{ name: "@parentId", value: id }],
-      }).fetchAll()
-      let deletedCount = 0
-      for (const r of resources) {
-        if (r.blobName && (await store.exists(r.blobName))) {
-          await store.delete(r.blobName)
+    try {
+      if (resource.type === "folder") {
+        const { resources } = await db.items.query({
+          query: "SELECT * FROM c WHERE c.parentId = @parentId",
+          parameters: [{ name: "@parentId", value: id }],
+        }).fetchAll()
+        let deletedCount = 0
+        for (const r of resources) {
+          if (r.blobName && (await store.exists(r.blobName))) {
+            await store.delete(r.blobName)
+          }
+          await db.item(r.id).delete()
+          deletedCount++
         }
-        await db.item(r.id).delete()
-        deletedCount++
+        await db.item(id).delete()
+        return { deleted: deletedCount + 1 }
+      }
+
+      if (resource.blobName && (await store.exists(resource.blobName))) {
+        await store.delete(resource.blobName)
       }
       await db.item(id).delete()
-      return { deleted: deletedCount + 1 }
+      return { deleted: 1 }
+    } catch (err) {
+      rethrowBackendError(err, `Delete failed for ${id}`)
     }
-
-    if (resource.blobName && (await store.exists(resource.blobName))) {
-      await store.delete(resource.blobName)
-    }
-    await db.item(id).delete()
-    return { deleted: 1 }
   }
 
   async quickLinks(ownerId: string) {

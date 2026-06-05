@@ -34,25 +34,19 @@ services:
       retries: 5
 
   cosmos:
-    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+    image: ghcr.io/pikami/cosmium:latest
     container_name: vault-cosmos
     ports:
-      - "8081:8081"  # Cosmos DB Emulator
-      # - "10250:10250"  # MongoDB API
-      # - "10251:10251"  # MongoDB API
-      # - "10252:10252"  # Cassandra API
-      # - "10253:10253"  # Azure Tables API
-      # - "10254:10254"  # Gremlin API
+      - "8081:8081"
     environment:
-      - AZURE_COSMOS_EMULATOR_ENABLE_CASSANDRA_ENDPOINT=true
-      - AZURE_COSMOS_EMULATOR_ENABLE_GREMLIN_ENDPOINT=true
+      - COSMIUM_PERSIST=/data/cosmos.json
     volumes:
       - cosmos_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsk https://localhost:8081/_explorer/emulator.pem -o /dev/null"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "curl -fsk https://localhost:8081/_explorer/emulator.pem -o /dev/null || curl -fsk https://localhost:8081/ -o /dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   azurite_data:

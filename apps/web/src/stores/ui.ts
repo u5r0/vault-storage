@@ -1,7 +1,8 @@
-import { ref, watch } from "vue"
+import { shallowRef, watch } from "vue"
 import { defineStore } from "pinia"
 
 export type ThemeMode = "light" | "dark"
+export type SearchType = "file" | "folder" | undefined
 
 const THEME_KEY = "vault.theme"
 
@@ -16,8 +17,12 @@ function normalizeMode(value: string | null): ThemeMode {
 }
 
 export const useUIStore = defineStore("ui", () => {
-  const theme = ref<ThemeMode>(normalizeMode(localStorage.getItem(THEME_KEY)))
-  const sidebarCollapsed = ref(false)
+  const theme = shallowRef<ThemeMode>(normalizeMode(localStorage.getItem(THEME_KEY)))
+  const sidebarCollapsed = shallowRef(false)
+
+  const searchQuery = shallowRef("")
+  const searchType = shallowRef<SearchType>(undefined)
+  const searchOpen = shallowRef(false)
 
   watch(
     theme,
@@ -36,5 +41,29 @@ export const useUIStore = defineStore("ui", () => {
     sidebarCollapsed.value = !sidebarCollapsed.value
   }
 
-  return { theme, sidebarCollapsed, setTheme, toggleSidebar }
+  function setSearchQuery(q: string) {
+    searchQuery.value = q
+  }
+
+  function setSearchType(type: SearchType) {
+    searchType.value = type
+  }
+
+  function clearSearch() {
+    searchQuery.value = ""
+    searchType.value = undefined
+  }
+
+  return {
+    theme,
+    sidebarCollapsed,
+    searchQuery,
+    searchType,
+    searchOpen,
+    setTheme,
+    toggleSidebar,
+    setSearchQuery,
+    setSearchType,
+    clearSearch,
+  }
 })

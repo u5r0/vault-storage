@@ -3,19 +3,6 @@ import { fileURLToPath } from "node:url"
 
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 
-/**
- * Three projects:
- *  - `unit`        — fast, no fixtures. Co-located *.test.ts in services/, lib/,
- *                    middleware/, web/ (non-browser), and packages/. Mocks everything.
- *  - `integration` — boots Azurite + Cosmos + Mailpit; exercises the full HTTP
- *                    stack via app.request(). Tests in controllers/.
- *  - `web-browser` — Vitest browser mode (Playwright + Chromium). Config lives
- *                    in apps/web/vitest.config.ts because it needs
- *                    `@vitejs/plugin-vue` (a web-package dep). Referenced
- *                    here by path so `pnpm test` from the root runs all three.
- *
- * See ADR 0017 — Test Layout. Browser-mode rationale: ADR 0019 §E3.
- */
 export default defineConfig({
   resolve: {
     alias: {
@@ -35,7 +22,6 @@ export default defineConfig({
             "apps/web/src/**/*.test.ts",
             "packages/**/*.test.ts",
           ],
-          // Browser-mode tests have their own project; keep them out of `unit`.
           exclude: ["**/node_modules/**", "apps/web/src/**/*.browser.test.ts"],
         },
       },

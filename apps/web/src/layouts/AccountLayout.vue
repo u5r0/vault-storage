@@ -2,14 +2,16 @@
 import { computed } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { ArrowLeft, LogOut, Sun, Moon } from "@lucide/vue"
+import { useQueryClient } from "@tanstack/vue-query"
 import { useUIStore, type ThemeMode } from "@/stores/ui"
 import { useAuthStore } from "@/stores/auth"
 import AccountNav from "@/components/AccountNav.vue"
 
-const route   = useRoute()
-const router  = useRouter()
-const ui      = useUIStore()
-const auth    = useAuthStore()
+const route       = useRoute()
+const router      = useRouter()
+const ui          = useUIStore()
+const auth        = useAuthStore()
+const queryClient = useQueryClient()
 
 const mode = computed(() => ui.theme)
 const user = computed(() => auth.user)
@@ -36,6 +38,7 @@ const themes: { id: ThemeMode; icon: typeof Sun; label: string }[] = [
 
 async function signOut() {
   await auth.signOut()
+  queryClient.removeQueries({ queryKey: ["files"] })
   router.push({ name: "login" })
 }
 

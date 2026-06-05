@@ -1,296 +1,377 @@
 /**
- * Seed script — populates the dev storage backend (Azurite + Cosmos DB) with a sample
- * folder tree and a few files via the public API. Doubles as an end-to-end
- * smoke test of the Azure code path.
+ * Seed script — populates the dev storage backend via the API, exercising the
+ * same code path as production (SDK → API → Cosmos + Azurite).
  *
  * Usage:
  *   1. Start docker-compose:  docker compose up -d
- *   2. Start API:            pnpm dev:api
- *   3. In another terminal:  pnpm seed
+ *   2. Start API:             pnpm dev:api
+ *   3. In another terminal:   pnpm seed
+ *
+ * With Cosmium replacing the official Cosmos emulator, there are no RU limits
+ * or 408 timeouts — seeding completes in seconds without rate-limit bypass.
  */
 import "dotenv/config"
 import { createVaultClient } from "@vault/sdk"
-import { v4 as uuidv4 } from "uuid"
-import { hashPassword } from "../src/lib/auth"
 import { db } from "../src/db"
 import { getContainer } from "../src/lib/azure"
+import { clearMailpit, waitForMessage, extractLinkToken } from "../src/__setup__/mailpit"
 
 const API_URL = process.env.SEED_API_URL || `http://localhost:${process.env.PORT || 3001}`
 const client = createVaultClient(API_URL)
 
-// Demo user details for development/testing
+/**
+ * Password must satisfy RegisterBody rules (ADR 0002 / schemas.ts):
+ * ≥ 12 chars, at least one letter, at least one digit.
+ */
 const DEMO_USER = {
   email: "demo@vault.app",
-  password: "demo123456",
+  password: "Demo12345678",
   name: "Demo User",
 }
 
-type FolderSpec = {
-  name: string
-}
+const FILES_PER_UPLOAD = 10
+
+// ── Types ────────────────────────────────────────────────────────────────────
 
 type FileSpec = {
-  parentId: string | null
+  parentPath: string
   name: string
   content: string
   contentType: string
 }
 
-const folders: FolderSpec[] = [
-  { name: "Movies" },
-  { name: "Documents" },
-  { name: "Music" },
+type FolderSpec = {
+  parentPath: string | null
+  name: string
+}
+
+const folderIds = new Map<string, string>()
+
+// ── Folder structure ─────────────────────────────────────────────────────────
+
+const folderSpecs: FolderSpec[] = [
+  { parentPath: null, name: "Documents" },
+  { parentPath: null, name: "Photos" },
+  { parentPath: null, name: "Music" },
+  { parentPath: null, name: "Movies" },
+  { parentPath: null, name: "Projects" },
+  { parentPath: null, name: "Archive" },
+  { parentPath: null, name: "Downloads" },
+  { parentPath: null, name: "Inbox" },
+  { parentPath: "Documents", name: "Reports" },
+  { parentPath: "Documents", name: "Invoices" },
+  { parentPath: "Documents", name: "Contracts" },
+  { parentPath: "Documents", name: "Notes" },
+  { parentPath: "Photos", name: "2024" },
+  { parentPath: "Photos", name: "2025" },
+  { parentPath: "Photos", name: "Family" },
+  { parentPath: "Music", name: "Albums" },
+  { parentPath: "Music", name: "Playlists" },
+  { parentPath: "Movies", name: "Action" },
+  { parentPath: "Movies", name: "Documentary" },
 ]
 
-// Will be populated with IDs after creation
-const folderIds: Record<string, string> = {}
+// ── File generators ──────────────────────────────────────────────────────────
 
-const subFolders: Array<{ parentId: string; name: string }> = [
-  { parentId: "Movies", name: "Action" },
-  { parentId: "Movies", name: "Documentary" },
-  { parentId: "Documents", name: "Notes" },
-  { parentId: "Music", name: "Albums" },
-]
+const txt = (s: string) => ({ contentType: "text/plain", content: s })
+const md = (s: string) => ({ contentType: "text/markdown", content: s })
+const json = (o: unknown) => ({ contentType: "application/json", content: JSON.stringify(o, null, 2) })
 
-const files: FileSpec[] = [
-  {
-    parentId: "Documents",
-    name: "README.txt",
-    contentType: "text/plain",
-    content:
-      "Welcome to your Vault.\n\nThis sample data was created by `pnpm seed`.\n",
-  },
-  {
-    parentId: "Notes",
-    name: "ideas.md",
-    contentType: "text/markdown",
-    content:
-      "# Ideas\n\n- Add tags\n- Add stars\n- Build search\n- Implement trash\n",
-  },
-  {
-    parentId: "Documents",
-    name: "config.json",
-    contentType: "application/json",
-    content: JSON.stringify({ theme: "dark", layout: "list" }, null, 2),
-  },
-]
+const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"]
+const subjects = ["alpha","beta","gamma","delta","omega","phoenix","atlas","horizon","summit","voyager"]
+
+function generateFiles(): FileSpec[] {
+  const files: FileSpec[] = []
+
+  files.push({ parentPath: "Documents", name: "README.md", ...md(
+    "# Vault demo dataset\n\nTry:\n- search **report**, **invoice**, **2024**, **vacation**\n- open **Photos/2024** to see pagination kick in (>100 items)\n- ⌘K / Ctrl+K to focus search\n",
+  )})
+
+  for (const s of subjects) files.push({ parentPath: "Inbox", name: `${s}-spec.md`, ...md(`# ${s} spec\n\nDraft notes for project ${s}.`) })
+  for (const m of months) files.push({ parentPath: "Inbox", name: `meeting-${m}-2025.txt`, ...txt(`Meeting notes for ${m} 2025.`) })
+
+  for (const year of [2024, 2025]) {
+    for (const q of [1, 2, 3, 4]) files.push({ parentPath: "Documents.Reports", name: `report-q${q}-${year}.md`, ...md(`# Q${q} ${year} report\n\nSummary, metrics, outlook.`) })
+    for (const m of months.slice(0, year === 2025 ? 8 : 12)) files.push({ parentPath: "Documents.Reports", name: `report-${m}-${year}.md`, ...md(`# ${m} ${year} report\n`) })
+  }
+
+  for (const year of [2024, 2025]) {
+    for (let i = 1; i <= 12; i++) {
+      const num = String(i).padStart(2, "0")
+      files.push({ parentPath: "Documents.Invoices", name: `invoice-${year}-${num}.pdf.txt`, ...txt(`Invoice #${year}${num}\nAmount: $${(i * 137) % 5000}.00\n`) })
+    }
+  }
+
+  for (const s of subjects) files.push({ parentPath: "Documents.Contracts", name: `contract-${s}.md`, ...md(`# Contract: ${s}\n\nSigned 2025.`) })
+  files.push({ parentPath: "Documents.Contracts", name: "nda-template.md", ...md("# NDA template\n") })
+  files.push({ parentPath: "Documents.Contracts", name: "saas-agreement.md", ...md("# SaaS agreement\n") })
+
+  files.push({ parentPath: "Documents.Notes", name: "ideas.md", ...md("# Ideas\n\n- Add tags\n- Add stars\n- Build search\n- Implement trash\n") })
+  files.push({ parentPath: "Documents.Notes", name: "todo.md", ...md("# Todo\n\n- [ ] write design doc\n- [x] fix login bug\n") })
+  files.push({ parentPath: "Documents.Notes", name: "config.json", ...json({ theme: "dark", layout: "list" }) })
+  for (const s of subjects.slice(0, 7)) files.push({ parentPath: "Documents.Notes", name: `note-${s}.md`, ...md(`# Note: ${s}\n`) })
+
+  const events2024 = ["vacation","birthday","wedding","trip","family","hike","concert","graduation"]
+  for (let i = 0; i < 120; i++) {
+    files.push({ parentPath: "Photos.2024", name: `${events2024[i % 8]}-${months[i % 12]}-2024-${String(i + 1).padStart(3, "0")}.jpg`, ...txt(`fake jpeg bytes for ${events2024[i % 8]} #${i + 1}`) })
+  }
+
+  const events2025 = ["beach","summit","festival","trip","skiing","park"]
+  for (let i = 0; i < 80; i++) {
+    files.push({ parentPath: "Photos.2025", name: `${events2025[i % 6]}-${months[i % 12]}-2025-${String(i + 1).padStart(3, "0")}.jpg`, ...txt(`fake jpeg bytes for ${events2025[i % 6]} #${i + 1}`) })
+  }
+
+  for (let i = 0; i < 20; i++) files.push({ parentPath: "Photos.Family", name: `family-portrait-${String(i + 1).padStart(2, "0")}.jpg`, ...txt(`portrait #${i + 1}`) })
+
+  for (const s of subjects) files.push({ parentPath: "Music.Albums", name: `${s}-album.txt`, ...txt(`Album metadata for ${s}.`) })
+  for (let i = 0; i < 5; i++) files.push({ parentPath: "Music.Albums", name: `mixtape-${String(i + 1).padStart(2, "0")}.txt`, ...txt(`Mixtape #${i + 1}`) })
+
+  const moods = ["focus","chill","workout","morning","evening","drive","rainy-day","summer","winter","party"]
+  for (const m of moods) files.push({ parentPath: "Music.Playlists", name: `${m}-playlist.json`, ...json({ mood: m, tracks: 12 }) })
+
+  const action = ["city-of-shadows","thunder-strike","iron-horizon","rapid-fire","midnight-run","steel-fury","echo-protocol","ghost-blade","neon-knights","savage-tide","burning-skyline","cobra-code"]
+  for (const t of action) files.push({ parentPath: "Movies.Action", name: `${t}.txt`, ...txt(`Movie metadata: ${t}`) })
+
+  const docs = ["the-quiet-ocean","voices-of-the-summit","code-of-the-city","silent-frontiers","rivers-of-glass","after-the-storm","circuits-of-tomorrow","the-long-road","an-honest-craft","open-fields"]
+  for (const t of docs) files.push({ parentPath: "Movies.Documentary", name: `${t}.txt`, ...txt(`Documentary: ${t}`) })
+
+  for (const s of subjects) files.push({ parentPath: "Projects", name: `${s}-roadmap.md`, ...md(`# ${s} roadmap\n\nMilestones, timelines, owners.`) })
+  files.push({ parentPath: "Projects", name: "kickoff-2025.md", ...md("# 2025 kickoff\n") })
+  files.push({ parentPath: "Projects", name: "retro-template.md", ...md("# Retro template\n") })
+
+  for (let i = 0; i < 15; i++) files.push({ parentPath: "Archive", name: `legacy-export-${String(i + 1).padStart(3, "0")}.json`, ...json({ exportId: i + 1, createdAt: `2023-${String((i % 12) + 1).padStart(2, "0")}-15` }) })
+
+  for (let i = 0; i < 10; i++) files.push({ parentPath: "Downloads", name: `installer-v${i + 1}.0.0.txt`, ...txt(`Pretend installer payload v${i + 1}.0.0`) })
+  for (let i = 0; i < 10; i++) files.push({ parentPath: "Downloads", name: `receipt-${String(i + 1).padStart(3, "0")}.txt`, ...txt(`Receipt #${i + 1}`) })
+
+  return files
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function waitForApi(timeoutMs = 15_000): Promise<void> {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
     try {
       const r = await fetch(`${API_URL}/api/health`)
-      if (r.ok) {
-        const j = (await r.json()) as { azureConfigured: boolean }
-        if (j.azureConfigured) return
-        throw new Error("Azure not configured — check .env")
-      }
-    } catch {
-      // retry
-    }
+      if (r.ok) return
+    } catch { /* retry */ }
     await new Promise((r) => setTimeout(r, 500))
   }
   throw new Error(`API not reachable at ${API_URL} after ${timeoutMs}ms`)
 }
 
-async function createFolderIfMissing(spec: FolderSpec) {
-  try {
-    const result = await client.createFolder({ parentId: null, name: spec.name })
-    folderIds[spec.name] = result.id
-    console.log(`  + folder  ${spec.name} (${result.id})`)
-  } catch (e: any) {
-    // Folder might already exist
-    console.log(`  · folder  ${spec.name} (exists or error: ${e.message})`)
-  }
-}
-
-async function createSubFolder(spec: { parentId: string; name: string }) {
-  const parentId = folderIds[spec.parentId]
-  if (!parentId) {
-    console.log(`  ! subfolder ${spec.name} - parent ${spec.parentId} not found`)
-    return
-  }
-  try {
-    const result = await client.createFolder({ parentId, name: spec.name })
-    folderIds[spec.name] = result.id
-    console.log(`  + subfolder  ${spec.name} under ${spec.parentId} (${result.id})`)
-  } catch (e: any) {
-    console.log(`  · subfolder  ${spec.name} (exists or error: ${e.message})`)
-  }
-}
-
-async function uploadFile(spec: FileSpec) {
-  const parentId = spec.parentId ? folderIds[spec.parentId] : null
-  const blob = new Blob([spec.content], { type: spec.contentType })
-  const file = new File([blob], spec.name, { type: spec.contentType })
-  await client.uploadFiles({ parentId: parentId ?? undefined, files: [file] })
-  console.log(`  + file    ${spec.name} under ${spec.parentId || "root"}`)
-}
-
-async function withRetry<T>(fn: () => Promise<T>, operation: string, maxRetries = 5): Promise<T> {
-  let lastError: Error = new Error("Max retries exceeded")
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+async function withRetry<T>(fn: () => Promise<T>, label: string, retries = 5): Promise<T> {
+  for (let i = 0; i <= retries; i++) {
     try {
       return await fn()
     } catch (e: any) {
-      lastError = e
-      if (e.code === 429 || e.message?.includes("429") || e.message?.includes("Too many")) {
-        const delay = Math.pow(2, attempt) * 1000 // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-        console.log(`    ${operation} rate limited, retry ${attempt + 1}/${maxRetries} in ${delay}ms...`)
-        await new Promise(resolve => setTimeout(resolve, delay))
-      } else {
-        throw e // Non-rate-limit errors should fail immediately
-      }
+      if (i === retries) throw e
+      const msg = (e?.message ?? "").toLowerCase()
+      const retryable =
+        msg.includes("too many") || msg.includes("backend throttled") ||
+        msg.includes("timeout") || msg.includes("etimedout") ||
+        msg.includes("econnreset") || msg.includes("socket hang up")
+      if (!retryable) throw e
+      const delay = Math.min(1000 * Math.pow(2, i), 10_000)
+      console.log(`    ${label}: retry ${i + 1}/${retries} in ${delay}ms…`)
+      await new Promise((r) => setTimeout(r, delay))
     }
   }
-  throw lastError
+  throw new Error("unreachable")
 }
+
+// ── Cleanup ──────────────────────────────────────────────────────────────────
 
 async function cleanup() {
-  console.log("Cleaning up existing data...")
+  console.log("Cleaning up existing data…")
 
-  // Delete all blobs from Azure container
   try {
     const container = await getContainer()
-    console.log("  Deleting blobs...")
+    let count = 0
     for await (const blob of container.listBlobsFlat()) {
       await container.deleteBlob(blob.name)
+      count++
     }
-    console.log("  Blobs deleted")
+    console.log(`  ${count} blob(s) deleted`)
   } catch (e: any) {
-    console.log(`  Blob cleanup failed: ${e.message}`)
+    console.log(`  blob cleanup: ${e.message}`)
   }
 
-  // Delete all documents from Cosmos DB (except demo user) with retry
+  // Delete every doc the seed manages: the demo user(s) (a fresh uuid is
+  // minted each run), their refresh/spent tokens, AND all file/folder docs.
+  //
+  // File/folder docs MUST be cleared too. The demo user is recreated with a
+  // new id on every run, but folders/files were previously left behind —
+  // orphaning entire datasets owned by now-deleted users and ballooning the
+  // container (38 folder docs for a 19-folder seed). Wiping them gives each
+  // run one clean, consistent dataset owned by the new demo user.
+  //
+  // We fetch broadly (an unfiltered SELECT, which cosmium handles correctly)
+  // and filter in JS. Each delete surfaces its error so a broken cleanup
+  // fails the seed instead of leaving stale docs behind.
   try {
-    console.log("  Deleting documents...")
-    const { resources } = await withRetry(
-      () => db.items.query("SELECT * FROM c").fetchAll(),
-      "Query"
+    const { resources: allDocs } = await db.items
+      .query({ query: "SELECT c.id, c.type FROM c" })
+      .fetchAll()
+
+    // This is a single-user dev seed: clear all users, tokens, and entries
+    // so nothing from a previous run survives to confuse the listing.
+    const toDelete = allDocs.filter((d: any) =>
+      ["user", "refresh_token", "spent_token", "file", "folder"].includes(d.type),
     )
-    console.log(`    Found ${resources.length} documents`)
-    for (const item of resources) {
-      // Preserve the demo user across re-runs so login still works
-      if (item.type === "user" && item.email === DEMO_USER.email) continue
-      try {
-        await withRetry(
-          () => db.item(item.id).delete(),
-          `Delete ${item.id}`
-        )
-      } catch (deleteError: any) {
-        if (deleteError.code !== 404) {
-          console.log(`    Failed to delete ${item.id}: ${deleteError.message}`)
-        }
-      }
+
+    for (const { id } of toDelete) {
+      // Cosmium uses /id as the default partition key, so the second arg is
+      // required. A missing PK throws and would otherwise be swallowed.
+      await db.item(id, id).delete()
     }
-    console.log("  Documents deleted (demo user preserved)")
+
+    const counts = toDelete.reduce((acc: Record<string, number>, d: any) => {
+      acc[d.type] = (acc[d.type] ?? 0) + 1
+      return acc
+    }, {})
+    console.log(`  cleared docs:`, counts)
   } catch (e: any) {
-    console.log(`  Document cleanup failed: ${e.message}`)
-    console.log(`  Continuing anyway...`)
+    throw new Error(`doc cleanup failed: ${e.message ?? e}`)
   }
 
-  console.log("Cleanup complete.\n")
+  console.log()
 }
 
-async function createDemoUserIfMissing() {
+// ── Demo user ────────────────────────────────────────────────────────────────
+
+/**
+ * Provision the demo user entirely through the API — no direct Cosmos writes.
+ *
+ * Flow on first run (new user):
+ *   register → email-verification link in Mailpit → client.verify(token)
+ *   → user is verified AND the SDK cookie jar has session cookies
+ *
+ * Flow on re-runs (user already exists and is verified):
+ *   register (no-op, API resends a login magic-link) →
+ *   login magic-link in Mailpit → client.verify(token)
+ *   → SDK cookie jar has session cookies
+ *
+ * In both cases the /verify endpoint issues session cookies (ADR 0019 §B6),
+ * so client.verify() leaves the SDK fully authenticated — no separate
+ * client.login() call needed, and the stored password hash is never an issue.
+ */
+async function ensureDemoUser(): Promise<void> {
+  // Drain Mailpit so we don't accidentally pick up a token from a previous run.
+  await clearMailpit()
+
+  // POST /api/auth/register — always returns 200 regardless of whether the
+  // email is new, already verified, or unverified. Sends an email in all cases:
+  //   new user          → email-verification link
+  //   existing verified → login magic-link
+  //   existing unverified → email-verification link
+  await client.register({
+    email: DEMO_USER.email,
+    password: DEMO_USER.password,
+    name: DEMO_USER.name,
+  })
+
+  // Both email-verification and login magic-links point to /verify.
+  const msg = await waitForMessage(DEMO_USER.email, { timeoutMs: 10_000 })
+  const token = extractLinkToken(msg.HTML, "/verify")
+
+  // client.verify() calls GET /api/auth/verify through the SDK's request()
+  // method, which captures the Set-Cookie headers into the tough-cookie jar.
+  // The /verify endpoint issues session cookies per ADR 0019 §B6, so after
+  // this call the SDK is fully authenticated for all subsequent API calls.
+  await client.verify(token)
+
+  // Self-check: prove that DEMO_USER.password actually authenticates against
+  // the stored hash. A separate client (fresh cookie jar) so the verify
+  // session can't mask a broken password login.
+  const probe = createVaultClient(API_URL)
   try {
-    // First check if user exists and update it if missing type field
-    const querySpec = {
-      query: "SELECT * FROM c WHERE c.email = @email",
-      parameters: [{ name: "@email", value: DEMO_USER.email }],
-    }
-    const { resources } = await db.items.query(querySpec).fetchAll()
-    const existingUser = resources[0]
-
-    if (existingUser) {
-      // Update existing user to add type field if missing
-      if (!existingUser.type) {
-        const passwordHash = await hashPassword(DEMO_USER.password)
-        await db.item(existingUser.id, DEMO_USER.email).replace({
-          ...existingUser,
-          type: "user",
-          passwordHash,
-          verified: "1",
-        })
-        console.log(`  Demo user updated with type field: ${DEMO_USER.email}`)
-      } else {
-        console.log(`  Demo user already exists with correct schema: ${DEMO_USER.email}`)
-      }
-      return
-    }
-
-    // Create verified user directly in database (bypasses magic link)
-    const passwordHash = await hashPassword(DEMO_USER.password)
-    const userId = uuidv4()
-    await db.items.create({
-      id: userId,
-      type: "user",
-      email: DEMO_USER.email,
-      passwordHash,
-      name: DEMO_USER.name,
-      verified: "1",
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      lastLoginAt: null,
-      createdAt: new Date().toISOString(),
-    })
-    console.log(`  Demo user created: ${DEMO_USER.email}`)
+    await probe.login({ email: DEMO_USER.email, password: DEMO_USER.password })
   } catch (e: any) {
-    if (e.code === 409) {
-      console.log(`  Demo user already exists: ${DEMO_USER.email}`)
-    } else if (e.code === 429) {
-      console.log(`  Rate limited - retrying in 1s...`)
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      await createDemoUserIfMissing()
-    } else {
-      console.log(`  Demo user creation failed: ${e.message}`)
-      console.log(`  Error code: ${e.code}`)
-      console.log(`  Continuing anyway...`)
-    }
+    throw new Error(
+      `Demo user provisioned but password login failed: ${e.message ?? e}. ` +
+      `This usually means a stale duplicate user document survived cleanup.`,
+    )
+  }
+
+  console.log(`  demo user ready: ${DEMO_USER.email}`)
+}
+
+// ── Seed via SDK ─────────────────────────────────────────────────────────────
+
+async function createFolders() {
+  for (const spec of folderSpecs) {
+    const parentId = spec.parentPath ? folderIds.get(spec.parentPath) ?? null : null
+    const result = await withRetry(
+      () => client.createFolder({ parentId, name: spec.name }),
+      `folder ${spec.name}`,
+    )
+    const path = spec.parentPath ? `${spec.parentPath}.${spec.name}` : spec.name
+    folderIds.set(path, result.id)
   }
 }
+
+async function uploadFiles(files: FileSpec[]) {
+  const byParent = new Map<string, FileSpec[]>()
+  for (const f of files) {
+    const list = byParent.get(f.parentPath) ?? []
+    list.push(f)
+    byParent.set(f.parentPath, list)
+  }
+
+  let done = 0
+  for (const [parentPath, list] of byParent) {
+    const parentId = folderIds.get(parentPath)
+    if (!parentId) { console.log(`  ! skipped ${list.length} files — parent ${parentPath} unknown`); continue }
+
+    for (let i = 0; i < list.length; i += FILES_PER_UPLOAD) {
+      const batch = list.slice(i, i + FILES_PER_UPLOAD)
+      const fileObjects = batch.map((spec) => {
+        const blob = new Blob([spec.content], { type: spec.contentType })
+        return new File([blob], spec.name, { type: spec.contentType })
+      })
+
+      await withRetry(
+        () => client.uploadFiles({ parentId, files: fileObjects }),
+        `upload to ${parentPath}`,
+      )
+
+      done += batch.length
+      process.stdout.write(`  ${done}/${files.length}\r`)
+    }
+  }
+  process.stdout.write(`  ${done}/${files.length} ✓\n`)
+}
+
+// ── Entry point ──────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log(`Seeding ${API_URL}…`)
+  console.log(`Seeding ${API_URL}…\n`)
+
   await waitForApi()
   console.log("API ready.\n")
 
-  // Cleanup existing data
   await cleanup()
 
-  // Create demo user directly in database (bypasses magic link verification)
-  console.log("Creating demo user...")
-  await createDemoUserIfMissing()
+  console.log("Demo user:")
+  await ensureDemoUser()
+  console.log(`  Credentials: ${DEMO_USER.email} / ${DEMO_USER.password}\n`)
 
-  console.log("\nDemo user credentials:")
-  console.log(`  Email:    ${DEMO_USER.email}`)
-  console.log(`  Password: ${DEMO_USER.password}`)
-  console.log(`  Name:     ${DEMO_USER.name}\n`)
+  console.log(`Creating ${folderSpecs.length} folders…`)
+  await createFolders()
+  console.log(`  ${folderIds.size} folder(s) created\n`)
 
-  // Log in to get auth cookies for subsequent file operations
-  console.log("Logging in as demo user...")
-  await client.login({ email: DEMO_USER.email, password: DEMO_USER.password })
-  console.log("Logged in successfully.\n")
+  const files = generateFiles()
+  console.log(`Uploading ${files.length} files…`)
+  await uploadFiles(files)
 
-  console.log("Root folders:")
-  for (const f of folders) await createFolderIfMissing(f)
-
-  console.log("\nSubfolders:")
-  for (const f of subFolders) await createSubFolder(f)
-
-  console.log("\nFiles:")
-  for (const f of files) await uploadFile(f)
-
-  console.log("\nVerifying root listing:")
-  const root = await client.listFiles()
-  for (const entry of root.entries) {
-    console.log(`  ${entry.type === "folder" ? "📁" : "📄"} ${entry.name} (${entry.id})`)
-  }
-
-  console.log("\nSeed complete.")
+  console.log("\nSeed complete ✓")
+  console.log("  Photos/2024 has 120+ items (exercises pagination)")
+  console.log("  Search: 'report', 'invoice', 'vacation', 'alpha'")
 }
 
 main().catch((err) => {
-  console.error("Seed failed:", err)
+  console.error("\nSeed failed:", err.message ?? err)
   process.exit(1)
 })

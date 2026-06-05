@@ -2,21 +2,22 @@
 import { ref, computed, onUnmounted } from "vue"
 import { useRoute } from "vue-router"
 import { Mail, MailCheck } from "@lucide/vue"
-import { useAuthStore } from "@/stores/auth"
+import { useResendVerification } from "../composables/useAuthMutations"
 import BrandMark from "../components/BrandMark.vue"
 import AuthCard from "../components/AuthCard.vue"
 import ErrorBanner from "../components/ErrorBanner.vue"
 
-const route = useRoute()
-const auth  = useAuthStore()
+const route  = useRoute()
+const resend = useResendVerification()
 
 const email     = computed(() => (route.query.email as string) || "")
-const error     = ref("")
 const sent      = ref(false)
 const cooldown  = ref(0)
 let cooldownTimer: ReturnType<typeof setInterval> | null = null
 
 const COOLDOWN_SECS = 30
+
+const error = computed(() => resend.error.value?.message ?? "")
 
 function startCooldown() {
   cooldown.value = COOLDOWN_SECS
@@ -33,16 +34,14 @@ onUnmounted(() => {
   if (cooldownTimer) clearInterval(cooldownTimer)
 })
 
-async function handleResend() {
+function handleResend() {
   if (!email.value || cooldown.value > 0) return
-  error.value = ""
-  try {
-    await auth.resendVerification(email.value)
-    sent.value = true
-    startCooldown()
-  } catch (err: any) {
-    error.value = err.message || "Failed to resend verification email."
-  }
+  resend.mutate(email.value, {
+    onSuccess: () => {
+      sent.value = true
+      startCooldown()
+    },
+  })
 }
 </script>
 
@@ -75,7 +74,7 @@ async function handleResend() {
             type="button"
             variant="outline"
             wide
-            :loading="auth.loading"
+            :loading="resend.isPending.value"
             :disabled="!email || cooldown > 0"
             @click="handleResend"
           >

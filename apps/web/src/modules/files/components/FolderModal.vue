@@ -4,6 +4,8 @@ import { Folder, X } from "@lucide/vue"
 
 const props = defineProps<{
   open: boolean
+  isPending?: boolean
+  serverError?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -12,21 +14,22 @@ const emit = defineEmits<{
 }>()
 
 const folderName = ref("")
-const error = ref("")
+const localError = ref("")
 
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
     folderName.value = ""
-    error.value = ""
+    localError.value = ""
   }
 })
 
 function handleSubmit() {
   const name = folderName.value.trim()
-  if (!name) { error.value = "Folder name is required"; return }
-  if (name.includes("/") || name.includes("\\")) { error.value = "Folder name cannot contain slashes"; return }
-  if (name === "." || name === "..") { error.value = "Invalid folder name"; return }
-  if (name.length > 255) { error.value = "Folder name is too long (max 255 characters)"; return }
+  if (!name) { localError.value = "Folder name is required"; return }
+  if (name.includes("/") || name.includes("\\")) { localError.value = "Folder name cannot contain slashes"; return }
+  if (name === "." || name === "..") { localError.value = "Invalid folder name"; return }
+  if (name.length > 255) { localError.value = "Folder name is too long (max 255 characters)"; return }
+  localError.value = ""
   emit("confirm", name)
 }
 
@@ -34,6 +37,8 @@ function handleKeydown(e: KeyboardEvent) {
   if (e.key === "Enter") { e.preventDefault(); handleSubmit() }
   else if (e.key === "Escape") { emit("close") }
 }
+
+const displayError = () => localError.value || props.serverError || ""
 </script>
 
 <template>
@@ -93,9 +98,9 @@ function handleKeydown(e: KeyboardEvent) {
                   placeholder="My Folder"
                   autofocus
                   class="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-background)] px-3.5 py-2.5 text-sm transition focus:border-[var(--color-ring)] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]/30"
-                  :class="error ? 'border-[var(--color-destructive)] focus:ring-[var(--color-destructive)]/30' : ''"
+                  :class="(localError || serverError) ? 'border-[var(--color-destructive)] focus:ring-[var(--color-destructive)]/30' : ''"
                 />
-                <p v-if="error" class="text-[11px] text-[var(--color-destructive)]">{{ error }}</p>
+                <p v-if="displayError()" class="text-[11px] text-[var(--color-destructive)]">{{ displayError() }}</p>
               </div>
             </div>
 
@@ -110,10 +115,10 @@ function handleKeydown(e: KeyboardEvent) {
               <button
                 type="button"
                 @click="handleSubmit"
-                :disabled="!folderName.trim()"
+                :disabled="!folderName.trim() || isPending"
                 class="inline-flex items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Create
+                {{ isPending ? 'Creating…' : 'Create' }}
               </button>
             </div>
           </div>

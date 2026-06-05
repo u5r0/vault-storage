@@ -50,4 +50,4 @@ Thumbs.db
 .changeset/*.md
 
 # AI agent tooling
-.kiro/
+.agents/

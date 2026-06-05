@@ -32,10 +32,17 @@ async function markNonceSpent(nonce: string) {
 }
 
 async function findUserByEmail(email: string) {
+  // Cosmium (dev emulator) silently returns nothing for *literal* string
+  // equality in WHERE clauses (e.g. `c.type = 'user'`); parameterized
+  // bindings work. So every condition must be a @param. Real Cosmos handles
+  // both forms, so this is correct for production as well.
   const { resources } = await db.items
     .query({
-      query: "SELECT * FROM c WHERE c.type = 'user' AND c.email = @email",
-      parameters: [{ name: "@email", value: email }],
+      query: "SELECT * FROM c WHERE c.type = @type AND c.email = @email",
+      parameters: [
+        { name: "@type", value: "user" },
+        { name: "@email", value: email },
+      ],
     })
     .fetchAll()
   return resources[0] ?? null
@@ -232,7 +239,7 @@ export class AuthService {
     }
     await deleteAllRefreshTokensForUser(user.id)
     const passwordHash = await hashPassword(password)
-    await db.item(user.id).replace({ ...user, passwordHash })
+    await db.item(user.id).replace({ ...user, passwordHash, failedLoginAttempts: 0, lockedUntil: null })
   }
 
   async validateAndConsumeRefreshToken(jti: string): Promise<void> {

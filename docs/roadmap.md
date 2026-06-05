@@ -1,37 +1,12 @@
 # Roadmap
 
-Last reviewed: 2026-05-22. Items ordered by priority within each tier.
-
----
-
-## What's Done
-
-These features are implemented and working:
-
-- **Authentication** — Register (Argon2id), login, magic links, email verification, password reset, JWT access/refresh tokens, account lockout (5 attempts → 30min)
-- **File storage** — Upload, download, create folder, rename, move, delete (Azure Blob + Cosmos DB)
-- **Frontend architecture** — Vertical slice modules (auth, files, upload, settings, profile), Pinia stores, global v-* primitives, layout system
-- **Headless upload** — Uppy core (no @uppy/vue)
-- **Theme system** — Light/dark with CSS custom properties, persisted to localStorage
-- **Testing** — Vitest dual-project (unit + integration), Azurite + Cosmos emulator in CI
-- **SDK** — Shared Zod schemas, VaultClient (browser + Node.js), VaultStore interface contract
-- **Rate limiting** — Three layers (per-email, volumetric upload, IP emergency brake)
-- **Quick links API** — Starred/recent/tags/trash counts served from Cosmos DB
+Last reviewed: 2026-06-05. Items ordered by priority within each tier.
 
 ---
 
 ## Critical
 
-### 1. Search
-
-`AppHeader.vue` has a search input wired to a local `query` ref that goes nowhere. No backend endpoint, no filtering logic.
-
-**Needs:**
-- `GET /api/files/search?q=<term>` endpoint querying Cosmos DB `CONTAINS()` on name
-- Frontend: debounced search input → API call → display results (route or overlay)
-- Consider full-text search (Azure AI Search) as a future upgrade path
-
-### 2. Pagination
+### 1. Pagination
 
 `GET /api/files` returns all entries in a folder. No limit.
 
@@ -40,7 +15,7 @@ These features are implemented and working:
 - Frontend: infinite scroll or "load more" in FileList
 - Reasonable default page size (50–100 entries)
 
-### 3. Metadata features are read-only stubs
+### 2. Metadata features are read-only stubs
 
 The backend serves `quickLinks` counts and stores `isFavorite`/`tags`/`deletedAt` fields, but there are no mutation endpoints for starring, tagging, or soft-deleting.
 
@@ -54,7 +29,7 @@ The backend serves `quickLinks` counts and stores `isFavorite`/`tags`/`deletedAt
 
 ## Functional
 
-### 4. Context menu / actions
+### 3. Context menu / actions
 
 Toolbar buttons (Properties, Tags, Star, Delete) have no click handlers. No right-click context menu.
 
@@ -63,7 +38,7 @@ Toolbar buttons (Properties, Tags, Star, Delete) have no click handlers. No righ
 - Context menu component (right-click or long-press on mobile)
 - Confirmation dialog for destructive actions (delete)
 
-### 5. Share
+### 4. Share
 
 Share button in DetailsPanel has no handler.
 
@@ -72,7 +47,7 @@ Share button in DetailsPanel has no handler.
 - Permission model (read-only link vs. collaborator access)
 - Frontend: modal with generated link + copy button
 
-### 6. Storage stats
+### 5. Storage stats
 
 AppSidebar shows hardcoded storage usage.
 
@@ -80,7 +55,7 @@ AppSidebar shows hardcoded storage usage.
 - `GET /api/files/stats` endpoint — total bytes stored, file count
 - Frontend: display real values in sidebar
 
-### 7. Mobile responsiveness
+### 6. Mobile responsiveness
 
 No hamburger menu or responsive sidebar. Desktop-only layout.
 
@@ -89,7 +64,7 @@ No hamburger menu or responsive sidebar. Desktop-only layout.
 - Responsive grid breakpoints for FileGridItem
 - Touch-friendly context actions
 
-### 8. Loading states
+### 7. Loading states
 
 Only a `<v-spinner>` during initial load. No skeleton placeholders.
 
@@ -101,25 +76,25 @@ Only a `<v-spinner>` during initial load. No skeleton placeholders.
 
 ## Nice-to-Have
 
-### 9. Keyboard shortcuts
+### 8. Keyboard shortcuts
 
 No global shortcuts.
 
 **Candidates:** `/` for search focus, `Ctrl+U` for upload, `Delete` for selected file, arrow keys for navigation.
 
-### 10. Breadcrumb navigation
+### 9. Breadcrumb navigation
 
 Currently only a "Home" button. No path breadcrumbs showing folder hierarchy.
 
-### 11. File preview
+### 10. File preview
 
 No in-app preview for images, PDFs, or text files. Downloads are the only option.
 
-### 12. Drag-to-move
+### 11. Drag-to-move
 
 Files can be dragged in to upload but cannot be dragged between folders within the app.
 
-### 13. Multi-select
+### 12. Multi-select
 
 No shift-click or ctrl-click selection for bulk actions.
 

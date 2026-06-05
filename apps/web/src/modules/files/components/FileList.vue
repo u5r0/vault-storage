@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue"
+import { computed, ref, watch, useTemplateRef } from "vue"
+import { useVirtualizer } from "@tanstack/vue-virtual"
 import {
   ClipboardList,
   Tag,
@@ -25,12 +26,14 @@ const props = defineProps<{
   files: VaultEntry[]
   selectedId: string
   currentEntityId: string
+  hasNextPage?: boolean
+  isFetchingNextPage?: boolean
 }>()
 
 const emit = defineEmits<{
   select: [id: string]
   navigate: [entityId: string | null]
-  "upload-complete": []
+  "load-more": []
   "create-folder": []
 }>()
 
@@ -42,14 +45,6 @@ watch(
   () => props.currentEntityId,
   (id) => uploadStore.setCurrentEntity(id || null),
   { immediate: true },
-)
-
-// Refresh the route's listing when an upload batch completes.
-watch(
-  () => uploadStore.lastCompletedAt,
-  (val, prev) => {
-    if (val && val !== prev) emit("upload-complete")
-  },
 )
 
 // ─── Full-background drop zone ───────────────────────────────────────
@@ -102,6 +97,8 @@ function onDrop(e: DragEvent) {
 
 // ─── Sorting & view ──────────────────────────────────────────────────
 const sorted = computed(() => {
+  // Client-side sort over the currently-fetched pages per ADR 0018 §"Sort
+  // interaction with pagination". Folders before files, then by sortKey.
   const list = [...props.files]
   list.sort((a, b) => {
     if (a.type !== b.type) return a.type === "folder" ? -1 : 1
@@ -119,6 +116,80 @@ const sorted = computed(() => {
 
 const isEmpty = computed(() => props.files.length === 0)
 const isRoot  = computed(() => !props.currentEntityId)
+
+// ─── Virtualization ──────────────────────────────────────────────────
+// One virtualizer per view mode. List = single column of rows; grid = rows of
+// 4 cards on xl, 3 on sm+, 2 on mobile. We pick the column count based on the
+// viewport and re-measure on resize.
+const listScrollerRef = useTemplateRef<HTMLDivElement>("listScrollerRef")
+const gridScrollerRef = useTemplateRef<HTMLDivElement>("gridScrollerRef")
+
+const LIST_ROW_HEIGHT = 52  // matches FileListItem's py-2.5 + content height
+const GRID_ROW_HEIGHT = 200 // card height + gap
+
+const listVirtualizer = useVirtualizer(
+  computed(() => ({
+    count: sorted.value.length,
+    getScrollElement: () => listScrollerRef.value,
+    estimateSize: () => LIST_ROW_HEIGHT,
+    overscan: 8,
+  })),
+)
+
+// Grid columns by viewport (matches existing grid-cols utilities).
+const gridCols = ref(2)
+function updateGridCols() {
+  const w = window.innerWidth
+  gridCols.value = w >= 1280 ? 4 : w >= 640 ? 3 : 2
+}
+watch(
+  () => filesStore.viewMode,
+  (mode) => {
+    if (mode === "grid") updateGridCols()
+  },
+  { immediate: true },
+)
+if (typeof window !== "undefined") {
+  window.addEventListener("resize", updateGridCols)
+}
+
+const gridRowCount = computed(() =>
+  Math.ceil(sorted.value.length / gridCols.value),
+)
+
+const gridVirtualizer = useVirtualizer(
+  computed(() => ({
+    count: gridRowCount.value,
+    getScrollElement: () => gridScrollerRef.value,
+    estimateSize: () => GRID_ROW_HEIGHT,
+    overscan: 4,
+  })),
+)
+
+// Auto-load next page when the user nears the end of the virtualized list.
+function maybeLoadMore(lastIndex: number) {
+  if (props.hasNextPage && !props.isFetchingNextPage && lastIndex >= sorted.value.length - 8) {
+    emit("load-more")
+  }
+}
+
+watch(
+  () => listVirtualizer.value.getVirtualItems(),
+  (items) => {
+    if (filesStore.viewMode !== "list" || items.length === 0) return
+    maybeLoadMore(items[items.length - 1].index)
+  },
+)
+
+watch(
+  () => gridVirtualizer.value.getVirtualItems(),
+  (items) => {
+    if (filesStore.viewMode !== "grid" || items.length === 0) return
+    const lastRow = items[items.length - 1].index
+    const lastIndex = (lastRow + 1) * gridCols.value - 1
+    maybeLoadMore(lastIndex)
+  },
+)
 
 const toolbarActions = [
   { id: "details", icon: ClipboardList, label: "Properties" },
@@ -147,7 +218,10 @@ const toolbarActions = [
         <Home :size="16" :stroke-width="2" />
       </button>
 
-      <p class="text-[11.5px] text-muted-foreground">{{ props.files.length }} items</p>
+      <p class="text-[11.5px] text-muted-foreground">
+        {{ props.files.length }} item<span v-if="props.files.length !== 1">s</span>
+        <span v-if="props.hasNextPage" class="opacity-70">+</span>
+      </p>
 
       <div class="ml-auto flex items-center gap-1">
         <!-- View toggle -->
@@ -209,48 +283,117 @@ const toolbarActions = [
     </div>
 
     <!-- LIST VIEW -->
-    <div v-if="filesStore.viewMode === 'list'" class="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div
-        v-if="!isEmpty"
-        class="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_180px_140px_100px] items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-background)]/95 px-5 py-2.5 text-[11.5px] font-medium uppercase tracking-wider text-muted-foreground backdrop-blur"
-      >
-        <button type="button" @click="filesStore.setSortKey('name')" class="flex items-center gap-1.5 hover:text-foreground">
-          Name
-          <ArrowUpDown :size="11" :stroke-width="2" :class="filesStore.sortKey === 'name' ? 'text-foreground' : 'opacity-60'" />
-        </button>
-        <button type="button" @click="filesStore.setSortKey('modified')" class="flex items-center gap-1.5 hover:text-foreground">
-          Last modified
-          <ArrowUpDown :size="11" :stroke-width="2" :class="filesStore.sortKey === 'modified' ? 'text-foreground' : 'opacity-60'" />
-        </button>
-        <button type="button" @click="filesStore.setSortKey('type')" class="flex items-center gap-1.5 hover:text-foreground">
-          Type
-          <ArrowUpDown :size="11" :stroke-width="2" :class="filesStore.sortKey === 'type' ? 'text-foreground' : 'opacity-60'" />
-        </button>
-        <button type="button" @click="filesStore.setSortKey('size')" class="flex items-center justify-end gap-1.5 hover:text-foreground">
-          Size
-          <ArrowUpDown :size="11" :stroke-width="2" :class="filesStore.sortKey === 'size' ? 'text-foreground' : 'opacity-60'" />
-        </button>
-      </div>
-
+    <template v-if="filesStore.viewMode === 'list'">
       <FileEmptyState v-if="isEmpty" :is-root="isRoot" @create-folder="emit('create-folder')" />
 
-      <ul v-else class="flex flex-col px-2 py-2">
-        <li v-for="file in sorted" :key="file.id">
-          <FileListItem :file="file" :selected="selectedId === file.id" @select="emit('select', file.id)" />
-        </li>
-      </ul>
-    </div>
+      <div v-else class="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div
+          class="grid grid-cols-[minmax(0,1fr)_180px_140px_100px] items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-background)]/95 px-5 py-2.5 text-[11.5px] font-medium uppercase tracking-wider text-muted-foreground"
+        >
+          <button type="button" @click="filesStore.setSortKey('name')" class="flex items-center gap-1.5 hover:text-foreground">
+            Name
+            <ArrowUpDown :size="11" :stroke-width="2" :class="filesStore.sortKey === 'name' ? 'text-foreground' : 'opacity-60'" />
+          </button>
+          <button type="button" @click="filesStore.setSortKey('modified')" class="flex items-center gap-1.5 hover:text-foreground">
+            Last modified
+            <ArrowUpDown :size="11" :stroke-width="2" :class="filesStore.sortKey === 'modified' ? 'text-foreground' : 'opacity-60'" />
+          </button>
+          <button type="button" @click="filesStore.setSortKey('type')" class="flex items-center gap-1.5 hover:text-foreground">
+            Type
+            <ArrowUpDown :size="11" :stroke-width="2" :class="filesStore.sortKey === 'type' ? 'text-foreground' : 'opacity-60'" />
+          </button>
+          <button type="button" @click="filesStore.setSortKey('size')" class="flex items-center justify-end gap-1.5 hover:text-foreground">
+            Size
+            <ArrowUpDown :size="11" :stroke-width="2" :class="filesStore.sortKey === 'size' ? 'text-foreground' : 'opacity-60'" />
+          </button>
+        </div>
+
+        <div ref="listScrollerRef" class="min-h-0 flex-1 overflow-y-auto px-2">
+          <div
+            :style="{
+              height: `${listVirtualizer.getTotalSize()}px`,
+              position: 'relative',
+              width: '100%',
+            }"
+          >
+            <div
+              v-for="virtualRow in listVirtualizer.getVirtualItems()"
+              :key="sorted[virtualRow.index].id"
+              :style="{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${virtualRow.start}px)`,
+              }"
+              class="py-0.5"
+            >
+              <FileListItem
+                :file="sorted[virtualRow.index]"
+                :selected="selectedId === sorted[virtualRow.index].id"
+                @select="emit('select', sorted[virtualRow.index].id)"
+              />
+            </div>
+          </div>
+          <div
+            v-if="isFetchingNextPage"
+            class="grid place-items-center py-3 text-[11.5px] text-muted-foreground"
+          >
+            Loading more…
+          </div>
+        </div>
+      </div>
+    </template>
 
     <!-- GRID VIEW -->
-    <div v-else class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <template v-else>
       <FileEmptyState v-if="isEmpty" :is-root="isRoot" @create-folder="emit('create-folder')" />
 
-      <ul v-else class="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3 xl:grid-cols-4">
-        <li v-for="file in sorted" :key="file.id">
-          <FileGridItem :file="file" :selected="selectedId === file.id" @select="emit('select', file.id)" />
-        </li>
-      </ul>
-    </div>
+      <div v-else ref="gridScrollerRef" class="min-h-0 flex-1 overflow-y-auto p-5">
+        <div
+          :style="{
+            height: `${gridVirtualizer.getTotalSize()}px`,
+            position: 'relative',
+            width: '100%',
+          }"
+        >
+          <div
+            v-for="virtualRow in gridVirtualizer.getVirtualItems()"
+            :key="virtualRow.index"
+            :style="{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              transform: `translateY(${virtualRow.start}px)`,
+            }"
+            class="grid gap-3"
+            :class="{
+              'grid-cols-2':       gridCols === 2,
+              'grid-cols-3':       gridCols === 3,
+              'grid-cols-4':       gridCols === 4,
+            }"
+          >
+            <FileGridItem
+              v-for="file in sorted.slice(
+                virtualRow.index * gridCols,
+                virtualRow.index * gridCols + gridCols,
+              )"
+              :key="file.id"
+              :file="file"
+              :selected="selectedId === file.id"
+              @select="emit('select', file.id)"
+            />
+          </div>
+        </div>
+        <div
+          v-if="isFetchingNextPage"
+          class="grid place-items-center py-3 text-[11.5px] text-muted-foreground"
+        >
+          Loading more…
+        </div>
+      </div>
+    </template>
 
     <!-- Active drag overlay -->
     <Transition

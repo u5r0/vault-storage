@@ -69,8 +69,18 @@ export type ResetPasswordInput = z.infer<typeof ResetPasswordBody>;
 
 export const ListFilesQuery = z.object({
   entityId: z.uuid().nullable().optional(),
+  cursor: z.string().optional(),
+  pageSize: z.coerce.number().int().min(1).max(200).default(100),
 });
 export type ListFilesInput = z.infer<typeof ListFilesQuery>;
+
+export const SearchFilesQuery = z.object({
+  q: z.string().min(1).max(128),
+  type: z.enum(["file", "folder"]).optional(),
+  cursor: z.string().optional(),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type SearchFilesInput = z.infer<typeof SearchFilesQuery>;
 
 export const CreateFolderBody = z.object({
   parentId: z.uuid().nullable().optional(),
@@ -100,8 +110,15 @@ export type DeleteInput = z.infer<typeof DeleteBody>;
 export const ListFilesResponse = z.object({
   entityId: z.string().nullable(),
   entries: z.array(VaultEntrySchema),
+  cursor: z.string().nullable(),
 });
 export type ListFilesResult = z.infer<typeof ListFilesResponse>;
+
+export const SearchFilesResponse = z.object({
+  entries: z.array(VaultEntrySchema),
+  cursor: z.string().nullable(),
+});
+export type SearchFilesResult = z.infer<typeof SearchFilesResponse>;
 
 export const CreateFolderResponse = z.object({
   id: z.string().uuid(),
@@ -165,6 +182,10 @@ export interface VaultStore {
   logout(): Promise<void>;
   me(): Promise<AuthResult>;
   listFiles(input?: Partial<ListFilesInput>): Promise<ListFilesResult>;
+  searchFiles(
+    input: SearchFilesInput,
+    init?: { signal?: AbortSignal },
+  ): Promise<SearchFilesResult>;
   createFolder(input: CreateFolderInput): Promise<CreateFolderResult>;
   uploadFiles(input: { parentId?: string; files: File[] }): Promise<UploadResult>;
   getDownloadUrl(id: string): string;

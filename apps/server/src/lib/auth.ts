@@ -45,10 +45,16 @@ export async function verifyToken(token: string) {
 }
 
 export async function createUser(email: string, password: string, name?: string) {
-  // Check if user exists in Cosmos DB
+  // Check if user exists. Every WHERE condition must be parameterized —
+  // cosmium silently drops *literal* string comparisons like `c.type = 'user'`
+  // (returning 0 rows), which previously let duplicate users slip past this
+  // guard. Parameterized bindings work on both cosmium and real Cosmos.
   const querySpec = {
-    query: "SELECT * FROM c WHERE c.type = 'user' AND c.email = @email",
-    parameters: [{ name: "@email", value: email }],
+    query: "SELECT * FROM c WHERE c.type = @type AND c.email = @email",
+    parameters: [
+      { name: "@type", value: "user" },
+      { name: "@email", value: email },
+    ],
   }
   const { resources } = await db.items.query(querySpec).fetchAll()
   if (resources.length > 0) throw new Error("User exists")
@@ -106,8 +112,11 @@ export async function deleteRefreshToken(jti: string) {
 export async function deleteAllRefreshTokensForUser(userId: string) {
   const { resources } = await db.items
     .query({
-      query: "SELECT c.id FROM c WHERE c.type = 'refresh_token' AND c.userId = @uid",
-      parameters: [{ name: "@uid", value: userId }],
+      query: "SELECT c.id FROM c WHERE c.type = @type AND c.userId = @uid",
+      parameters: [
+        { name: "@type", value: "refresh_token" },
+        { name: "@uid", value: userId },
+      ],
     })
     .fetchAll()
   await Promise.all(

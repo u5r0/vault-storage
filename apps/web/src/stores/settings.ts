@@ -1,9 +1,9 @@
-import { ref } from "vue"
+import { shallowRef, ref } from "vue"
 import { defineStore } from "pinia"
 
 export const useSettingsStore = defineStore("settings", () => {
-  const loading = ref(false)
-  const error = ref<string | null>(null)
+  const loading = shallowRef(false)
+  const error = shallowRef<string | null>(null)
 
   const account = ref({
     email: "",

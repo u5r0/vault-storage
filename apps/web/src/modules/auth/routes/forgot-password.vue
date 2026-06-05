@@ -1,27 +1,24 @@
 <script setup lang="ts">
-import { ref } from "vue"
+import { ref, computed } from "vue"
 import { useRouter } from "vue-router"
 import { Mail, ArrowLeft, CheckCircle } from "@lucide/vue"
-import { useAuthStore } from "@/stores/auth"
+import { useForgotPassword } from "../composables/useAuthMutations"
 import BrandMark from "../components/BrandMark.vue"
 import AuthCard from "../components/AuthCard.vue"
 import ErrorBanner from "../components/ErrorBanner.vue"
 
 const router = useRouter()
-const auth = useAuthStore()
+const forgot = useForgotPassword()
 
 const email   = ref("")
-const error   = ref("")
 const success = ref(false)
 
-async function handleSubmit() {
-  error.value = ""
-  try {
-    await auth.forgotPassword(email.value)
-    success.value = true
-  } catch (err: any) {
-    error.value = err.message || "Failed to send reset email."
-  }
+const error = computed(() => forgot.error.value?.message ?? "")
+
+function handleSubmit() {
+  forgot.mutate(email.value, {
+    onSuccess: () => { success.value = true },
+  })
 }
 </script>
 
@@ -60,7 +57,7 @@ async function handleSubmit() {
 
         <ErrorBanner v-if="error" :message="error" />
 
-        <v-button type="submit" :loading="auth.loading" wide>Send reset link</v-button>
+        <v-button type="submit" :loading="forgot.isPending.value" wide>Send reset link</v-button>
       </form>
     </AuthCard>
 

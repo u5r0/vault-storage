@@ -2,21 +2,20 @@
 import { ref, computed } from "vue"
 import { useRouter } from "vue-router"
 import { Lock, Mail, Eye, EyeOff, User, Check, Circle } from "@lucide/vue"
-import { useAuthStore } from "@/stores/auth"
+import { useSignUp } from "../composables/useAuthMutations"
 import BrandMark from "../components/BrandMark.vue"
 import AuthCard from "../components/AuthCard.vue"
 import ErrorBanner from "../components/ErrorBanner.vue"
 import { validatePassword } from "../lib/passwordRules"
 
 const router = useRouter()
-const auth = useAuthStore()
+const signUp = useSignUp()
 
 const name                = ref("")
 const email               = ref("")
 const password            = ref("")
 const confirmPassword     = ref("")
 const agreeToTerms        = ref(false)
-const error               = ref("")
 const showPassword        = ref(false)
 const showConfirmPassword = ref(false)
 
@@ -32,9 +31,6 @@ const strengthColor  = computed(() => [
   "oklch(0.65 0.18 150)",
 ][strength.value])
 
-// Submit gated on the shared password rules (no bare-length check) plus the
-// form-only requirements (email, confirm match, terms accepted).
-// Name is optional per ADR 0019 §D3.
 const passwordsMatch = computed(() => password.value === confirmPassword.value)
 const isValid = computed(() =>
   email.value.includes("@") &&
@@ -43,17 +39,14 @@ const isValid = computed(() =>
   agreeToTerms.value,
 )
 
-async function handleSignup() {
-  error.value = ""
-  if (!passwordsMatch.value) { error.value = "Passwords do not match."; return }
-  if (!validation.value.valid) { error.value = validation.value.errors[0]; return }
-  if (!agreeToTerms.value) { error.value = "You must agree to the terms of service."; return }
-  try {
-    await auth.signUp(email.value, password.value, name.value.trim() || undefined)
-    router.push({ name: "check-email", query: { email: email.value } })
-  } catch (err: any) {
-    error.value = err.message || "Signup failed. Please try again."
-  }
+const error = computed(() => signUp.error.value?.message ?? "")
+
+function handleSignup() {
+  if (!passwordsMatch.value || !validation.value.valid || !agreeToTerms.value) return
+  signUp.mutate(
+    { email: email.value, password: password.value, name: name.value.trim() || undefined },
+    { onSuccess: () => router.push({ name: "check-email", query: { email: email.value } }) },
+  )
 }
 </script>
 
@@ -157,7 +150,7 @@ async function handleSignup() {
 
         <ErrorBanner v-if="error" :message="error" />
 
-        <v-button type="submit" :loading="auth.loading" :disabled="!isValid" wide>
+        <v-button type="submit" :loading="signUp.isPending.value" :disabled="!isValid" wide>
           Create account
         </v-button>
       </form>

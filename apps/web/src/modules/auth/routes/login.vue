@@ -1,52 +1,45 @@
 <script setup lang="ts">
-import { ref } from "vue"
-import { useRouter } from "vue-router"
+import { ref, computed } from "vue"
 import { Lock, Mail } from "@lucide/vue"
-import { useAuthStore, AuthError } from "@/stores/auth"
+import { useSignIn, useResendVerification, AuthError } from "../composables/useAuthMutations"
 import BrandMark from "../components/BrandMark.vue"
 import AuthCard from "../components/AuthCard.vue"
 import ErrorBanner from "../components/ErrorBanner.vue"
 
-const router = useRouter()
-const auth = useAuthStore()
-
 const email    = ref("")
 const password = ref("")
-const error    = ref("")
+
 // ADR 0019 §D4 — branch the UI on a structured code, not the message string.
 const errorCode = ref<"" | "email_not_verified" | "other">("")
-const resendSent    = ref(false)
-const resendLoading = ref(false)
+const resendSent = ref(false)
+
+const signIn = useSignIn()
+const resend = useResendVerification()
+
+const error = computed(() => signIn.error.value?.message ?? "")
 
 async function handleLogin() {
-  error.value = ""
   errorCode.value = ""
   resendSent.value = false
-  try {
-    await auth.signIn(email.value, password.value)
-    router.push("/contents")
-  } catch (err: any) {
-    if (err instanceof AuthError && err.code === "email_not_verified") {
-      errorCode.value = "email_not_verified"
-      error.value = "Your email isn't verified yet. Check your inbox or request a new link."
-    } else {
-      errorCode.value = "other"
-      error.value = err.message || "Login failed. Please try again."
-    }
-  }
+  signIn.mutate(
+    { email: email.value, password: password.value },
+    {
+      onError: (err) => {
+        if (err instanceof AuthError && err.code === "email_not_verified") {
+          errorCode.value = "email_not_verified"
+        } else {
+          errorCode.value = "other"
+        }
+      },
+    },
+  )
 }
 
-async function handleResendVerification() {
+function handleResendVerification() {
   if (!email.value) return
-  resendLoading.value = true
-  try {
-    await auth.resendVerification(email.value)
-    resendSent.value = true
-  } catch (err: any) {
-    error.value = err.message || "Failed to resend verification email."
-  } finally {
-    resendLoading.value = false
-  }
+  resend.mutate(email.value, {
+    onSuccess: () => { resendSent.value = true },
+  })
 }
 </script>
 
@@ -80,7 +73,7 @@ async function handleResendVerification() {
             type="button"
             variant="outline"
             wide
-            :loading="resendLoading"
+            :loading="resend.isPending.value"
             :disabled="!email"
             @click="handleResendVerification"
           >
@@ -91,7 +84,7 @@ async function handleResendVerification() {
           Verification email re-sent. Check your inbox.
         </p>
 
-        <v-button type="submit" :loading="auth.loading" wide>Sign in</v-button>
+        <v-button type="submit" :loading="signIn.isPending.value" wide>Sign in</v-button>
       </form>
     </AuthCard>
 

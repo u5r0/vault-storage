@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from "vue"
-import { useRouter } from "vue-router"
+import { ref, computed, shallowRef, onMounted, onUnmounted, watch } from "vue"
+import { useRouter, useRoute } from "vue-router"
 import {
   Search, Settings, Sun, Moon, Command,
   FolderPlus, Upload, LogOut, User, X, Folder,
@@ -9,18 +9,24 @@ import { useUIStore, type ThemeMode } from "@/stores/ui"
 import { useAuthStore } from "@/stores/auth"
 import { useFilesStore } from "@/stores/files"
 import { useUploadStore } from "@/stores/upload"
+import { useSignOut } from "@/modules/auth"
+import { useCreateFolder } from "@/modules/files/composables/useFileMutations"
+import { routeToEntityId } from "@/router"
 
-const ui     = useUIStore()
-const auth   = useAuthStore()
-const files  = useFilesStore()
-const upload = useUploadStore()
-const router = useRouter()
+const ui          = useUIStore()
+const auth        = useAuthStore()
+const files       = useFilesStore()
+const upload      = useUploadStore()
+const router      = useRouter()
+const route       = useRoute()
+
+const signOut = useSignOut()
 
 const mode = computed(() => ui.theme)
 const user = computed(() => auth.user)
 
 // ── Upload ────────────────────────────────────────────────────────────────────
-const fileInputRef = ref<HTMLInputElement | null>(null)
+const fileInputRef = shallowRef<HTMLInputElement | null>(null)
 
 const uploadDisabled = computed(
   () => upload.currentEntityId === null && !files.allowRootUploads,
@@ -45,9 +51,17 @@ function onFilesSelected(e: Event) {
 }
 
 // ── New folder drawer ─────────────────────────────────────────────────────────
-const drawerOpen  = ref(false)
-const folderName  = ref("")
-const folderError = ref("")
+const drawerOpen  = shallowRef(false)
+const folderName  = shallowRef("")
+const folderError = shallowRef("")
+
+// The parent folder for new-folder actions depends on where the user is.
+// On /contents/:entityId we use that entity; everywhere else we default to root.
+const folderParentId = computed(() =>
+  route.name === "content" ? routeToEntityId(route.params.entityId) : null,
+)
+
+const createFolder = useCreateFolder(folderParentId)
 
 function openDrawer() {
   folderName.value  = ""
@@ -68,13 +82,16 @@ function submitFolder() {
   if (!name) { folderError.value = "Name is required"; return }
   if (name.includes("/") || name.includes("\\")) { folderError.value = "Name cannot contain slashes"; return }
   if (name.length > 255) { folderError.value = "Name is too long"; return }
-  files.requestCreateFolder(name)
-  closeDrawer()
+  folderError.value = ""
+  createFolder.mutate(name, {
+    onSuccess: () => closeDrawer(),
+    onError:   (err) => { folderError.value = err.message },
+  })
 }
 
 // ── User dropdown ─────────────────────────────────────────────────────────────
-const dropdownOpen  = ref(false)
-const avatarBtnRef  = ref<HTMLButtonElement | null>(null)
+const dropdownOpen  = shallowRef(false)
+const avatarBtnRef  = shallowRef<HTMLButtonElement | null>(null)
 
 function toggleDropdown() {
   dropdownOpen.value = !dropdownOpen.value
@@ -89,10 +106,9 @@ function navigate(path: string) {
   closeDropdown()
 }
 
-async function handleSignOut() {
+function handleSignOut() {
   closeDropdown()
-  await auth.signOut()
-  router.push("/login")
+  signOut.mutate()
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -101,7 +117,55 @@ const themes: { id: ThemeMode; icon: typeof Sun; label: string }[] = [
   { id: "dark",  icon: Moon, label: "Dark"  },
 ]
 
-const query = ref("")
+// ── Search ────────────────────────────────────────────────────────────────────
+const searchInputRef = shallowRef<HTMLInputElement | null>(null)
+const lastNonSearchPath = shallowRef<string>("/contents")
+
+const query = computed({
+  get: () => ui.searchQuery,
+  set: (val: string) => ui.setSearchQuery(val),
+})
+
+watch(
+  () => route.fullPath,
+  (path) => {
+    if (route.name !== "search") lastNonSearchPath.value = path
+  },
+  { immediate: true },
+)
+
+watch(
+  () => ui.searchQuery,
+  (q) => {
+    if (q.trim().length > 0 && route.name !== "search") {
+      router.push({ name: "search" })
+    } else if (q.trim().length === 0 && route.name === "search") {
+      router.push(lastNonSearchPath.value)
+    }
+  },
+)
+
+function clearSearch() {
+  ui.clearSearch()
+  searchInputRef.value?.focus()
+}
+
+function onGlobalKeydown(e: KeyboardEvent) {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault()
+    searchInputRef.value?.focus()
+    searchInputRef.value?.select()
+  }
+  if (e.key === "Escape" && document.activeElement === searchInputRef.value) {
+    if (ui.searchQuery.length > 0) {
+      e.preventDefault()
+      clearSearch()
+    }
+  }
+}
+
+onMounted(() => window.addEventListener("keydown", onGlobalKeydown))
+onUnmounted(() => window.removeEventListener("keydown", onGlobalKeydown))
 </script>
 
 <template>
@@ -125,8 +189,24 @@ const query = ref("")
       <div class="ml-2 flex-1">
         <label class="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-muted)]/60 px-3.5 py-2.5 text-sm transition focus-within:border-[var(--color-ring)] focus-within:bg-[var(--color-card)] focus-within:ring-2 focus-within:ring-[var(--color-ring)]/30">
           <Search :size="16" class="shrink-0 text-muted-foreground" :stroke-width="2" />
-          <input v-model="query" type="text" placeholder="Search files, folders, and tags…" class="w-full bg-transparent text-sm placeholder:text-muted-foreground/80 focus:outline-none" />
-          <span class="hidden items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-[11px] text-muted-foreground sm:inline-flex">
+          <input
+            ref="searchInputRef"
+            v-model="query"
+            type="text"
+            placeholder="Search files, folders, and tags…"
+            aria-label="Search"
+            class="w-full bg-transparent text-sm placeholder:text-muted-foreground/80 focus:outline-none"
+          />
+          <button
+            v-if="query.length > 0"
+            type="button"
+            aria-label="Clear search"
+            @click="clearSearch"
+            class="grid h-5 w-5 place-items-center rounded-full text-muted-foreground transition hover:bg-[var(--color-muted)] hover:text-foreground"
+          >
+            <X :size="11" :stroke-width="2.5" />
+          </button>
+          <span v-else class="hidden items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-1.5 py-0.5 text-[11px] text-muted-foreground sm:inline-flex">
             <Command :size="11" :stroke-width="2.5" /> K
           </span>
         </label>
@@ -284,7 +364,7 @@ const query = ref("")
         <!-- Footer -->
         <div class="flex items-center justify-end gap-2 border-t border-[var(--color-border)] px-5 py-3">
           <v-button variant="outline" size="sm" @click="closeDrawer">Cancel</v-button>
-          <v-button size="sm" :disabled="!folderName.trim()" @click="submitFolder">Create</v-button>
+          <v-button size="sm" :disabled="!folderName.trim() || createFolder.isPending.value" :loading="createFolder.isPending.value" @click="submitFolder">Create</v-button>
         </div>
       </div>
     </Transition>

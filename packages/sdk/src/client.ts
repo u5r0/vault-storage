@@ -16,12 +16,42 @@ import type {
   RenameInput,
   RenameResult,
   ResendVerificationInput,
+  SearchFilesInput,
+  SearchFilesResult,
   UploadResult,
   VaultStore,
 } from "./schemas";
 
 const isBrowser =
   typeof window !== "undefined" && typeof document !== "undefined";
+
+/**
+ * Default retry configuration for transient 429 responses. The server
+ * sets `Retry-After` (seconds) on every rate-limit rejection — see
+ * apps/server/src/middleware/rate-limit.ts. The client honors that
+ * header up to `maxRetries` times before surfacing the failure.
+ */
+const DEFAULT_MAX_RETRIES = 3;
+const MAX_RETRY_DELAY_MS = 30_000;
+
+function parseRetryAfterMs(header: string | null): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(MAX_RETRY_DELAY_MS, Math.ceil(seconds * 1000));
+  }
+  // HTTP allows an HTTP-date too; we don't expect the server to send one
+  // but parsing it cheaply lets us be tolerant.
+  const date = Date.parse(header);
+  if (!Number.isNaN(date)) {
+    return Math.max(0, Math.min(MAX_RETRY_DELAY_MS, date - Date.now()));
+  }
+  return null;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * Vault API client — works in both browser and Node.js environments.
@@ -34,6 +64,8 @@ const isBrowser =
 export class VaultClient implements VaultStore {
   /** Cookie jar used in Node.js only. */
   private cookieJar: CookieJar = new CookieJar();
+  /** Max number of retries on 429 with `Retry-After`. Override for tests. */
+  public maxRetries = DEFAULT_MAX_RETRIES;
 
   constructor(private baseUrl: string) {}
 
@@ -51,16 +83,33 @@ export class VaultClient implements VaultStore {
       init.headers = headers;
     }
 
-    const response = await fetch(url, init);
+    let response: Response;
+    let attempt = 0;
+    while (true) {
+      response = await fetch(url, init);
 
-    if (!isBrowser) {
-      // getSetCookie() returns each Set-Cookie header separately, avoiding the
-      // comma-collapsing issue of Headers.get("set-cookie") which breaks on
-      // values containing commas (e.g. Expires dates).
-      const setCookieHeaders = response.headers.getSetCookie?.() ?? [];
-      for (const cookie of setCookieHeaders) {
-        await this.cookieJar.setCookie(cookie, url);
+      if (!isBrowser) {
+        // getSetCookie() returns each Set-Cookie header separately, avoiding the
+        // comma-collapsing issue of Headers.get("set-cookie") which breaks on
+        // values containing commas (e.g. Expires dates).
+        const setCookieHeaders = response.headers.getSetCookie?.() ?? [];
+        for (const cookie of setCookieHeaders) {
+          await this.cookieJar.setCookie(cookie, url);
+        }
       }
+
+      // Honor Retry-After on 429s up to `maxRetries`. Retrying inside the
+      // SDK means callers (the SPA, the seed, anything else) get correct
+      // backoff for free — no per-call retry plumbing needed.
+      if (response.status === 429 && attempt < this.maxRetries) {
+        const delayMs = parseRetryAfterMs(response.headers.get("Retry-After"));
+        if (delayMs !== null) {
+          attempt++;
+          await sleep(delayMs);
+          continue;
+        }
+      }
+      break;
     }
 
     if (!response.ok) {
@@ -91,6 +140,10 @@ export class VaultClient implements VaultStore {
     });
   }
 
+  async verify(token: string): Promise<AuthResult> {
+    return this.request<AuthResult>(`/api/auth/verify?token=${encodeURIComponent(token)}`);
+  }
+
   async login(input: LoginInput): Promise<AuthResult> {
     return this.request<AuthResult>("/api/auth/login", {
       method: "POST",
@@ -110,9 +163,26 @@ export class VaultClient implements VaultStore {
   /* ======================== Files API ======================== */
 
   async listFiles(input: Partial<ListFilesInput> = {}): Promise<ListFilesResult> {
-    const entityId = input.entityId ?? "";
-    const params = entityId ? `?entityId=${encodeURIComponent(entityId)}` : "";
-    return this.request<ListFilesResult>(`/api/files${params}`);
+    const params = new URLSearchParams();
+    if (input.entityId) params.set("entityId", input.entityId);
+    if (input.cursor) params.set("cursor", input.cursor);
+    if (input.pageSize !== undefined) params.set("pageSize", String(input.pageSize));
+    const qs = params.toString();
+    return this.request<ListFilesResult>(`/api/files${qs ? `?${qs}` : ""}`);
+  }
+
+  async searchFiles(
+    input: SearchFilesInput,
+    init: { signal?: AbortSignal } = {},
+  ): Promise<SearchFilesResult> {
+    const params = new URLSearchParams();
+    params.set("q", input.q);
+    if (input.type) params.set("type", input.type);
+    if (input.cursor) params.set("cursor", input.cursor);
+    if (input.pageSize !== undefined) params.set("pageSize", String(input.pageSize));
+    return this.request<SearchFilesResult>(`/api/files/search?${params.toString()}`, {
+      signal: init.signal,
+    });
   }
 
   async createFolder(input: CreateFolderInput): Promise<CreateFolderResult> {

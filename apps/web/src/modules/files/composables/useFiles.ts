@@ -1,20 +1,39 @@
-import { computed, type Ref } from "vue"
-import { useAsync } from "@/composables/useAsync"
+import { computed, toValue, type MaybeRefOrGetter } from "vue"
+import { useInfiniteQuery } from "@tanstack/vue-query"
 import { client as defaultClient } from "@/lib/client"
-import type { VaultStore, VaultEntry } from "@vault/sdk"
+import type { ListFilesResult, VaultEntry, VaultStore } from "@vault/sdk"
+import { filesKeys } from "../lib/queryKeys"
 
 export function useFiles(
-  entityId: Ref<string | null> | string | null,
+  entityId: MaybeRefOrGetter<string | null>,
   client: VaultStore = defaultClient,
 ) {
-  const id = () => (typeof entityId === "string" ? entityId : entityId?.value ?? null)
+  const query = useInfiniteQuery({
+    queryKey: computed(() => filesKeys.list(toValue(entityId))),
+    queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
+      client.listFiles({
+        entityId: toValue(entityId) ?? undefined,
+        cursor: pageParam,
+        pageSize: 100,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last: ListFilesResult) => last.cursor ?? undefined,
+    staleTime: 60_000,
+  })
 
-  const { data, loading, error, refresh } = useAsync(
-    () => client.listFiles({ entityId: id() ?? undefined }),
-    id,
+  const entries = computed<VaultEntry[]>(
+    () => query.data.value?.pages.flatMap((p) => p.entries) ?? [],
   )
 
-  const entries = computed<VaultEntry[]>(() => data.value?.entries ?? [])
-
-  return { entries, loading, error, refresh }
+  return {
+    entries,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isFetchingNextPage: query.isFetchingNextPage,
+    hasNextPage: query.hasNextPage,
+    fetchNextPage: query.fetchNextPage,
+    error: query.error,
+    refetch: query.refetch,
+    query,
+  }
 }

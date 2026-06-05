@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from "vue"
 import { useRouter, useRoute } from "vue-router"
 import { Lock, Eye, EyeOff, Check, Circle } from "@lucide/vue"
-import { useAuthStore } from "@/stores/auth"
+import { useResetPassword } from "../composables/useAuthMutations"
 import BrandMark from "../components/BrandMark.vue"
 import AuthCard from "../components/AuthCard.vue"
 import ErrorBanner from "../components/ErrorBanner.vue"
@@ -10,13 +10,13 @@ import { validatePassword } from "../lib/passwordRules"
 
 const router = useRouter()
 const route  = useRoute()
-const auth   = useAuthStore()
+const reset  = useResetPassword()
 
 const password            = ref("")
 const confirmPassword     = ref("")
 const showPassword        = ref(false)
 const showConfirmPassword = ref(false)
-const error               = ref("")
+const tokenError          = ref("")
 const token               = ref("")
 
 const validation     = computed(() => validatePassword(password.value))
@@ -37,22 +37,16 @@ const isValid = computed(() =>
   passwordsMatch.value,
 )
 
+const error = computed(() => tokenError.value || reset.error.value?.message || "")
+
 onMounted(() => {
   token.value = (route.query.token as string) || ""
-  if (!token.value) error.value = "Invalid or missing reset token."
+  if (!token.value) tokenError.value = "Invalid or missing reset token."
 })
 
-async function handleSubmit() {
-  error.value = ""
-  if (!token.value) { error.value = "Invalid reset token."; return }
-  if (!passwordsMatch.value) { error.value = "Passwords do not match."; return }
-  if (!validation.value.valid) { error.value = validation.value.errors[0]; return }
-  try {
-    await auth.resetPassword(token.value, password.value)
-    router.push("/login")
-  } catch (err: any) {
-    error.value = err.message || "Password reset failed."
-  }
+function handleSubmit() {
+  if (!isValid.value) return
+  reset.mutate({ token: token.value, password: password.value })
 }
 </script>
 
@@ -124,7 +118,7 @@ async function handleSubmit() {
 
         <ErrorBanner v-if="error" :message="error" />
 
-        <v-button type="submit" :loading="auth.loading" :disabled="!isValid" wide>
+        <v-button type="submit" :loading="reset.isPending.value" :disabled="!isValid" wide>
           Reset password
         </v-button>
       </form>

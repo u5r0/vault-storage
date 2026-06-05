@@ -3,8 +3,6 @@ import XHRUpload from "@uppy/xhr-upload"
 import { defineStore } from "pinia"
 import { ref, shallowRef } from "vue"
 
-// Uppy's file type generics are deeply contravariant and not useful at the UI layer.
-// We only care about name, progress, and id — use a minimal shape.
 export interface UploadFile {
   id: string
   name: string
@@ -16,15 +14,10 @@ const MAX_UPLOAD_MB = Number(import.meta.env.VITE_MAX_UPLOAD_MB ?? 100)
 export const useUploadStore = defineStore("upload", () => {
   const uppy = shallowRef<Uppy | null>(null)
   const files = ref<UploadFile[]>([])
-  const hasPending = ref(false)
-  const isUploading = ref(false)
-  const currentEntityId = ref<string | null>(null)
-
-  /**
-   * Bumped each time an upload batch completes. Routes can `watch()` this to
-   * trigger a refresh of their listings without prop-drilling callbacks.
-   */
-  const lastCompletedAt = ref(0)
+  const hasPending = shallowRef(false)
+  const isUploading = shallowRef(false)
+  const currentEntityId = shallowRef<string | null>(null)
+  const lastCompletedAt = shallowRef(0)
 
   function syncFiles(u: Uppy) {
     files.value = u.getFiles() as unknown as UploadFile[]
