@@ -11,7 +11,7 @@
     "build": "pnpm --filter @vault/web build",
     "start": "tsx apps/server/src/index.ts",
     "preview": "pnpm --filter @vault/web preview",
-    "test": "vitest run",
+    "test": "pnpm test:unit && pnpm test:integration && pnpm test:web",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "test:web": "vitest run --project web-browser",

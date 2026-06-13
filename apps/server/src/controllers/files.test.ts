@@ -401,10 +401,13 @@ describe("GET /api/files/download-url", () => {
     expect(await direct.text()).toBe("via presigned")
   })
 
-  it("404s for entries the caller does not own", async () => {
+  it("404s for entries that do not exist", async () => {
+    // Valid UUID v4 format (positions 13 = '4', 17 = '8') so it passes
+    // the Zod validator; nothing in Cosmos has this id, so the service
+    // returns 404 from the doc lookup.
     const app = getApp()
     const res = await app.request(
-      `/api/files/download-url?id=00000000-0000-0000-0000-000000000999`,
+      `/api/files/download-url?id=00000000-0000-4000-8000-000000000000`,
       { headers: { Cookie: defaultCookies } },
     )
     expect(res.status).toBe(404)

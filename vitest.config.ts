@@ -25,8 +25,8 @@ export default defineConfig({
           exclude: [
             "**/node_modules/**",
             "apps/web/src/**/*.browser.test.ts",
-            // Integration tests under lib/ use real infrastructure (RustFS,
-            // Azurite). Keep them out of the unit project.
+            // Integration tests under lib/ use real infrastructure (RustFS).
+            // Keep them out of the unit project.
             "apps/server/src/lib/**/*.integration.test.ts",
           ],
         },
@@ -36,16 +36,23 @@ export default defineConfig({
         test: {
           name: "integration",
           include: [
+            // The HTTP surface — provider-agnostic by design (everything
+            // routes through `getBlobStore()`). Tested once against the
+            // default provider (Azurite). Cross-provider confidence comes
+            // from the layered strategy: the R2BlobStore adapter test
+            // verifies the contract for R2, and a unit test on
+            // `blob-provider` verifies provider selection.
             "apps/server/src/controllers/**/*.test.ts",
+            // Adapter-level integration: R2BlobStore against RustFS.
             "apps/server/src/lib/**/*.integration.test.ts",
           ],
           globalSetup: [
-            "./apps/server/src/__setup__/azurite.global.ts",
+            "./apps/server/src/__setup__/blob.global.ts",
             "./apps/server/src/__setup__/cosmos.global.ts",
             "./apps/server/src/__setup__/mailpit.global.ts",
           ],
           setupFiles: [
-            "./apps/server/src/__setup__/azurite.env.ts",
+            "./apps/server/src/__setup__/blob.env.ts",
             "./apps/server/src/__setup__/cosmos.env.ts",
             "./apps/server/src/__setup__/mailpit.env.ts",
           ],

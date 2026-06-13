@@ -9,7 +9,6 @@ import {
   DeleteObjectsCommand,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import { Readable } from "stream"
 import type {
   BlobStore,
   BlobListItem,
@@ -20,6 +19,24 @@ import type {
   UploadUrlOptions,
   DownloadUrlOptions,
 } from "./storage"
+
+async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  for await (const chunk of stream) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : (chunk as Buffer))
+  }
+  return Buffer.concat(chunks)
+}
+
+async function iterableToBuffer(
+  iter: AsyncIterable<Uint8Array>,
+): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  for await (const chunk of iter) {
+    chunks.push(Buffer.from(chunk))
+  }
+  return Buffer.concat(chunks)
+}
 
 export type R2Config = {
   accountId: string
@@ -136,20 +153,24 @@ export class R2BlobStore implements BlobStore {
     data: Buffer | NodeJS.ReadableStream | AsyncIterable<Uint8Array>,
     options?: UploadOptions,
   ): Promise<void> {
-    let body: Buffer | Readable
-
-    if (Buffer.isBuffer(data)) {
-      body = data
-    } else if (typeof (data as any).pipe === "function") {
-      body = data as unknown as Readable
-    } else {
-      body = Readable.from(data as AsyncIterable<Uint8Array>)
-    }
+    // AWS SDK v3's flexible-checksums + chunked-streaming path requires
+    // either a pre-known Content-Length OR an AWS-specific streaming
+    // signer that non-AWS S3 implementations (RustFS, MinIO) don't always
+    // accept. For our blob sizes (capped at VITE_MAX_UPLOAD_MB), buffer
+    // the body so Content-Length is known and the request goes out as a
+    // simple PUT. True streaming for multi-GB blobs would call for
+    // @aws-sdk/lib-storage multipart upload — not needed today.
+    const body = Buffer.isBuffer(data)
+      ? data
+      : typeof (data as any).pipe === "function"
+        ? await streamToBuffer(data as NodeJS.ReadableStream)
+        : await iterableToBuffer(data as AsyncIterable<Uint8Array>)
 
     await this.client.send(new PutObjectCommand({
       Bucket: this.bucket,
       Key: path,
       Body: body,
+      ContentLength: body.length,
       ContentType: options?.contentType ?? "application/octet-stream",
     }))
   }
