@@ -6,16 +6,7 @@ Last reviewed: 2026-06-05. Items ordered by priority within each tier.
 
 ## Critical
 
-### 1. Pagination
-
-`GET /api/files` returns all entries in a folder. No limit.
-
-**Needs:**
-- Continuation token-based pagination (Cosmos DB native pattern)
-- Frontend: infinite scroll or "load more" in FileList
-- Reasonable default page size (50–100 entries)
-
-### 2. Metadata features are read-only stubs
+### 1. Metadata features are read-only stubs
 
 The backend serves `quickLinks` counts and stores `isFavorite`/`tags`/`deletedAt` fields, but there are no mutation endpoints for starring, tagging, or soft-deleting.
 
@@ -29,7 +20,7 @@ The backend serves `quickLinks` counts and stores `isFavorite`/`tags`/`deletedAt
 
 ## Functional
 
-### 3. Context menu / actions
+### 2. Context menu / actions
 
 Toolbar buttons (Properties, Tags, Star, Delete) have no click handlers. No right-click context menu.
 
@@ -38,7 +29,7 @@ Toolbar buttons (Properties, Tags, Star, Delete) have no click handlers. No righ
 - Context menu component (right-click or long-press on mobile)
 - Confirmation dialog for destructive actions (delete)
 
-### 4. Share
+### 3. Share
 
 Share button in DetailsPanel has no handler.
 
@@ -47,7 +38,7 @@ Share button in DetailsPanel has no handler.
 - Permission model (read-only link vs. collaborator access)
 - Frontend: modal with generated link + copy button
 
-### 5. Storage stats
+### 4. Storage stats
 
 AppSidebar shows hardcoded storage usage.
 
@@ -55,7 +46,7 @@ AppSidebar shows hardcoded storage usage.
 - `GET /api/files/stats` endpoint — total bytes stored, file count
 - Frontend: display real values in sidebar
 
-### 6. Mobile responsiveness
+### 5. Mobile responsiveness
 
 No hamburger menu or responsive sidebar. Desktop-only layout.
 
@@ -64,7 +55,7 @@ No hamburger menu or responsive sidebar. Desktop-only layout.
 - Responsive grid breakpoints for FileGridItem
 - Touch-friendly context actions
 
-### 7. Loading states
+### 6. Loading states
 
 Only a `<v-spinner>` during initial load. No skeleton placeholders.
 
@@ -76,25 +67,25 @@ Only a `<v-spinner>` during initial load. No skeleton placeholders.
 
 ## Nice-to-Have
 
-### 8. Keyboard shortcuts
+### 7. Keyboard shortcuts
 
 No global shortcuts.
 
 **Candidates:** `/` for search focus, `Ctrl+U` for upload, `Delete` for selected file, arrow keys for navigation.
 
-### 9. Breadcrumb navigation
+### 8. Breadcrumb navigation
 
 Currently only a "Home" button. No path breadcrumbs showing folder hierarchy.
 
-### 10. File preview
+### 9. File preview
 
 No in-app preview for images, PDFs, or text files. Downloads are the only option.
 
-### 11. Drag-to-move
+### 10. Drag-to-move
 
 Files can be dragged in to upload but cannot be dragged between folders within the app.
 
-### 12. Multi-select
+### 11. Multi-select
 
 No shift-click or ctrl-click selection for bulk actions.
 

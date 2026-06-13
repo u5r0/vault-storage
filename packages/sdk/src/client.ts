@@ -6,6 +6,7 @@ import type {
   CreateFolderResult,
   DeleteInput,
   DeleteResult,
+  DownloadUrlResult,
   ListFilesInput,
   ListFilesResult,
   LoginInput,
@@ -18,7 +19,12 @@ import type {
   ResendVerificationInput,
   SearchFilesInput,
   SearchFilesResult,
+  UploadCompleteInput,
+  UploadCompleteResult,
   UploadResult,
+  UploadUrlInput,
+  UploadUrlResult,
+  VaultEntry,
   VaultStore,
 } from "./schemas";
 
@@ -203,8 +209,82 @@ export class VaultClient implements VaultStore {
     });
   }
 
+  /**
+   * Browser-direct upload: per file, mint a presigned PUT URL, push bytes
+   * directly to the object store, then ask the server to record the entry.
+   * Bytes never cross the API server, which matters for zero-egress
+   * providers like R2.
+   *
+   * Same return shape as `uploadFiles` so callers can swap paths.
+   */
+  async uploadFilesDirect(input: { parentId?: string; files: File[] }): Promise<UploadResult> {
+    const uploaded: VaultEntry[] = [];
+    for (const file of input.files) {
+      const ticket = await this.createUploadUrl({
+        parentId: input.parentId,
+        name: file.name,
+        contentType: file.type || "application/octet-stream",
+        size: file.size,
+      });
+
+      // PUT goes to the object store, NOT the API. Cookies / API auth
+      // headers must not leak — fetch directly with no credentials.
+      // `requiredHeaders` carries provider-specific extras (e.g. Azure
+      // needs `x-ms-blob-type: BlockBlob`).
+      const putRes = await fetch(ticket.uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type || "application/octet-stream",
+          ...ticket.requiredHeaders,
+        },
+        body: file,
+      });
+      if (!putRes.ok) {
+        throw new Error(
+          `Direct upload PUT failed for ${file.name}: ${putRes.status} ${putRes.statusText}`,
+        );
+      }
+
+      const completed = await this.completeUpload({
+        blobName: ticket.blobName,
+        parentId: input.parentId,
+        name: file.name,
+        contentType: file.type || undefined,
+      });
+      uploaded.push(completed.entry);
+    }
+    return { uploaded };
+  }
+
+  async createUploadUrl(input: UploadUrlInput): Promise<UploadUrlResult> {
+    return this.request<UploadUrlResult>("/api/files/upload-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  }
+
+  async completeUpload(input: UploadCompleteInput): Promise<UploadCompleteResult> {
+    return this.request<UploadCompleteResult>("/api/files/upload-complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  }
+
   getDownloadUrl(id: string): string {
     return `${this.baseUrl}/api/files/download?id=${encodeURIComponent(id)}`;
+  }
+
+  /**
+   * Mint a short-lived presigned GET URL for browser-direct download.
+   * Useful for large files where streaming through the API would cost
+   * egress (R2) or saturate the server (Azure / proxy).
+   */
+  async createDownloadUrl(id: string): Promise<DownloadUrlResult> {
+    return this.request<DownloadUrlResult>(
+      `/api/files/download-url?id=${encodeURIComponent(id)}`,
+    );
   }
 
   async renameFile(input: RenameInput): Promise<RenameResult> {

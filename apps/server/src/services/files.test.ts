@@ -14,6 +14,9 @@ vi.mock("../db", () => ({
 
 vi.mock("../lib/azure", () => ({
   env: { maxUploadMb: 100 },
+}))
+
+vi.mock("../lib/blob-provider", () => ({
   getBlobStore: vi.fn(),
 }))
 
@@ -269,7 +272,7 @@ describe("FilesService", () => {
   describe("delete", () => {
     it("deletes file and blob", async () => {
       const { db } = await import("../db")
-      const { getBlobStore } = await import("../lib/azure")
+      const { getBlobStore } = await import("../lib/blob-provider")
 
       const mockStore = {
         exists: vi.fn().mockResolvedValue(true),
@@ -297,7 +300,7 @@ describe("FilesService", () => {
 
     it("deletes folder and cascades to children", async () => {
       const { db } = await import("../db")
-      const { getBlobStore } = await import("../lib/azure")
+      const { getBlobStore } = await import("../lib/blob-provider")
 
       const mockStore = {
         exists: vi.fn().mockResolvedValue(true),
@@ -431,7 +434,7 @@ describe("FilesService", () => {
 
     it("upload: Cosmos 429 from items.create → HTTPException 429", async () => {
       const { db } = await import("../db")
-      const { getBlobStore } = await import("../lib/azure")
+      const { getBlobStore } = await import("../lib/blob-provider")
 
       vi.mocked(getBlobStore).mockResolvedValue({
         upload: vi.fn().mockResolvedValue(undefined),
@@ -453,7 +456,7 @@ describe("FilesService", () => {
     })
 
     it("upload: blob 429 (statusCode) → HTTPException 429", async () => {
-      const { getBlobStore } = await import("../lib/azure")
+      const { getBlobStore } = await import("../lib/blob-provider")
       const blobErr = new Error("throttled") as Error & { statusCode?: number }
       blobErr.statusCode = 429
       vi.mocked(getBlobStore).mockResolvedValue({
@@ -474,7 +477,7 @@ describe("FilesService", () => {
 
     it("upload: unknown failure → HTTPException 500 mentioning the filename", async () => {
       const { db } = await import("../db")
-      const { getBlobStore } = await import("../lib/azure")
+      const { getBlobStore } = await import("../lib/blob-provider")
       vi.mocked(getBlobStore).mockResolvedValue({
         upload: vi.fn().mockResolvedValue(undefined),
         download: vi.fn(),
@@ -523,7 +526,7 @@ describe("FilesService", () => {
 
     it("delete: Cosmos 429 on delete → HTTPException 429", async () => {
       const { db } = await import("../db")
-      const { getBlobStore } = await import("../lib/azure")
+      const { getBlobStore } = await import("../lib/blob-provider")
       vi.mocked(getBlobStore).mockResolvedValue({
         exists: vi.fn().mockResolvedValue(false),
         delete: vi.fn(),

@@ -1,15 +1,25 @@
-import type { ContainerClient } from "@azure/storage-blob"
-import type { 
-  BlobStore, 
-  BlobListItem, 
-  BlobMetadata, 
-  UploadOptions, 
-  DownloadResult 
+import {
+  BlobSASPermissions,
+  generateBlobSASQueryParameters,
+  type ContainerClient,
+} from "@azure/storage-blob"
+import type {
+  BlobStore,
+  BlobListItem,
+  BlobMetadata,
+  UploadOptions,
+  DownloadResult,
+  PresignedUrl,
+  UploadUrlOptions,
+  DownloadUrlOptions,
 } from "./storage"
 import { Readable } from "stream"
+import { resolveAccountCredentials, env as azureEnv } from "./azure"
+import { StorageSharedKeyCredential } from "@azure/storage-blob"
 
 /**
- * Azure Blob Storage adapter implementing the BlobStore interface
+ * Azure Blob Storage adapter implementing the BlobStore interface.
+ * Constructor signature is unchanged — only takes a ContainerClient.
  */
 export class AzureBlobStore implements BlobStore {
   constructor(private container: ContainerClient) {}
@@ -17,20 +27,13 @@ export class AzureBlobStore implements BlobStore {
   async *list(prefix: string): AsyncIterable<BlobListItem> {
     for await (const item of this.container.listBlobsByHierarchy("/", { prefix })) {
       if (item.kind === "prefix") {
-        // Folder
         const fullPath = item.name.replace(/\/$/, "")
         const name = fullPath.slice(prefix.length)
         if (!name) continue
-
-        yield {
-          kind: "folder",
-          path: fullPath,
-        }
+        yield { kind: "folder", path: fullPath }
       } else {
-        // File
         const name = item.name.slice(prefix.length)
         if (!name) continue
-
         const props = item.properties
         yield {
           kind: "file",
@@ -51,6 +54,23 @@ export class AzureBlobStore implements BlobStore {
     return blob.exists()
   }
 
+  async stat(path: string): Promise<BlobMetadata | null> {
+    const blob = this.container.getBlobClient(path)
+    try {
+      const props = await blob.getProperties()
+      return {
+        name: path.split("/").pop() ?? "file",
+        path,
+        size: Number(props.contentLength ?? 0),
+        contentType: props.contentType ?? null,
+        modifiedAt: props.lastModified ? new Date(props.lastModified) : null,
+      }
+    } catch (err: any) {
+      if (err.statusCode === 404) return null
+      throw err
+    }
+  }
+
   async upload(
     path: string,
     data: Buffer | NodeJS.ReadableStream | AsyncIterable<Uint8Array>,
@@ -64,19 +84,16 @@ export class AzureBlobStore implements BlobStore {
       },
     }
 
-    // Buffer: upload directly
     if (Buffer.isBuffer(data)) {
       await block.uploadData(data, headers)
       return
     }
 
-    // Node stream (has pipe)
     if (typeof (data as any).pipe === "function") {
       await block.uploadStream(data as any, 4 * 1024 * 1024, 5, headers)
       return
     }
 
-    // AsyncIterable<Uint8Array>: convert to Node stream
     const nodeStream = Readable.from(data as AsyncIterable<Uint8Array>)
     await block.uploadStream(nodeStream, 4 * 1024 * 1024, 5, headers)
   }
@@ -105,7 +122,6 @@ export class AzureBlobStore implements BlobStore {
   async copy(fromPath: string, toPath: string): Promise<void> {
     const source = this.container.getBlobClient(fromPath)
     const target = this.container.getBlobClient(toPath)
-
     const poller = await target.beginCopyFromURL(source.url)
     await poller.pollUntilDone()
   }
@@ -122,5 +138,64 @@ export class AzureBlobStore implements BlobStore {
       deleted++
     }
     return deleted
+  }
+
+  async createUploadUrl(path: string, options?: UploadUrlOptions): Promise<PresignedUrl> {
+    const expiresMinutes = options?.expiresMinutes ?? 15
+    const { accountName, accountKey } = resolveAccountCredentials()
+    const credential = new StorageSharedKeyCredential(accountName, accountKey)
+    const block = this.container.getBlockBlobClient(path)
+
+    const startsOn = new Date(Date.now() - 60_000)
+    const expiresOn = new Date(Date.now() + expiresMinutes * 60 * 1000)
+
+    const permissions = new BlobSASPermissions()
+    permissions.create = true
+    permissions.write = true
+
+    const sas = generateBlobSASQueryParameters(
+      {
+        containerName: azureEnv.containerName,
+        blobName: path,
+        permissions,
+        startsOn,
+        expiresOn,
+      },
+      credential,
+    ).toString()
+
+    return {
+      url: `${block.url}?${sas}`,
+      expiresAt: expiresOn,
+      // Azure Put Blob (single shot) requires this header on every PUT.
+      // The SDK passes it through to fetch(); R2/S3 ignore it.
+      requiredHeaders: { "x-ms-blob-type": "BlockBlob" },
+    }
+  }
+
+  async createDownloadUrl(path: string, options?: DownloadUrlOptions): Promise<PresignedUrl> {
+    const expiresMinutes = options?.expiresMinutes ?? 60
+    const { accountName, accountKey } = resolveAccountCredentials()
+    const credential = new StorageSharedKeyCredential(accountName, accountKey)
+    const blob = this.container.getBlobClient(path)
+
+    const startsOn = new Date(Date.now() - 60_000)
+    const expiresOn = new Date(Date.now() + expiresMinutes * 60 * 1000)
+
+    const permissions = new BlobSASPermissions()
+    permissions.read = true
+
+    const sas = generateBlobSASQueryParameters(
+      {
+        containerName: azureEnv.containerName,
+        blobName: path,
+        permissions,
+        startsOn,
+        expiresOn,
+      },
+      credential,
+    ).toString()
+
+    return { url: `${blob.url}?${sas}`, expiresAt: expiresOn }
   }
 }

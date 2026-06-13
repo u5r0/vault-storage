@@ -6,4 +6,4 @@ import { inject } from "vitest"
  */
 process.env.SMTP_URL   = inject("smtpUrl")
 process.env.EMAIL_FROM = "noreply@vault.test"
-process.env.APP_URL    = "http://localhost:5173"
+process.env.APP_URL    = "http://localhost:3000"

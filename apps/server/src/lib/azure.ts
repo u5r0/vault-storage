@@ -1,9 +1,7 @@
 import {
   BlobServiceClient,
-  BlobSASPermissions,
   StorageSharedKeyCredential,
   type ContainerClient,
-  generateBlobSASQueryParameters,
 } from "@azure/storage-blob"
 import { AzureBlobStore } from "./azure-blob-store"
 import type { BlobStore } from "./storage"
@@ -24,7 +22,6 @@ export const env = {
 
 let _container: ContainerClient | null = null
 let _ready: Promise<ContainerClient> | null = null
-let _credential: StorageSharedKeyCredential | null = null
 
 function parseConnectionString(connectionString: string): {
   accountName: string
@@ -51,6 +48,7 @@ function parseConnectionString(connectionString: string): {
 
 /**
  * Resolve account name + key from explicit env vars or a connection string.
+ * Used by `AzureBlobStore` to mint SAS tokens for presigned URLs.
  */
 export function resolveAccountCredentials(): { accountName: string; accountKey: string } {
   if (env.accountName && env.accountKey) {
@@ -65,13 +63,6 @@ export function resolveAccountCredentials(): { accountName: string; accountKey: 
     "Missing Azure credentials. Set AZURE_STORAGE_CONNECTION_STRING " +
       "or AZURE_STORAGE_ACCOUNT_NAME + AZURE_STORAGE_ACCOUNT_KEY.",
   )
-}
-
-function getSharedKeyCredential(): StorageSharedKeyCredential {
-  if (_credential) return _credential
-  const { accountName, accountKey } = resolveAccountCredentials()
-  _credential = new StorageSharedKeyCredential(accountName, accountKey)
-  return _credential
 }
 
 /**
@@ -100,8 +91,11 @@ function buildServiceClient(): BlobServiceClient {
 /**
  * Lazy-initialize the container client. The container is created on
  * first use if it doesn't already exist (private access by default).
+ *
+ * Internal — only `getBlobStore` (below) needs this. Consumers should
+ * import `getBlobStore` from `./blob-provider`.
  */
-export function getContainer(): Promise<ContainerClient> {
+function getContainer(): Promise<ContainerClient> {
   if (_container) return Promise.resolve(_container)
   if (_ready) return _ready
 
@@ -117,39 +111,6 @@ export function getContainer(): Promise<ContainerClient> {
 }
 
 /**
- * Generate a SAS URL for a specific blob path allowing client-side uploads.
- * Uses the SDK blob URL so Azurite/custom endpoints work automatically.
- */
-export async function generateUploadSAS(
-  path: string,
-  expiresMinutes = 15,
-): Promise<{ url: string; token: string }> {
-  const container = await getContainer()
-  const credential = getSharedKeyCredential()
-  const block = container.getBlockBlobClient(path)
-
-  const startsOn = new Date(Date.now() - 60_000)
-  const expiresOn = new Date(Date.now() + expiresMinutes * 60 * 1000)
-
-  const permissions = new BlobSASPermissions()
-  permissions.create = true
-  permissions.write = true
-
-  const sas = generateBlobSASQueryParameters(
-    {
-      containerName: env.containerName,
-      blobName: path,
-      permissions,
-      startsOn,
-      expiresOn,
-    },
-    credential,
-  ).toString()
-
-  return { url: `${block.url}?${sas}`, token: sas }
-}
-
-/**
  * True if the server has the credentials it needs to talk to Azure.
  * Used by the /api/health endpoint to surface configuration issues.
  */
@@ -158,7 +119,11 @@ export function isConfigured(): boolean {
 }
 
 /**
- * Get the BlobStore instance (abstraction over Azure Blob Storage)
+ * Get the BlobStore instance (abstraction over Azure Blob Storage).
+ *
+ * NOTE: most consumers should import `getBlobStore` from `./blob-provider`
+ * instead — it dispatches to the correct backend based on `BLOB_PROVIDER`.
+ * This export remains as the Azure-specific factory used by `blob-provider`.
  */
 export async function getBlobStore(): Promise<BlobStore> {
   const container = await getContainer()

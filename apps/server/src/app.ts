@@ -2,7 +2,8 @@ import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { logger } from "hono/logger"
 import { HTTPException } from "hono/http-exception"
-import { env, isConfigured } from "./lib/azure"
+import { env } from "./lib/azure"
+import { isBlobConfigured } from "./lib/blob-provider"
 import { createIpLimiter, rateLimitsDisabled } from "./lib/rate-limiter"
 import type { RateLimiterRes } from "rate-limiter-flexible"
 import files from "./controllers/files"
@@ -50,7 +51,7 @@ export function createApp(opts: { withLogger?: boolean } = {}) {
   app.get("/api/health", (c) =>
     c.json({
       status: "ok",
-      azureConfigured: isConfigured(),
+      blobConfigured: isBlobConfigured(),
       container: env.containerName,
       // Surfaced so dev tooling (the seed, smoke tests) can verify the
       // flag is actually live in the running process — `tsx watch` does

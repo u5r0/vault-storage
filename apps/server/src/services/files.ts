@@ -2,7 +2,8 @@ import { HTTPException } from "hono/http-exception"
 import { Readable } from "stream"
 import { v4 as uuidv4 } from "uuid"
 import { db } from "../db"
-import { env, getBlobStore } from "../lib/azure"
+import { getBlobStore } from "../lib/blob-provider"
+import { env } from "../lib/azure"
 import type { VaultEntry } from "@vault/sdk"
 
 function isSafeName(name: string): boolean {
@@ -279,6 +280,169 @@ export class FilesService {
 
     const { stream, metadata } = await store.download(resource.blobName)
     return { stream, metadata, name: resource.name }
+  }
+
+  /**
+   * Step 1 of browser-direct upload. Mints a presigned PUT URL bound to a
+   * server-generated blob key (UUID); no Cosmos write happens here. The
+   * client PUTs bytes to `uploadUrl`, then calls `completeUpload` to record
+   * the entry.
+   *
+   * Validation:
+   *   - Filename must pass `isSafeName`.
+   *   - Declared size must fit the per-file limit; the actual blob size is
+   *     re-checked in `completeUpload` (a malicious client can ignore the
+   *     declared value, so server-side trust comes from `stat()` afterward).
+   */
+  async createUploadUrl(
+    parentId: string | null,
+    name: string,
+    contentType: string,
+    size: number,
+    _ownerId: string,
+  ): Promise<{ blobName: string; uploadUrl: string; expiresAt: Date; requiredHeaders: Record<string, string> }> {
+    if (!isSafeName(name)) throw new HTTPException(400, { message: `Invalid filename: ${name}` })
+
+    const limit = env.maxUploadMb * 1024 * 1024
+    if (size > limit) {
+      throw new HTTPException(413, { message: `File "${name}" exceeds ${env.maxUploadMb}MB limit` })
+    }
+
+    // Parent-ownership check is a future hardening step; today the API
+    // does not validate parent across users (matches `upload` and other
+    // endpoints — the entire workspace is single-tenant per user).
+    void parentId
+
+    const store = await getBlobStore()
+    const id = uuidv4()
+    const blobName = `vault/blobs/${id}`
+
+    try {
+      const presigned = await store.createUploadUrl(blobName, {
+        contentType: contentType || "application/octet-stream",
+        expiresMinutes: 15,
+      })
+      return {
+        blobName,
+        uploadUrl: presigned.url,
+        expiresAt: presigned.expiresAt,
+        requiredHeaders: presigned.requiredHeaders ?? {},
+      }
+    } catch (err) {
+      rethrowBackendError(err, `Failed to create upload URL for ${name}`)
+    }
+  }
+
+  /**
+   * Step 2 of browser-direct upload. Verifies the blob exists at the
+   * server-issued path, trusts the storage `stat()` for size/contentType
+   * (not the client claim), and creates the Cosmos entry.
+   *
+   * Idempotent: the entry id is derived from `blobName` so re-calling with
+   * the same blobName produces a 409 from Cosmos which we surface as
+   * "already complete" by returning the existing entry.
+   *
+   * If the actual size exceeds the per-file limit (client lied), the blob
+   * is deleted and a 413 is thrown.
+   */
+  async completeUpload(
+    blobName: string,
+    parentId: string | null,
+    name: string,
+    contentTypeHint: string | undefined,
+    ownerId: string,
+  ): Promise<VaultEntry> {
+    if (!isSafeName(name)) throw new HTTPException(400, { message: `Invalid filename: ${name}` })
+
+    // Blob keys we mint are `vault/blobs/<uuid>`; reject anything that
+    // doesn't fit the pattern so a forged blobName can't slip an entry
+    // pointing at someone else's data.
+    const match = /^vault\/blobs\/([0-9a-f-]{36})$/.exec(blobName)
+    if (!match) throw new HTTPException(400, { message: "Invalid blobName" })
+    const id = match[1]
+
+    const store = await getBlobStore()
+
+    let meta
+    try {
+      meta = await store.stat(blobName)
+    } catch (err) {
+      rethrowBackendError(err, `Failed to stat ${blobName}`)
+    }
+    if (!meta) throw new HTTPException(404, { message: "Upload not found — PUT to uploadUrl first" })
+
+    const limit = env.maxUploadMb * 1024 * 1024
+    if (meta.size > limit) {
+      // Reject and clean up — client uploaded more than declared.
+      await store.delete(blobName).catch(() => {})
+      throw new HTTPException(413, {
+        message: `Uploaded blob exceeds ${env.maxUploadMb}MB limit`,
+      })
+    }
+
+    const contentType = contentTypeHint || meta.contentType || "application/octet-stream"
+    const createdAt = new Date().toISOString()
+
+    const doc = {
+      id,
+      ownerId,
+      parentId: parentId ?? null,
+      name,
+      type: "file",
+      size: meta.size,
+      contentType,
+      blobName,
+      isFavorite: "0",
+      tags: null,
+      deletedAt: null,
+      createdAt,
+      modifiedAt: createdAt,
+    }
+
+    try {
+      await db.items.create(doc)
+    } catch (err: any) {
+      // 409 Conflict → entry already exists for this blob (idempotent retry).
+      if (err?.code === 409 || err?.statusCode === 409) {
+        const { resource } = await db.item(id).read()
+        if (resource && resource.ownerId === ownerId) {
+          return this.toVaultEntry(resource)
+        }
+      }
+      rethrowBackendError(err, `Failed to record uploaded file ${name}`)
+    }
+
+    return this.toVaultEntry(doc)
+  }
+
+  async createDownloadUrl(id: string, ownerId: string): Promise<{ url: string; expiresAt: Date }> {
+    const { resource } = await db.item(id).read()
+    if (!resource) throw new HTTPException(404, { message: "File not found" })
+    checkOwner(resource, ownerId)
+    if (!resource.blobName) throw new HTTPException(400, { message: "Not a file" })
+
+    const store = await getBlobStore()
+    const meta = await store.stat(resource.blobName)
+    if (!meta) throw new HTTPException(404, { message: "File blob not found" })
+
+    return store.createDownloadUrl(resource.blobName, { expiresMinutes: 15 })
+  }
+
+  private toVaultEntry(r: any): VaultEntry {
+    return {
+      id: r.id,
+      ownerId: r.ownerId ?? null,
+      parentId: r.parentId ?? null,
+      name: r.name,
+      type: r.type,
+      size: r.size ?? 0,
+      contentType: r.contentType ?? null,
+      blobUrl: r.blobName ?? null,
+      isFavorite: r.isFavorite === "1",
+      tags: r.tags ? JSON.parse(r.tags) : [],
+      createdAt: r.createdAt,
+      modifiedAt: r.modifiedAt ?? null,
+    } as VaultEntry
   }
 
   async rename(id: string, name: string, ownerId: string): Promise<void> {

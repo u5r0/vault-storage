@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from "vitest"
-import type { ListFilesResult, VaultEntry } from "@vault/sdk"
+import type {
+  ListFilesResult,
+  UploadUrlResult,
+  UploadCompleteResult,
+  DownloadUrlResult,
+  VaultEntry,
+} from "@vault/sdk"
 import { useFilesFixture, parseCookies } from "../__setup__/fixtures"
 
 /**
@@ -200,6 +206,208 @@ describe("GET /api/files/download", () => {
     expect(res.status).toBe(200)
     expect(res.headers.get("Content-Type")).toBe("text/plain")
     expect(await res.text()).toBe("bonjour")
+  })
+})
+
+/**
+ * Two-step direct upload: client gets a presigned PUT URL, ships bytes
+ * straight to object storage, then asks the server to record the entry.
+ * Same end-state as POST /upload (one Cosmos doc, blob in storage), but
+ * the API process never touches the file body. See ADR 0021.
+ */
+describe("POST /api/files/upload-url + /upload-complete", () => {
+  async function mintUploadUrl(name: string, size: number, contentType = "text/plain") {
+    const app = getApp()
+    const res = await app.request("/api/files/upload-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: defaultCookies },
+      body: JSON.stringify({ parentId: null, name, contentType, size }),
+    })
+    expect(res.status).toBe(201)
+    return (await res.json()) as UploadUrlResult
+  }
+
+  it("round-trips a direct upload end-to-end", async () => {
+    const body = "direct upload payload"
+    const ticket = await mintUploadUrl("direct.txt", body.length)
+    expect(ticket.blobName).toMatch(/^vault\/blobs\/[0-9a-f-]{36}$/)
+    expect(ticket.uploadUrl).toContain("?")
+    expect(new Date(ticket.expiresAt).getTime()).toBeGreaterThan(Date.now())
+
+    // PUT goes straight to Azurite — the API never sees these bytes.
+    const putRes = await fetch(ticket.uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "text/plain",
+        ...ticket.requiredHeaders,
+      },
+      body,
+    })
+    expect(putRes.ok).toBe(true)
+
+    const app = getApp()
+    const completeRes = await app.request("/api/files/upload-complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: defaultCookies },
+      body: JSON.stringify({
+        blobName: ticket.blobName,
+        parentId: null,
+        name: "direct.txt",
+        contentType: "text/plain",
+      }),
+    })
+    expect(completeRes.status).toBe(201)
+    const { entry } = (await completeRes.json()) as UploadCompleteResult
+    expect(entry).toMatchObject({
+      name: "direct.txt",
+      type: "file",
+      size: body.length,
+      contentType: "text/plain",
+    })
+
+    // Visible in the listing exactly like a server-proxied upload.
+    const list = await listRoot()
+    expect(list.entries.find((e) => e.name === "direct.txt")).toBeDefined()
+  })
+
+  it("trusts storage stat() for size — server records the actual blob size", async () => {
+    // Client lies about size in upload-url (declares 1 byte) but uploads
+    // many. The server should record the real size from stat(), not the
+    // declared one. Limit isn't tripped here — that's a separate test.
+    const body = "actual contents are larger than declared"
+    const ticket = await mintUploadUrl("size-truth.txt", 1)
+
+    await fetch(ticket.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": "text/plain", ...ticket.requiredHeaders },
+      body,
+    })
+
+    const app = getApp()
+    const completeRes = await app.request("/api/files/upload-complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: defaultCookies },
+      body: JSON.stringify({
+        blobName: ticket.blobName,
+        parentId: null,
+        name: "size-truth.txt",
+      }),
+    })
+    expect(completeRes.status).toBe(201)
+    const { entry } = (await completeRes.json()) as UploadCompleteResult
+    expect(entry.size).toBe(body.length)
+  })
+
+  it("is idempotent — replaying upload-complete returns the same entry", async () => {
+    const body = "retry me"
+    const ticket = await mintUploadUrl("idempotent.txt", body.length)
+    await fetch(ticket.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": "text/plain", ...ticket.requiredHeaders },
+      body,
+    })
+
+    const app = getApp()
+    const payload = JSON.stringify({
+      blobName: ticket.blobName,
+      parentId: null,
+      name: "idempotent.txt",
+      contentType: "text/plain",
+    })
+    const headers = { "Content-Type": "application/json", Cookie: defaultCookies }
+
+    const first = (await (await app.request("/api/files/upload-complete", {
+      method: "POST",
+      headers,
+      body: payload,
+    })).json()) as UploadCompleteResult
+    const second = (await (await app.request("/api/files/upload-complete", {
+      method: "POST",
+      headers,
+      body: payload,
+    })).json()) as UploadCompleteResult
+
+    expect(second.entry.id).toBe(first.entry.id)
+    const list = await listRoot()
+    const matches = list.entries.filter((e) => e.name === "idempotent.txt")
+    expect(matches).toHaveLength(1)
+  })
+
+  it("rejects upload-url for invalid filenames (400)", async () => {
+    const app = getApp()
+    const res = await app.request("/api/files/upload-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: defaultCookies },
+      body: JSON.stringify({
+        parentId: null,
+        name: "bad/name.txt",
+        contentType: "text/plain",
+        size: 10,
+      }),
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it("rejects upload-complete for blobNames not minted by the server (400)", async () => {
+    const app = getApp()
+    const res = await app.request("/api/files/upload-complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: defaultCookies },
+      body: JSON.stringify({
+        blobName: "../../etc/passwd",
+        parentId: null,
+        name: "evil.txt",
+        contentType: "text/plain",
+      }),
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it("rejects upload-complete when no blob was actually uploaded (404)", async () => {
+    // Mint a URL but never PUT — the server should refuse to record it.
+    const ticket = await mintUploadUrl("ghost.txt", 5)
+    const app = getApp()
+    const res = await app.request("/api/files/upload-complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: defaultCookies },
+      body: JSON.stringify({
+        blobName: ticket.blobName,
+        parentId: null,
+        name: "ghost.txt",
+        contentType: "text/plain",
+      }),
+    })
+    expect(res.status).toBe(404)
+  })
+})
+
+describe("GET /api/files/download-url", () => {
+  it("mints a presigned URL that returns the original bytes", async () => {
+    const { uploaded } = await uploadText(null, "presigned.txt", "via presigned")
+    const fileId = uploaded[0].id
+
+    const app = getApp()
+    const res = await app.request(`/api/files/download-url?id=${fileId}`, {
+      headers: { Cookie: defaultCookies },
+    })
+    expect(res.status).toBe(200)
+    const { url, expiresAt } = (await res.json()) as DownloadUrlResult
+    expect(url).toContain("?")
+    expect(new Date(expiresAt).getTime()).toBeGreaterThan(Date.now())
+
+    // Browser-direct fetch — bypasses the API.
+    const direct = await fetch(url)
+    expect(direct.ok).toBe(true)
+    expect(await direct.text()).toBe("via presigned")
+  })
+
+  it("404s for entries the caller does not own", async () => {
+    const app = getApp()
+    const res = await app.request(
+      `/api/files/download-url?id=00000000-0000-0000-0000-000000000999`,
+      { headers: { Cookie: defaultCookies } },
+    )
+    expect(res.status).toBe(404)
   })
 })
 

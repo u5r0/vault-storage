@@ -105,6 +105,69 @@ export const DeleteBody = z.object({
 });
 export type DeleteInput = z.infer<typeof DeleteBody>;
 
+/* ── Direct upload (presigned PUT) ─────────────────────────────────────────
+ * Two-step browser → object-store upload that keeps bytes off the API server.
+ *
+ *   1. POST /api/files/upload-url    → server mints a presigned PUT URL
+ *                                      bound to a server-chosen blob key.
+ *   2. (browser) PUT bytes to that URL.
+ *   3. POST /api/files/upload-complete → server HEADs the blob, validates the
+ *                                        actual size, and creates the entry.
+ *
+ * Replaces the single-step `/sas` flow described in ADR 0006, which assumed
+ * the object store was the source of truth for file listings. With Cosmos
+ * as the source of truth (entries keyed by UUID), a separate complete step
+ * is required to record the entry. See `services/files.ts`.
+ */
+export const UploadUrlBody = z.object({
+  parentId: z.uuid().nullable().optional(),
+  name: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(200),
+  /** Client-declared size in bytes — checked again post-upload via stat(). */
+  size: z.number().int().nonnegative(),
+});
+export type UploadUrlInput = z.infer<typeof UploadUrlBody>;
+
+export const UploadUrlResponse = z.object({
+  /** Server-generated blob key (also the future entry id). Echoed on complete. */
+  blobName: z.string(),
+  uploadUrl: z.url(),
+  /** ISO 8601 timestamp; the URL is rejected after this. */
+  expiresAt: z.string(),
+  /**
+   * Headers the browser must include on the PUT. Azure requires
+   * `x-ms-blob-type: BlockBlob`; R2/S3 returns this empty.
+   */
+  requiredHeaders: z.record(z.string(), z.string()).default({}),
+});
+export type UploadUrlResult = z.infer<typeof UploadUrlResponse>;
+
+export const UploadCompleteBody = z.object({
+  blobName: z.string().min(1),
+  parentId: z.uuid().nullable().optional(),
+  name: z.string().min(1).max(255),
+  /** Optional override; server uses stat() if omitted or to validate. */
+  contentType: z.string().min(1).max(200).optional(),
+});
+export type UploadCompleteInput = z.infer<typeof UploadCompleteBody>;
+
+export const UploadCompleteResponse = z.object({
+  entry: VaultEntrySchema,
+});
+export type UploadCompleteResult = z.infer<typeof UploadCompleteResponse>;
+
+/* ── Direct download (presigned GET) ───────────────────────────────────── */
+export const DownloadUrlQuery = z.object({
+  id: z.uuid(),
+});
+export type DownloadUrlInput = z.infer<typeof DownloadUrlQuery>;
+
+export const DownloadUrlResponse = z.object({
+  url: z.url(),
+  expiresAt: z.string(),
+});
+export type DownloadUrlResult = z.infer<typeof DownloadUrlResponse>;
+
 /* ======================== Response schemas ======================== */
 
 export const ListFilesResponse = z.object({
@@ -188,7 +251,16 @@ export interface VaultStore {
   ): Promise<SearchFilesResult>;
   createFolder(input: CreateFolderInput): Promise<CreateFolderResult>;
   uploadFiles(input: { parentId?: string; files: File[] }): Promise<UploadResult>;
+  /**
+   * Browser-direct upload: bytes go straight to object storage via a
+   * presigned URL, then the server records the entry. Same result shape
+   * as `uploadFiles` so callers can switch paths transparently.
+   */
+  uploadFilesDirect(input: { parentId?: string; files: File[] }): Promise<UploadResult>;
+  createUploadUrl(input: UploadUrlInput): Promise<UploadUrlResult>;
+  completeUpload(input: UploadCompleteInput): Promise<UploadCompleteResult>;
   getDownloadUrl(id: string): string;
+  createDownloadUrl(id: string): Promise<DownloadUrlResult>;
   renameFile(input: RenameInput): Promise<RenameResult>;
   moveFile(input: MoveInput): Promise<MoveResult>;
   deleteFile(input: DeleteInput): Promise<DeleteResult>;

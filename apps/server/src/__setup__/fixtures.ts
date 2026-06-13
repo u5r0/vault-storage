@@ -35,11 +35,12 @@ export async function setupDb() {
 }
 
 /**
- * Setup the blob store instance
+ * Setup the blob store instance — uses the provider abstraction so the
+ * fixture works for both Azure (Azurite) and R2 (RustFS) test runs.
  */
 export async function setupBlobStore() {
   if (!blobStore) {
-    const { getBlobStore } = await import('../lib/azure')
+    const { getBlobStore } = await import('../lib/blob-provider')
     blobStore = await getBlobStore()
   }
   return blobStore

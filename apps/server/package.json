@@ -9,6 +9,8 @@
     "seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1068.0",
+    "@aws-sdk/s3-request-presigner": "^3.1068.0",
     "@azure/cosmos": "^4.9.3",
     "@azure/storage-blob": "^12.31.0",
     "@hono/node-server": "^2.0.1",

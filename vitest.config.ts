@@ -22,14 +22,23 @@ export default defineConfig({
             "apps/web/src/**/*.test.ts",
             "packages/**/*.test.ts",
           ],
-          exclude: ["**/node_modules/**", "apps/web/src/**/*.browser.test.ts"],
+          exclude: [
+            "**/node_modules/**",
+            "apps/web/src/**/*.browser.test.ts",
+            // Integration tests under lib/ use real infrastructure (RustFS,
+            // Azurite). Keep them out of the unit project.
+            "apps/server/src/lib/**/*.integration.test.ts",
+          ],
         },
       },
       {
         extends: true,
         test: {
           name: "integration",
-          include: ["apps/server/src/controllers/**/*.test.ts"],
+          include: [
+            "apps/server/src/controllers/**/*.test.ts",
+            "apps/server/src/lib/**/*.integration.test.ts",
+          ],
           globalSetup: [
             "./apps/server/src/__setup__/azurite.global.ts",
             "./apps/server/src/__setup__/cosmos.global.ts",

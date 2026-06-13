@@ -15,6 +15,9 @@ import {
   RenameBody,
   MoveBody,
   DeleteBody,
+  UploadUrlBody,
+  UploadCompleteBody,
+  DownloadUrlQuery,
 } from "@vault/sdk"
 import { filesService } from "../services/files"
 
@@ -64,6 +67,23 @@ files.get("/download", userRateLimit(readLimiter), async (c) => {
   })
 })
 
+/**
+ * Mint a presigned GET URL so the browser can fetch the blob directly
+ * from object storage (zero egress through this server). Auth happens here;
+ * the URL itself is short-lived (15 min) and unauthenticated.
+ */
+files.get(
+  "/download-url",
+  userRateLimit(readLimiter),
+  zValidator("query", DownloadUrlQuery),
+  async (c) => {
+    const { id } = c.req.valid("query")
+    const ownerId = (c as any).get("userId") as string
+    const { url, expiresAt } = await filesService.createDownloadUrl(id, ownerId)
+    return c.json({ url, expiresAt: expiresAt.toISOString() })
+  },
+)
+
 files.get("/quick-links", userRateLimit(readLimiter), async (c) => {
   const ownerId = (c as any).get("userId") as string
   const counts = await filesService.quickLinks(ownerId)
@@ -104,6 +124,66 @@ files.post("/upload", userRateLimit(writeLimiter), async (c) => {
   const uploaded = await filesService.upload(list, parentId, ownerId)
   return c.json({ uploaded }, 201)
 })
+
+/**
+ * Step 1 of browser-direct upload — mints a presigned PUT URL bound to a
+ * server-generated blob key. No Cosmos write happens here; the entry is
+ * recorded by `/upload-complete` after the client successfully PUTs.
+ *
+ * Charges the write limiter so this can't be abused as an oracle.
+ */
+files.post(
+  "/upload-url",
+  userRateLimit(writeLimiter),
+  zValidator("json", UploadUrlBody),
+  async (c) => {
+    const { parentId, name, contentType, size } = c.req.valid("json")
+    const ownerId = (c as any).get("userId") as string
+    const { blobName, uploadUrl, expiresAt, requiredHeaders } =
+      await filesService.createUploadUrl(parentId ?? null, name, contentType, size, ownerId)
+    return c.json(
+      {
+        blobName,
+        uploadUrl,
+        expiresAt: expiresAt.toISOString(),
+        requiredHeaders,
+      },
+      201,
+    )
+  },
+)
+
+/**
+ * Step 2 of browser-direct upload — verifies the blob is in storage,
+ * checks its actual size against the per-file limit, and creates the
+ * Cosmos entry. Idempotent on `blobName`.
+ *
+ * Charges the volumetric limiter by actual size so direct uploads are
+ * accounted for the same as proxied uploads.
+ */
+files.post(
+  "/upload-complete",
+  userRateLimit(writeLimiter),
+  zValidator("json", UploadCompleteBody),
+  async (c) => {
+    const { blobName, parentId, name, contentType } = c.req.valid("json")
+    const ownerId = (c as any).get("userId") as string
+    const entry = await filesService.completeUpload(
+      blobName,
+      parentId ?? null,
+      name,
+      contentType,
+      ownerId,
+    )
+
+    if (entry.size > 0) {
+      const reject = await consumeUserPoints(volumetricLimiter, c, entry.size)
+      if (reject) return reject
+    }
+
+    return c.json({ entry }, 201)
+  },
+)
 
 files.patch("/rename", userRateLimit(writeLimiter), zValidator("json", RenameBody), async (c) => {
   const { id, name } = c.req.valid("json")

@@ -66,9 +66,12 @@ const ROUTE_ORDER = [
   "GET /",
   "GET /search",
   "GET /download",
+  "GET /download-url",
   "GET /quick-links",
   "POST /folder",
   "POST /upload",
+  "POST /upload-url",
+  "POST /upload-complete",
   "PATCH /rename",
   "PATCH /move",
   "DELETE /",
@@ -103,15 +106,18 @@ describe("files controller — limiter wiring", () => {
     expect(userRateLimitCalls).toHaveLength(ROUTE_ORDER.length)
 
     const expected: Record<(typeof ROUTE_ORDER)[number], RateLimiterMemory> = {
-      "GET /":            readLimiter,
-      "GET /search":      readLimiter,
-      "GET /download":    readLimiter,
-      "GET /quick-links": readLimiter,
-      "POST /folder":     writeLimiter,
-      "POST /upload":     writeLimiter,
-      "PATCH /rename":    writeLimiter,
-      "PATCH /move":      writeLimiter,
-      "DELETE /":         writeLimiter,
+      "GET /":                  readLimiter,
+      "GET /search":            readLimiter,
+      "GET /download":          readLimiter,
+      "GET /download-url":      readLimiter,
+      "GET /quick-links":       readLimiter,
+      "POST /folder":           writeLimiter,
+      "POST /upload":           writeLimiter,
+      "POST /upload-url":       writeLimiter,
+      "POST /upload-complete":  writeLimiter,
+      "PATCH /rename":          writeLimiter,
+      "PATCH /move":            writeLimiter,
+      "DELETE /":               writeLimiter,
     }
 
     for (let i = 0; i < ROUTE_ORDER.length; i++) {

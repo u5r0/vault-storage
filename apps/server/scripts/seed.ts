@@ -13,7 +13,7 @@
 import "dotenv/config"
 import { createVaultClient } from "@vault/sdk"
 import { db } from "../src/db"
-import { getContainer } from "../src/lib/azure"
+import { getBlobStore } from "../src/lib/blob-provider"
 import { clearMailpit, waitForMessage, extractLinkToken } from "../src/__setup__/mailpit"
 
 const API_URL = process.env.SEED_API_URL || `http://localhost:${process.env.PORT || 3001}`
@@ -187,12 +187,10 @@ async function cleanup() {
   console.log("Cleaning up existing data…")
 
   try {
-    const container = await getContainer()
-    let count = 0
-    for await (const blob of container.listBlobsFlat()) {
-      await container.deleteBlob(blob.name)
-      count++
-    }
+    // Wipe every blob via the configured provider's adapter — works for
+    // Azure (Azurite) and R2 (RustFS / production R2) without branching.
+    const store = await getBlobStore()
+    const count = await store.deletePrefix("")
     console.log(`  ${count} blob(s) deleted`)
   } catch (e: any) {
     console.log(`  blob cleanup: ${e.message}`)

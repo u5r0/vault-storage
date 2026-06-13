@@ -1,7 +1,8 @@
 import "dotenv/config"
 import { serve } from "@hono/node-server"
 import { createApp } from "./app"
-import { env, isConfigured } from "./lib/azure"
+import { env } from "./lib/azure"
+import { isBlobConfigured, getProvider } from "./lib/blob-provider"
 import { initializeDatabase } from "./db"
 
 const app = createApp({ withLogger: true })
@@ -14,9 +15,10 @@ async function start() {
 
   serve({ fetch: app.fetch, port }, (info) => {
     console.log(`[server] Vault API running on http://localhost:${info.port}`)
-    if (!isConfigured()) {
+    console.log(`[server] Blob provider: ${getProvider()}`)
+    if (!isBlobConfigured()) {
       console.warn(
-        "[server] Azure credentials are NOT set. Fill in AZURE_STORAGE_* in .env",
+        `[server] Blob storage credentials are NOT set. Check BLOB_PROVIDER and related env vars in .env`,
       )
     }
   })
