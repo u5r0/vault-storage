@@ -12,8 +12,6 @@
     "@lucide/vue": "^1.16.0",
     "@tanstack/vue-query": "^5.100.14",
     "@tanstack/vue-virtual": "^3.13.26",
-    "@uppy/core": "^5.2.0",
-    "@uppy/xhr-upload": "^5.2.0",
     "@vault/sdk": "workspace:*",
     "@vueuse/core": "^14.3.0",
     "pinia": "^2.3.1",

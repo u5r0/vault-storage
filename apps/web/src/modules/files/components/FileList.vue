@@ -447,15 +447,18 @@ const toolbarActions = [
       leave-to-class="translate-y-full opacity-0"
     >
       <div
-        v-if="uploadStore.hasPending && uploadStore.uppy"
+        v-if="uploadStore.hasPending"
         class="absolute inset-x-0 bottom-0 z-20 border-t border-[var(--color-border)] bg-[var(--color-background)]/95 px-5 py-3 backdrop-blur"
       >
         <div class="mb-2 flex items-center justify-between gap-2">
           <p class="text-[11.5px] text-muted-foreground">
-            {{ uploadStore.files.filter(f => !f.progress?.uploadComplete).length }} file(s) uploading
+            {{ uploadStore.files.filter(f => f.state.status !== 'completed').length }} file(s) uploading
           </p>
         </div>
-        <UploadQueue :uppy="uploadStore.uppy" :files="uploadStore.files" />
+        <UploadQueue
+          :files="uploadStore.files"
+          @remove="(id) => uploadStore.removeFile(id)"
+        />
       </div>
     </Transition>
   </section>

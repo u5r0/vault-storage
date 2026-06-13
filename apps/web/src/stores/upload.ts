@@ -1,93 +1,91 @@
-import Uppy from "@uppy/core"
-import XHRUpload from "@uppy/xhr-upload"
 import { defineStore } from "pinia"
-import { ref, shallowRef } from "vue"
+import { ref, shallowRef, computed } from "vue"
+import { UploadManager, type UploadHandle } from "@vault/sdk"
+import { client } from "@/lib/client"
 
-export interface UploadFile {
-  id: string
-  name: string
-  progress?: { percentage?: number; uploadComplete?: boolean; uploadStarted?: number | null }
-}
+/**
+ * Wraps the SDK's framework-agnostic `UploadManager` in a Pinia store so
+ * Vue components can react to queue changes. The store is intentionally
+ * thin — all upload semantics (concurrency, restrictions, retry, cancel)
+ * live in the SDK so they're shared with non-browser consumers.
+ *
+ * On `completed`, the handle is dropped from the queue and `lastCompletedAt`
+ * is bumped — the file-list view watches that timestamp to invalidate its
+ * TanStack Query cache and pull the new entry from the server.
+ */
 
 const MAX_UPLOAD_MB = Number(import.meta.env.VITE_MAX_UPLOAD_MB ?? 100)
+const MAX_FILES = 20
+const CONCURRENCY = 3
+
+// `ItemInput` matches the shape AppHeader / FileList already produce.
+// `data` is the actual `File`; the other fields are redundant with
+// `File.name`/`type`/`size` but kept for source-call-site compatibility.
+type ItemInput = { name: string; type: string; size: number; data: File }
 
 export const useUploadStore = defineStore("upload", () => {
-  const uppy = shallowRef<Uppy | null>(null)
-  const files = ref<UploadFile[]>([])
-  const hasPending = shallowRef(false)
-  const isUploading = shallowRef(false)
+  const manager = new UploadManager(client, {
+    concurrency: CONCURRENCY,
+    maxFiles: MAX_FILES,
+    maxFileSize: MAX_UPLOAD_MB * 1024 * 1024,
+  })
+
+  // The reactive surface for templates. Re-assigned on every `change`
+  // event so Vue re-renders even though individual handle objects are
+  // mutated in place by the manager.
+  const files = ref<UploadHandle[]>([])
+
   const currentEntityId = shallowRef<string | null>(null)
   const lastCompletedAt = shallowRef(0)
 
-  function syncFiles(u: Uppy) {
-    files.value = u.getFiles() as unknown as UploadFile[]
-    hasPending.value = files.value.some((f) => !f.progress?.uploadComplete)
-    isUploading.value = files.value.some(
-      (f) => f.progress?.uploadStarted && !f.progress?.uploadComplete,
-    )
+  function sync() {
+    files.value = manager.list().slice()
   }
 
-  function ensureUppy(): Uppy {
-    if (uppy.value) return uppy.value
+  manager.on("change", sync)
+  manager.on("completed", (handle) => {
+    // Match the previous Uppy behavior: completed files leave the queue,
+    // and the file-list view refetches from the timestamp bump.
+    manager.remove(handle.id)
+    lastCompletedAt.value = Date.now()
+  })
 
-    const instance = new Uppy({
-      autoProceed: true,
-      restrictions: {
-        maxNumberOfFiles: 20,
-        maxFileSize: MAX_UPLOAD_MB * 1024 * 1024,
-      },
-    }).use(XHRUpload, {
-      method: "POST",
-      formData: true,
-      fieldName: "files",
-      allowedMetaFields: ["parentId"],
-      limit: 3,
-      endpoint: "/api/files/upload",
-      headers: { Accept: "application/json" },
-    })
+  const hasPending = computed(() =>
+    files.value.some(
+      (f) => f.state.status === "pending" || f.state.status === "uploading",
+    ),
+  )
 
-    instance.on("file-added", (file) => {
-      instance.setFileMeta(file.id, { parentId: currentEntityId.value ?? null })
-      syncFiles(instance)
-    })
-    instance.on("file-removed",    () => syncFiles(instance))
-    instance.on("upload-progress", () => syncFiles(instance))
-    instance.on("upload-success",  () => syncFiles(instance))
-    instance.on("upload-error",    () => syncFiles(instance))
-    instance.on("complete", (result) => {
-      if (result.successful?.length) {
-        for (const f of result.successful) instance.removeFile(f.id)
-        syncFiles(instance)
-        lastCompletedAt.value = Date.now()
-      }
-    })
-
-    uppy.value = instance
-    return instance
-  }
+  const isUploading = computed(() =>
+    files.value.some((f) => f.state.status === "uploading"),
+  )
 
   function setCurrentEntity(id: string | null) {
     currentEntityId.value = id
   }
 
-  function addFiles(items: Array<{ name: string; type: string; size: number; data: File }>) {
-    ensureUppy().addFiles(items)
+  function addFiles(items: ItemInput[]) {
+    for (const item of items) {
+      manager.add({ file: item.data, parentId: currentEntityId.value })
+    }
   }
 
   function removeFile(id: string) {
-    uppy.value?.removeFile(id)
+    manager.remove(id)
   }
 
   return {
-    uppy,
     files,
     hasPending,
     isUploading,
     currentEntityId,
     lastCompletedAt,
-    ensureUppy,
     setCurrentEntity,
     addFiles,
     removeFile,
   }
 })
+
+// Re-export the SDK type so components can import it from the store
+// without reaching into the SDK directly.
+export type { UploadHandle } from "@vault/sdk"
