@@ -1,0 +1,17 @@
+# Ignore everything not needed for the server build
+node_modules
+apps/web/node_modules
+apps/web/dist
+apps/server/dist
+apps/server/node_modules
+.git
+.github
+.env
+.env.*
+!.env.example
+*.md
+docs/
+infra/
+.agents/
+.kiro/
+.changeset/

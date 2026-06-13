@@ -37,3 +37,7 @@ See [docs/roadmap.md](docs/roadmap.md) for current priorities.
 ## Security
 
 Never commit secrets. Use environment variables — see `.env.example`.
+
+## Deploying
+
+See [docs/deploy.md](docs/deploy.md) for the full production deployment guide.

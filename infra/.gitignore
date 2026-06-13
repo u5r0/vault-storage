@@ -1,0 +1,10 @@
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfplan
+crash.log
+
+# Never commit actual secret values
+*.auto.tfvars
+secret.tfvars

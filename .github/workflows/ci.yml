@@ -29,7 +29,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Start services
-        run: docker compose up -d azurite cosmos mailpit
+        run: docker compose up -d azurite cosmos mailpit rustfs
 
       - name: Wait for Azurite
         run: |
@@ -69,6 +69,19 @@ jobs:
           done
           echo "Mailpit failed to start"
           docker logs vault-mailpit
+          exit 1
+
+      - name: Wait for RustFS
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost:9000/health -o /dev/null 2>/dev/null; then
+              echo "RustFS ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "RustFS failed to start"
+          docker logs vault-rustfs
           exit 1
 
       - name: Run unit tests
