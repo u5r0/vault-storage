@@ -1,15 +1,6 @@
 import { CosmosClient, type Container } from "@azure/cosmos"
 import { createCosmosClient } from "./lib/cosmos-credentials"
 
-const COSMOS_ENDPOINT = process.env.COSMOS_DB_ENDPOINT || "https://localhost:8081"
-const DATABASE_NAME = process.env.COSMOS_DB_DATABASE || "vault"
-const CONTAINER_NAME = process.env.COSMOS_DB_CONTAINER || "vault_entries"
-
-// Allow self-signed certificates for local Cosmos DB emulator (not in test — setup handles this)
-if (COSMOS_ENDPOINT.includes("localhost") && process.env.NODE_ENV !== "test") {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
-}
-
 /**
  * Well-known emulator key — used when COSMOS_DB_KEY is unset AND we're
  * talking to localhost. This keeps local `pnpm dev` zero-config.
@@ -17,35 +8,59 @@ if (COSMOS_ENDPOINT.includes("localhost") && process.env.NODE_ENV !== "test") {
 const EMULATOR_KEY =
   "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
 
-// If no key is provided and we're hitting localhost, inject the emulator key
-// so dev/CI works without any explicit COSMOS_DB_KEY in .env.
-if (!process.env.COSMOS_DB_KEY && COSMOS_ENDPOINT.includes("localhost")) {
-  process.env.COSMOS_DB_KEY = EMULATOR_KEY
+// ─── Deferred config helpers ──────────────────────────────────────────────────
+// All env-var reads are deferred to call time so that test setupFiles can
+// inject COSMOS_DB_DATABASE / COSMOS_DB_CONTAINER before the container
+// reference is resolved, regardless of module import order.
+function getEndpoint() {
+  return process.env.COSMOS_DB_ENDPOINT || "https://localhost:8081"
+}
+function getDatabaseName() {
+  return process.env.COSMOS_DB_DATABASE || "vault"
+}
+function getContainerName() {
+  return process.env.COSMOS_DB_CONTAINER || "vault_entries"
 }
 
-// ─── Eager client (backward compat for tests + dev) ──────────────────────────
-// When COSMOS_DB_KEY is available (dev/CI/emulator), create the client eagerly
-// at module load so that `db` can be used immediately without calling
-// `initializeDatabase()` first. Production (managed identity) uses the async
-// path via `initializeDatabase()`.
-const _eagerKey = process.env.COSMOS_DB_KEY
-let _client: CosmosClient | null = _eagerKey
-  ? new CosmosClient({ endpoint: COSMOS_ENDPOINT, key: _eagerKey })
-  : null
+let _client: CosmosClient | null = null
+let _container: Container | null = null
 
-const _eagerContainer: Container | null = _client
-  ? _client.database(DATABASE_NAME).container(CONTAINER_NAME)
-  : null
-
-let _container: Container | null = _eagerContainer
+/**
+ * Apply env-var defaults required for talking to a localhost Cosmos emulator:
+ *   - disable TLS verification (self-signed cert)
+ *   - inject the well-known emulator key if no real key is configured
+ *
+ * Idempotent. Must run before any Cosmos network call (eager dev, lazy test,
+ * or explicit `initializeDatabase()`).
+ */
+function bootstrapEmulatorEnv() {
+  const endpoint = getEndpoint()
+  if (endpoint.includes("localhost") && process.env.NODE_ENV !== "test") {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
+  }
+  if (!process.env.COSMOS_DB_KEY && endpoint.includes("localhost")) {
+    process.env.COSMOS_DB_KEY = EMULATOR_KEY
+  }
+}
 
 function getContainer(): Container {
+  bootstrapEmulatorEnv()
+  const endpoint = getEndpoint()
+
   if (!_container) {
-    throw new Error(
-      "[db] Container not initialized. Call initializeDatabase() first " +
-        "(or set COSMOS_DB_KEY for eager initialization).",
-    )
+    const key = process.env.COSMOS_DB_KEY
+    if (key) {
+      // Key-based auth (dev / CI / emulator): build the client and container lazily.
+      _client = new CosmosClient({ endpoint, key })
+      _container = _client.database(getDatabaseName()).container(getContainerName())
+    } else {
+      throw new Error(
+        "[db] Container not initialized. Call initializeDatabase() first " +
+          "(or set COSMOS_DB_KEY for eager initialization).",
+      )
+    }
   }
+
   return _container
 }
 
@@ -60,42 +75,62 @@ function getContainer(): Container {
  * before any `db` operation.
  */
 export const db: Container = new Proxy({} as Container, {
-  get(_target, prop, receiver) {
-    const container = getContainer()
-    const value = Reflect.get(container, prop, receiver)
+  get(_target, prop) {
+    const container = getContainer() as any
+    // Read with the real container as the receiver so any prototype getters
+    // (e.g. Container#items, #scripts, #conflicts in newer @azure/cosmos
+    // builds) resolve `this` correctly. Passing the proxy as receiver makes
+    // those getters run against an empty target and return undefined.
+    const value = container[prop as keyof Container]
     return typeof value === "function" ? value.bind(container) : value
   },
 })
 
-export let cosmosClient: CosmosClient = _client!
+export let cosmosClient: CosmosClient = null!
 
 /**
  * Initialize Cosmos DB database and container (create if not exists).
  * Must be called once at startup in the production entry point.
  *
- * In dev/test with COSMOS_DB_KEY set, this upgrades the eagerly-created
- * container by ensuring the DB and container exist. Safe to call multiple times.
+ * In dev/test with COSMOS_DB_KEY set, this also ensures the DB and container
+ * exist. Safe to call multiple times.
+ *
+ * Resets the cached container so that the correct database/container names
+ * (which may have been injected by test setupFiles after module load) are used.
  */
 export async function initializeDatabase() {
   const timeout = 30_000
   const startTime = Date.now()
 
+  // Apply emulator-friendly env defaults (TLS bypass, emulator key) before
+  // any network call. Mirrors the lazy path in getContainer().
+  bootstrapEmulatorEnv()
+
+  // Reset the cached container so env-var changes (e.g. from test setupFiles)
+  // are picked up on the next getContainer() call.
+  _container = null
+
+  const endpoint = getEndpoint()
+
   if (!_client) {
-    _client = await createCosmosClient(COSMOS_ENDPOINT)
+    _client = await createCosmosClient(endpoint)
   }
   cosmosClient = _client
+
+  const dbName = getDatabaseName()
+  const containerName = getContainerName()
 
   while (true) {
     try {
       const { database: dbResult } = await _client.databases.createIfNotExists({
-        id: DATABASE_NAME,
+        id: dbName,
       })
       await dbResult.containers.createIfNotExists({
-        id: CONTAINER_NAME,
+        id: containerName,
       })
-      _container = _client.database(DATABASE_NAME).container(CONTAINER_NAME)
+      _container = _client.database(dbName).container(containerName)
       console.log(
-        `[Cosmos DB] Database '${DATABASE_NAME}' and container '${CONTAINER_NAME}' initialized`,
+        `[Cosmos DB] Database '${dbName}' and container '${containerName}' initialized`,
       )
       return
     } catch (error: any) {
