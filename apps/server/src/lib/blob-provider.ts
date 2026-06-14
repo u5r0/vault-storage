@@ -1,5 +1,5 @@
 import type { BlobStore } from "./storage"
-import { isConfigured as isAzureConfigured } from "./azure"
+import { isConfigured as isAzureConfigured, getBlobStore as getAzureBlobStore } from "./azure"
 
 export type BlobProvider = "r2" | "azure"
 
@@ -56,7 +56,6 @@ export async function getBlobStore(): Promise<BlobStore> {
       endpoint: process.env.R2_ENDPOINT || undefined,
     })
   } else {
-    const { getBlobStore: getAzureBlobStore } = await import("./azure")
     _store = await getAzureBlobStore()
   }
 
