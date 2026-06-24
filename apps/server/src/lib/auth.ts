@@ -2,8 +2,7 @@ import argon2 from "argon2"
 import { sign, verify } from "hono/jwt"
 import { db } from "../db"
 import { randomUUID } from "crypto"
-
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me"
+import { JWT_SECRET } from "./config"
 const ACCESS_EXPIRES_SECS = Number(process.env.ACCESS_EXPIRES_SECONDS || 15 * 60)
 const REFRESH_EXPIRES_SECS = Number(process.env.REFRESH_EXPIRES_SECONDS || 7 * 24 * 60 * 60)
 

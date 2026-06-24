@@ -5,12 +5,16 @@ import { env } from "./lib/azure"
 import { isBlobConfigured, getProvider } from "./lib/blob-provider"
 import { ensureCorsForBrowserUploads } from "./lib/cors-bootstrap"
 import { initializeDatabase } from "./db"
+import { validateProductionSecrets } from "./lib/config"
 
 const app = createApp({ withLogger: true })
 
 const port = env.port
 
 async function start() {
+  // Refuse to boot in production with missing or default secrets.
+  validateProductionSecrets()
+
   // Initialize Cosmos DB database and container
   await initializeDatabase()
 

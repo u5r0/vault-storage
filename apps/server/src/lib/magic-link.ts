@@ -1,6 +1,5 @@
 import crypto from "crypto"
-
-const AUTH_SECRET = process.env.AUTH_SECRET || "dev-secret-change-me"
+import { AUTH_SECRET } from "./config"
 const TOKEN_EXPIRY_SECONDS = 15 * 60 // 15 minutes
 
 interface MagicLinkToken {
