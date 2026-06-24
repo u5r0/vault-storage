@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-05-17
 **Updated:** 2026-05-20
+**Amended:** 2026-06-24 (corrected test infrastructure paths; added Cosmos + Mailpit global setup; web-browser Playwright project added)
 
 ## Decision
 
@@ -30,22 +31,26 @@ Based on Artem Zakharchenko's testing articles:
 
 ## Technical Details
 
-**Test Runner:** Vitest with two projects:
-- Unit: Fast, co-located tests for pure functions
-- Integration: API-level e2e against Azurite in-memory
+**Test Runner:** Vitest with three projects:
+- `unit`: Fast, co-located tests for pure functions and services (no infrastructure)
+- `integration`: API-level e2e against real infrastructure — Azurite blob emulator, Cosmos (cosmium) emulator, and Mailpit
+- `web-browser`: Component and interaction tests via Playwright (`@vitest/browser-playwright`)
 
 **Integration Tests:**
 - Full Hono app stack via `app.request(...)`
-- Real Azure SDK against Azurite in-memory mode
-- No mocks for storage layer
+- Real Azure SDK against Azurite in-memory mode (blob) and cosmium emulator (Cosmos DB)
+- No mocks for storage or database layers
 - Cookie handling for session tests
-- Centralized fixtures for common setup (`tests/fixtures.ts`)
-- Mock email functions at module boundary (not real SMTP/Mailpit)
+- Centralized fixtures in `apps/server/src/__setup__/fixtures.ts`
+- Mailpit intercepted at module boundary (no real SMTP calls — `mailpit.global.ts` boots Mailpit, tests assert delivered mail via Mailpit API)
 
 **Test Organization:**
-- `tests/integration/` - API-level e2e tests
-- `apps/server/src/**/*.test.ts` - Co-located unit tests
-- `tests/fixtures.ts` - Centralized test fixtures
+- `apps/server/src/services/*.test.ts` — unit tests for business logic
+- `apps/server/src/lib/*.test.ts` — unit tests for utilities; `*.integration.test.ts` for adapter-level (R2/RustFS)
+- `apps/server/src/middleware/*.test.ts` — unit tests for middleware
+- `apps/server/src/controllers/*.test.ts` — integration tests (full HTTP surface)
+- `apps/web/src/**/*.test.ts` — frontend unit tests; `*.browser.test.ts` in web-browser project
+- `apps/server/src/__setup__/` — global setup: `blob.global.ts`, `cosmos.global.ts`, `mailpit.global.ts`; per-project env: `blob.env.ts`, `cosmos.env.ts`, `mailpit.env.ts`
 
 **Testing Philosophy:**
 - Test user-facing intentions, not implementation details

@@ -2,6 +2,7 @@
 
 **Status:** Accepted  
 **Date:** 2026-05-21
+**Amended:** 2026-06-24 (rate-limit table updated to read/write split; VueQueryPlugin noted in bootstrap; blob-provider ADR reference added)
 
 ## Context
 
@@ -51,7 +52,7 @@ Services receive `ownerId` on every method call (set by the auth middleware) to 
 ### Middleware (`middleware/`)
 
 - `authenticate.ts` — verifies the `access` JWT cookie, sets `c.get("userId")`. Applied globally to all file routes.
-- `rate-limit.ts` — `userRateLimit()` factory and `consumeEmailLimit()` helper.
+- `rate-limiter.ts` — `createUserReadLimiter()`, `createUserWriteLimiter()`, and `consumeEmailLimit()` helpers. Factory functions allow reset between tests.
 
 ### Rate limiting strategy (three layers)
 
@@ -61,7 +62,14 @@ Services receive `ownerId` on every method call (set by the auth middleware) to 
 | 2 — volumetric | userId | Upload bytes per window |
 | 3 — emergency brake | IP | All routes, global in `app.ts` |
 
-Rate limiter instances are created via factory functions in `lib/rate-limiter.ts` so they can be reset between tests.
+Per-user file operations are split into two budgets:
+
+| Operation class | Limit |
+|---|---|
+| Reads (list, download, quick-links) | 600 per minute per userId |
+| Writes (upload, folder, rename, move, delete) | 120 per minute per userId |
+
+Reads and writes are split because listing and downloading are idempotent and cheap; mutations are stateful and more expensive. Factory functions in `lib/rate-limiter.ts`: `createUserReadLimiter`, `createUserWriteLimiter`.
 
 ### Auth flow
 
@@ -73,11 +81,12 @@ Rate limiter instances are created via factory functions in `lib/rate-limiter.ts
 
 ### Test infrastructure (`__setup__/`)
 
-- `azurite.global.ts` / `azurite.env.ts` — boots Azurite in-memory, provides connection string
+- `blob.global.ts` / `blob.env.ts` — boots Azurite in-memory, provides connection string
 - `cosmos.global.ts` / `cosmos.env.ts` — creates an isolated Cosmos DB database per test run
+- `mailpit.global.ts` / `mailpit.env.ts` — starts Mailpit SMTP for email assertions
 - `fixtures.ts` — `useAuthFixture()`, `useFilesFixture()`, `parseCookies()`
 
-Vitest runs two projects: `unit` (no infrastructure) and `integration` (Azurite + Cosmos).
+Vitest runs three projects: `unit` (no infrastructure), `integration` (Azurite + Cosmos + Mailpit), and `web-browser` (Playwright).
 
 ---
 
@@ -118,7 +127,7 @@ modules/<name>/
 | Module | Routes | Notes |
 |---|---|---|
 | `files` | `/contents/:entityId?` | FileList, DetailsPanel, FolderModal; sort/view state in `useFilesStore` |
-| `upload` | — (no routes) | Headless Uppy; `useVaultUpload` provides uppy instance via `provide/inject` |
+| `upload` | — (no routes) | `useUploadStore` wraps SDK `UploadManager`; files added via store, not provide/inject |
 | `auth` | `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/verify` | `passwordRules.ts` for ADR 0002 validation |
 | `settings` | `/settings` | Section-based layout; theme via `useUIStore` |
 | `profile` | `/profile` | Edit buffer pattern — draft committed on save |
@@ -147,12 +156,21 @@ Global Pinia stores using the composition API style (`defineStore('id', () => { 
 | `useFilesStore` | `viewMode`, `sortKey`, `sortAsc`, `selectedId`; `viewMode` persisted to `localStorage` |
 | `useSettingsStore` | `account`, `notifications`, `security`, `storage` |
 | `useUIStore` | `theme`, `sidebarCollapsed`; theme persisted to `localStorage` and applied to `<html>` |
+| `useUploadStore` | `files`, `hasPending`, `isUploading`, `currentEntityId`, `lastCompletedAt`; wraps SDK `UploadManager` |
 
 **Never destructure Pinia actions** — they lose their `this` binding. Call them directly on the store instance: `auth.signOut()` not `const { signOut } = auth`.
 
 ### Upload architecture
 
-`useVaultUpload` (in `modules/upload/composables/`) owns the Uppy instance and `provide()`s it via `UPPY_KEY`. `AppHeader` `inject()`s it to add files from the header upload button without prop-drilling through the layout. The `FileList` bottom bar shows the drop zone and upload trigger; the top "pending uploads" panel does not exist.
+`useUploadStore` (in `stores/upload.ts`) wraps the SDK's framework-agnostic `UploadManager` in a Pinia store so Vue components can react to queue changes reactively. The store is intentionally thin — all upload semantics (concurrency, restrictions, retry, cancel) live in the SDK's `UploadManager`.
+
+- Concurrency: 3 simultaneous uploads
+- Max files: 20 per batch
+- Max file size: `VITE_MAX_UPLOAD_MB` (default 100 MB)
+- `addFiles()` enqueues items using `currentEntityId` as the target folder
+- On `completed`, the handle is removed from the queue and `lastCompletedAt` is bumped — the file-list view watches that timestamp to invalidate its TanStack Query cache and refetch
+
+Components import `useUploadStore` directly — no `provide/inject` indirection.
 
 ### Theme system
 
@@ -163,13 +181,14 @@ All components use CSS custom property tokens (`var(--color-*)`, `var(--radius-*
 ```ts
 // main.ts
 app.use(pinia)          // 1. Pinia must be first
-registerGlobals(app)    // 2. Register v-* components
-await checkAuth()       // 3. Resolve auth state BEFORE router fires
-app.use(router)         // 4. Router registered after auth is known
-app.mount("#app")       // 5. Mount
+app.use(VueQueryPlugin) // 2. TanStack Query (staleTime 30s, no refetch on focus)
+registerGlobals(app)    // 3. Register v-* components
+await checkAuth()       // 4. Resolve auth state BEFORE router fires
+app.use(router)         // 5. Router registered after auth is known
+app.mount("#app")       // 6. Mount
 ```
 
-Step 3 is critical — registering the router before `checkAuth()` resolves causes the route guard to see `isAuthenticated = false` on every hard refresh and redirect to login.
+Step 4 is critical — registering the router before `checkAuth()` resolves causes the route guard to see `isAuthenticated = false` on every hard refresh and redirect to login.
 
 ---
 
@@ -193,6 +212,7 @@ See [ADR 0005](0005-sdk-as-shared-contract.md) for the rationale.
 - [ADR 0005: SDK as Shared Contract](0005-sdk-as-shared-contract.md)
 - [ADR 0006: Cosmos DB and ID-Based Routing](0006-cosmos-db-and-id-based-routing.md)
 - [ADR 0007: Monorepo Layout](0007-monorepo-layout.md)
+- [ADR 0009: Blob Storage Multi-Provider](0009-blob-storage-multi-provider.md)
 - Private ADR: `docs/adr-private/0015-frontend-vertical-slice-rearchitecture.md`
 - Private ADR: `docs/adr-private/0016-backend-rearchitecture-and-testing.md`
 - Private ADR: `docs/adr-private/0017-test-layout-co-location.md`

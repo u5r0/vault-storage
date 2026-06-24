@@ -24,7 +24,7 @@ This project is currently in active development. Core features are functional bu
 
 ## Tech Stack
 
-- **Frontend**: Vue 3, Pinia, Tailwind CSS, Vue Router, Uppy (file uploads)
+- **Frontend**: Vue 3, Pinia, Tailwind CSS, Vue Router
 - **Backend**: Hono (Node.js), TypeScript
 - **Storage**: Azure Blob Storage, Azure Cosmos DB
 - **Authentication**: Argon2id password hashing, JWT tokens, magic links

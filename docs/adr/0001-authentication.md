@@ -4,6 +4,7 @@
 **Date:** 2026-05-20
 **Updated:** 2026-05-20 (Rate limiting strategy)
 **Amended:** 2026-05-24 (ADR 0019 — rate-limit numbers reconciled with code; secrets split clarified)
+**Amended:** 2026-06-24 (per-user limit split into read/write buckets; centralized secret config via `lib/config.ts` noted)
 
 ## Decision
 
@@ -50,10 +51,13 @@ Per-bucket limits as configured in `apps/server/src/lib/rate-limiter.ts`:
 | `magic-link`        | 5 per 15 min per email         |
 | `password-reset`    | 5 per 60 min per email         |
 | `resend-verification` | 5 per 15 min per email (shares the magic-link bucket) |
-| Per-user requests   | 200 per minute per user        |
+| Per-user reads (list, download, quick-links) | 600 per minute per user |
+| Per-user writes (upload, rename, move, delete, folder) | 120 per minute per user |
 | Storage uploads     | 500 MB per 15 min per user     |
 
 Identity-based limiting (email or user ID) prevents single-user abuse regardless of IP sharing.
+
+Reads and writes have separate budgets because list/download/search operations are idempotent and cheap relative to mutations. The split is implemented via `createUserReadLimiter` and `createUserWriteLimiter` factory functions in `lib/rate-limiter.ts`.
 
 **Layer 2: Volumetric/Byte-Based (Storage Protection)**
 - Upload endpoints: 500 MB per 15-minute rolling window per user

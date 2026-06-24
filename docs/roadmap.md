@@ -1,19 +1,19 @@
 # Roadmap
 
-Last reviewed: 2026-06-05. Items ordered by priority within each tier.
+Last reviewed: 2026-06-24. Items ordered by priority within each tier.
 
 ---
 
 ## Critical
 
-### 1. Metadata features are read-only stubs
+### 1. Metadata mutations not yet exposed
 
-The backend serves `quickLinks` counts and stores `isFavorite`/`tags`/`deletedAt` fields, but there are no mutation endpoints for starring, tagging, or soft-deleting.
+The backend stores `isFavorite`, `tags`, and `deletedAt` on every Cosmos entry and `quickLinks` counts them, but there are no mutation endpoints for starring, tagging, or soft-deleting.
 
 **Needs:**
 - `PATCH /api/files/star` — toggle `isFavorite`
 - `PATCH /api/files/tag` — add/remove tags
-- `DELETE /api/files` (soft) — set `deletedAt` instead of hard delete (or add `/trash` and `/restore` endpoints)
+- `DELETE /api/files` (soft) — set `deletedAt` instead of hard delete, plus `/trash` and `/restore` endpoints
 - Frontend views for starred, recent, tagged, and trash (sidebar links go nowhere today)
 
 ---
@@ -29,12 +29,12 @@ Toolbar buttons (Properties, Tags, Star, Delete) have no click handlers. No righ
 - Context menu component (right-click or long-press on mobile)
 - Confirmation dialog for destructive actions (delete)
 
-### 3. Share
+### 3. Share links
 
-Share button in DetailsPanel has no handler.
+No public or token-gated share links. `GET /api/files/download-url` mints short-lived (15 min) presigned URLs for the authenticated owner — that is not a shareable link.
 
 **Needs:**
-- Backend: share link generation (signed URL or token-gated access)
+- Backend: durable share-link generation (signed token or separate `share` document in Cosmos)
 - Permission model (read-only link vs. collaborator access)
 - Frontend: modal with generated link + copy button
 
@@ -93,5 +93,5 @@ No shift-click or ctrl-click selection for bulk actions.
 
 ## Technical Debt
 
-- **`tough-cookie` in SDK** — Only needed for Node.js test client. Consider making it a peer/optional dependency or moving VaultClient out of the shared SDK.
-- **Test coverage gaps** — Phase B error-path tests not yet written (invalid tokens, password reset flow, unauthenticated access).
+- **`tough-cookie` in SDK** — Only needed for the Node.js `VaultClient` (cookie persistence in tests and server-side consumers). Consider making it a peer/optional dependency or splitting `VaultClient` into browser and Node variants.
+- **Test coverage gaps** — Error-path tests not yet written: invalid tokens, password reset flow, unauthenticated access to file routes.

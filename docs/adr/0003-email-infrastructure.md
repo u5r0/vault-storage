@@ -2,6 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-05-20
+**Amended:** 2026-06-24 (nodemailer as email transport library; production SMTP noted)
 
 ## Decision
 
@@ -9,8 +10,9 @@ Use Mailpit for development email delivery and configurable SMTP for production.
 
 ## Technical Details
 
-**Development:**
-- Mailpit Docker service (SMTP on port 1025, Web UI on port 8025)
+**Email Transport:**
+- `nodemailer` library for SMTP delivery on both dev and prod
+- Dev: Mailpit Docker service (SMTP on port 1025, Web UI on port 8025)
 - SMTP URL: `smtp://localhost:1025`
 - Web UI for viewing sent emails during development
 
