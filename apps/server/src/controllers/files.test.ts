@@ -481,6 +481,67 @@ describe("DELETE /api/files", () => {
     const list = await listRoot()
     expect(list.entries.find((e: VaultEntry) => e.name === "Junk")).toBeUndefined()
   })
+
+  /**
+   * F-DEL (ADR 0026 Phase 1): recursive delete must remove the full subtree,
+   * not just one level. Before the fix, nested subfolders and their blobs
+   * were orphaned in both Cosmos and blob storage.
+   *
+   * Tree under test:
+   *   Root/
+   *     Sub/
+   *       deep.txt   ← must be deleted
+   *     top.txt      ← must be deleted
+   */
+  it("recursively deletes nested subfolders and their blobs (F-DEL)", async () => {
+    const app = getApp()
+
+    // Create Root → Sub → deep.txt + Root → top.txt
+    const rootRes = await app.request("/api/files/folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: defaultCookies },
+      body: JSON.stringify({ parentId: null, name: "Root" }),
+    })
+    expect(rootRes.status).toBe(201)
+    const root = (await rootRes.json()) as { id: string }
+
+    const subRes = await app.request("/api/files/folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: defaultCookies },
+      body: JSON.stringify({ parentId: root.id, name: "Sub" }),
+    })
+    expect(subRes.status).toBe(201)
+    const sub = (await subRes.json()) as { id: string }
+
+    const { uploaded: [deepFile] } = await uploadText(sub.id, "deep.txt", "deep content")
+    const { uploaded: [topFile] } = await uploadText(root.id, "top.txt", "top content")
+
+    // Delete the root folder
+    const delRes = await app.request("/api/files", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Cookie: defaultCookies },
+      body: JSON.stringify({ id: root.id }),
+    })
+    expect(delRes.status).toBe(200)
+    const { deleted } = (await delRes.json()) as { deleted: number }
+    // root + Sub + deep.txt + top.txt = 4
+    expect(deleted).toBe(4)
+
+    // Root folder is gone from listing
+    const list = await listRoot()
+    expect(list.entries.find((e: VaultEntry) => e.name === "Root")).toBeUndefined()
+
+    // Blobs are physically gone — downloading either file must 404
+    const dlDeep = await app.request(`/api/files/download?id=${deepFile.id}`, {
+      headers: { Cookie: defaultCookies },
+    })
+    expect(dlDeep.status).toBe(404)
+
+    const dlTop = await app.request(`/api/files/download?id=${topFile.id}`, {
+      headers: { Cookie: defaultCookies },
+    })
+    expect(dlTop.status).toBe(404)
+  })
 })
 
 describe("PATCH /api/files/move", () => {

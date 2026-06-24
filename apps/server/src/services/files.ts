@@ -477,20 +477,45 @@ export class FilesService {
 
     try {
       if (resource.type === "folder") {
-        const { resources } = await db.items.query({
-          query: "SELECT * FROM c WHERE c.parentId = @parentId",
-          parameters: [{ name: "@parentId", value: id }],
-        }).fetchAll()
-        let deletedCount = 0
-        for (const r of resources) {
-          if (r.blobName && (await store.exists(r.blobName))) {
-            await store.delete(r.blobName)
+        // BFS: collect the full subtree before touching anything, so a
+        // crash mid-delete can be safely retried (already-gone items are
+        // tolerated via .catch(() => {})).
+        const subtree: Array<{ id: string; blobName: string | null }> = []
+        const queue: string[] = [id]
+
+        while (queue.length > 0) {
+          const parentId = queue.shift()!
+          const { resources: children } = await db.items
+            .query({
+              query: "SELECT c.id, c.type, c.blobName FROM c WHERE c.parentId = @parentId",
+              parameters: [{ name: "@parentId", value: parentId }],
+            })
+            .fetchAll()
+          for (const child of children) {
+            subtree.push({ id: child.id, blobName: child.blobName ?? null })
+            if (child.type === "folder") {
+              queue.push(child.id)
+            }
           }
-          await db.item(r.id).delete()
-          deletedCount++
         }
+
+        // Delete blobs first, then Cosmos documents. Failures on
+        // already-deleted items are silently tolerated.
+        await Promise.all(
+          subtree
+            .filter((r) => r.blobName)
+            .map(async (r) => {
+              if (await store.exists(r.blobName!).catch(() => false)) {
+                await store.delete(r.blobName!).catch(() => {})
+              }
+            }),
+        )
+        await Promise.all(
+          subtree.map((r) => db.item(r.id).delete().catch(() => {})),
+        )
+
         await db.item(id).delete()
-        return { deleted: deletedCount + 1 }
+        return { deleted: subtree.length + 1 }
       }
 
       if (resource.blobName && (await store.exists(resource.blobName))) {

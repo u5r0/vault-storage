@@ -298,7 +298,7 @@ describe("FilesService", () => {
       expect(result).toEqual({ deleted: 1 })
     })
 
-    it("deletes folder and cascades to children", async () => {
+    it("deletes folder and cascades to direct children", async () => {
       const { db } = await import("../db")
       const { getBlobStore } = await import("../lib/blob-provider")
 
@@ -312,11 +312,15 @@ describe("FilesService", () => {
         deletePrefix: vi.fn().mockResolvedValue(undefined),
       }
       vi.mocked(getBlobStore).mockResolvedValue(mockStore)
+
+      // BFS: first query returns the two children, second (for child-folder
+      // which is type "file") never fires — only type:"folder" children are
+      // enqueued.
       vi.mocked(db.items.query).mockReturnValue({
         fetchAll: vi.fn().mockResolvedValue({
           resources: [
-            { id: "child-1", blobName: "vault/blobs/child-1" },
-            { id: "child-2", blobName: null },
+            { id: "child-1", type: "file", blobName: "vault/blobs/child-1" },
+            { id: "child-2", type: "file", blobName: null },
           ],
         }),
       } as any)
@@ -329,7 +333,66 @@ describe("FilesService", () => {
 
       const result = await filesService.delete("folder-1", ownerId)
 
-      expect(result.deleted).toBeGreaterThanOrEqual(3)
+      // folder-1 + child-1 + child-2 = 3
+      expect(result.deleted).toBe(3)
+      expect(mockStore.delete).toHaveBeenCalledWith("vault/blobs/child-1")
+      expect(mockStore.delete).toHaveBeenCalledTimes(1)
+    })
+
+    it("recursively deletes nested subfolders and their blobs", async () => {
+      const { db } = await import("../db")
+      const { getBlobStore } = await import("../lib/blob-provider")
+
+      const mockStore = {
+        exists: vi.fn().mockResolvedValue(true),
+        delete: vi.fn().mockResolvedValue(undefined),
+        list: vi.fn().mockResolvedValue([]),
+        upload: vi.fn().mockResolvedValue(undefined),
+        download: vi.fn().mockResolvedValue({ stream: null, metadata: {} }),
+        copy: vi.fn().mockResolvedValue(undefined),
+        deletePrefix: vi.fn().mockResolvedValue(undefined),
+      }
+      vi.mocked(getBlobStore).mockResolvedValue(mockStore)
+
+      // Tree: root-folder → sub-folder → deep-file
+      //                   → root-file
+      //
+      // BFS order: query("root-folder") → [sub-folder, root-file]
+      //            query("sub-folder")  → [deep-file]
+      //            query("deep-file")   → never called (type:"file")
+      vi.mocked(db.items.query)
+        .mockReturnValueOnce({
+          // children of root-folder
+          fetchAll: vi.fn().mockResolvedValue({
+            resources: [
+              { id: "sub-folder", type: "folder", blobName: null },
+              { id: "root-file", type: "file", blobName: "vault/blobs/root-file" },
+            ],
+          }),
+        } as any)
+        .mockReturnValueOnce({
+          // children of sub-folder
+          fetchAll: vi.fn().mockResolvedValue({
+            resources: [
+              { id: "deep-file", type: "file", blobName: "vault/blobs/deep-file" },
+            ],
+          }),
+        } as any)
+
+      vi.mocked(db.item).mockReturnValue({
+        read: vi.fn().mockResolvedValue({
+          resource: { id: "root-folder", ownerId, type: "folder" },
+        }),
+        delete: vi.fn().mockResolvedValue(undefined),
+      } as any)
+
+      const result = await filesService.delete("root-folder", ownerId)
+
+      // root-folder + sub-folder + root-file + deep-file = 4
+      expect(result.deleted).toBe(4)
+      expect(mockStore.delete).toHaveBeenCalledWith("vault/blobs/root-file")
+      expect(mockStore.delete).toHaveBeenCalledWith("vault/blobs/deep-file")
+      expect(mockStore.delete).toHaveBeenCalledTimes(2)
     })
 
     it("throws 403 when ownerId does not match", async () => {
