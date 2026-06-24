@@ -1,18 +1,9 @@
 location              = "eastus"
-allowed_origin        = "https://vault.pages.dev"
-app_url               = "https://vault.pages.dev"
-ghcr_username         = "REPLACE_WITH_GITHUB_USERNAME"
-r2_account_id         = "REPLACE_WITH_CLOUDFLARE_ACCOUNT_ID"
-r2_bucket_name        = "vault"
+allowed_origin        = "https://vault-storage.pages.dev"
+app_url               = "https://vault-storage.pages.dev"
+ghcr_username         = "u5r0"
+r2_account_id         = "8076f1c1560b58efe3e3c26bf268a55c"
+r2_bucket_name        = "vault-bucket"
 email_from            = "noreply@vault.app"
-cloudflare_account_id = "REPLACE_WITH_CLOUDFLARE_ACCOUNT_ID"
-pages_project_name    = "vault"
-
-# Secrets — pass via environment variables or -var flags, never commit:
-#   TF_VAR_ghcr_token
-#   TF_VAR_r2_access_key_id
-#   TF_VAR_r2_secret_access_key
-#   TF_VAR_jwt_secret
-#   TF_VAR_auth_secret
-#   TF_VAR_smtp_url
-#   TF_VAR_cloudflare_api_token   ← needs R2:Edit + Pages:Edit permissions
+cloudflare_account_id = "8076f1c1560b58efe3e3c26bf268a55c"
+pages_project_name    = "vault-storage"

@@ -8,3 +8,5 @@ crash.log
 # Never commit actual secret values
 *.auto.tfvars
 secret.tfvars
+
+.env.local
