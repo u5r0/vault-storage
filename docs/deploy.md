@@ -29,37 +29,16 @@ bash infra/bootstrap/bootstrap.sh
 
 The script prints a `storage_account_name`. Open `infra/versions.tf` and replace `REPLACE_AFTER_BOOTSTRAP` with that value.
 
-### 2. Configure Cloudflare R2
-
-1. [Cloudflare Dashboard → R2](https://dash.cloudflare.com) → Create bucket named `vault`
-2. R2 → Manage R2 API Tokens → Create API token
-   - Permissions: Object Read & Write
-   - Scope: bucket `vault` only
-   - Copy the **Access Key ID** and **Secret Access Key**
-3. Set CORS on the bucket (Settings → CORS policy):
-
-```json
-[
-  {
-    "AllowedOrigins": ["https://vault.pages.dev"],
-    "AllowedMethods": ["GET", "PUT", "HEAD"],
-    "AllowedHeaders": ["Content-Type"],
-    "MaxAgeSeconds": 3600
-  }
-]
-```
-
-Replace `https://vault.pages.dev` with your actual Pages URL once you know it.
-
-### 3. Fill in `infra/envs/prod.tfvars`
+### 2. Fill in `infra/envs/prod.tfvars`
 
 Open `infra/envs/prod.tfvars` and set:
 
 ```hcl
-allowed_origin = "https://<your-pages-subdomain>.pages.dev"
-app_url        = "https://<your-pages-subdomain>.pages.dev"
-ghcr_username  = "<your-github-username>"
-r2_account_id  = "<cloudflare-account-id>"   # Dashboard → top-right → Account ID
+allowed_origin        = "https://<your-pages-subdomain>.pages.dev"
+app_url               = "https://<your-pages-subdomain>.pages.dev"
+ghcr_username         = "<your-github-username>"
+r2_account_id         = "<cloudflare-account-id>"
+cloudflare_account_id = "<cloudflare-account-id>"   # Dashboard → top-right → Account ID
 ```
 
 Secrets are passed via environment variables — never committed:
@@ -71,9 +50,14 @@ export TF_VAR_r2_secret_access_key="<r2-secret-access-key>"
 export TF_VAR_jwt_secret="$(openssl rand -hex 32)"
 export TF_VAR_auth_secret="$(openssl rand -hex 32)"
 export TF_VAR_smtp_url="smtp://resend:<resend-api-key>@smtp.resend.com:587"
+export TF_VAR_cloudflare_api_token="<cloudflare-api-token>"
 ```
 
-### 4. Provision Azure infrastructure
+The Cloudflare API token needs two permissions: **R2:Edit** (to create the bucket and set CORS) and **Pages:Edit** (to create the Pages project). Create it at Cloudflare Dashboard → My Profile → API Tokens.
+
+The R2 Access Key ID and Secret (for `TF_VAR_r2_access_key_id` / `TF_VAR_r2_secret_access_key`) are a separate S3-compatible credential — create them at Cloudflare Dashboard → R2 → Manage R2 API Tokens.
+
+### 3. Provision all infrastructure
 
 ```bash
 cd infra
@@ -82,38 +66,31 @@ terraform plan -var-file=envs/prod.tfvars
 terraform apply -var-file=envs/prod.tfvars
 ```
 
-Terraform creates: Cosmos DB account + database + container, Key Vault, Log Analytics workspace, Container App environment, Container App with system-assigned managed identity, and the Cosmos role assignment for that identity.
+A single `terraform apply` creates everything:
+- **Azure:** Cosmos DB account + database + container, Key Vault, Log Analytics workspace, Container App environment, Container App (with system-assigned managed identity + Cosmos role assignment)
+- **Cloudflare:** R2 bucket (`vault`) + CORS policy, Pages project (`vault`) with `VITE_API_URL` set to the Container App URL
 
-Note the `api_url` output — you'll need it for the next step.
+Note the outputs — you'll need `api_url` and `pages_url` for the next step.
 
-### 5. Deploy the SPA to Cloudflare Pages
+### 4. Configure GitHub repository secrets for the deploy pipeline
 
-1. [Cloudflare Dashboard → Pages](https://dash.cloudflare.com) → Create project → Connect to GitHub
-2. Configure the build:
+The `deploy.yml` workflow needs these (Settings → Secrets and variables → Actions):
 
-| Setting | Value |
-|---------|-------|
-| Build command | `pnpm install --frozen-lockfile && pnpm --filter @vault/web build` |
-| Build output directory | `apps/web/dist` |
-| Root directory | `/` |
-
-3. Add environment variable:
-
-| Name | Value |
-|------|-------|
-| `VITE_API_URL` | `https://<api_url from terraform output>` |
-
-4. Deploy — Cloudflare will auto-deploy on every push to `main` from this point.
-
-### 6. Configure GitHub repository secrets for the deploy pipeline
-
-The `deploy.yml` workflow needs these secrets (Settings → Secrets → Actions):
+**Secrets:**
 
 | Secret | How to get it |
 |--------|---------------|
-| `AZURE_CLIENT_ID` | Service principal or OIDC app registration client ID |
+| `AZURE_CLIENT_ID` | Service principal client ID (see below) |
 | `AZURE_TENANT_ID` | `az account show --query tenantId -o tsv` |
 | `AZURE_SUBSCRIPTION_ID` | `az account show --query id -o tsv` |
+| `CLOUDFLARE_API_TOKEN` | Same token used for Terraform (R2:Edit + Pages:Edit) |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → top-right → Account ID |
+
+**Variables:**
+
+| Variable | Value |
+|----------|-------|
+| `VITE_API_URL` | `https://<api_url from terraform output>` (baked into the SPA bundle at build time) |
 
 To create a service principal with Container App access:
 
@@ -127,12 +104,14 @@ az ad sp create-for-rbac \
 
 Use the returned `appId` as `AZURE_CLIENT_ID`, `tenant` as `AZURE_TENANT_ID`.
 
-### 7. Push to main
+### 5. Push to main
 
-CI runs tests. On success, `deploy.yml` triggers automatically:
-- Builds the Docker image from `apps/server/Dockerfile`
-- Pushes to `ghcr.io/<your-username>/vault-api`
-- Updates the Container App to the new image
+CI runs tests. On success, `deploy.yml` triggers automatically and fans out to two jobs:
+
+- **`deploy-api`** — builds the Docker image from `apps/server/Dockerfile`, pushes to `ghcr.io/<your-username>/vault-api`, and updates the Container App.
+- **`deploy-web`** — builds the SPA (`pnpm --filter @vault/web build`) and deploys `apps/web/dist` to Cloudflare Pages (`wrangler pages deploy`).
+
+A newer push to `main` cancels an in-flight deploy (workflow `concurrency` guard).
 
 ---
 

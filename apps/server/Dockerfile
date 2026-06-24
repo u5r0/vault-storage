@@ -39,6 +39,12 @@ COPY --from=build /app/apps/server/package.json ./package.json
 # argon2 needs the .node binding from node_modules
 # The bundled index.js marks it as external so it resolves from node_modules
 
+# Declare the health endpoint so `docker run` and compose know when
+# the process is ready. Uses node's built-in fetch (Node ≥ 18) so no
+# curl/wget is needed on the Alpine image.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD node -e "fetch('http://localhost:3001/api/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"
+
 USER node
 EXPOSE 3001
 CMD ["node", "dist/index.js"]

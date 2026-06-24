@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 5.0"
+    }
   }
 
   backend "azurerm" {
@@ -22,4 +26,10 @@ terraform {
 
 provider "azurerm" {
   features {}
+}
+
+# Cloudflare provider — authenticated via CLOUDFLARE_API_TOKEN env var.
+# Set TF_VAR_cloudflare_api_token or export CLOUDFLARE_API_TOKEN before running.
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
 }

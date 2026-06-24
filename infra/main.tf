@@ -234,6 +234,43 @@ resource "azurerm_container_app" "api" {
         name  = "EMAIL_FROM"
         value = var.email_from
       }
+
+      # ── Probes ────────────────────────────────────────────────
+      # startup_probe gates liveness and readiness until the container is
+      # ready — important with min_replicas = 0 (scale-to-zero) because a
+      # cold start must complete Cosmos DB initialisation (30 s retry loop
+      # + managed-identity role propagation) before traffic is admitted.
+      #
+      # Checks every 10 s for up to 120 s (12 × 10) before the replica is
+      # considered failed, giving the 30 s Cosmos retry loop plenty of room.
+
+      startup_probe {
+        transport        = "HTTP"
+        path             = "/api/health"
+        port             = 3001
+        interval_seconds = 10
+        timeout          = 5
+        failure_count_threshold = 12
+      }
+
+      readiness_probe {
+        transport        = "HTTP"
+        path             = "/api/health"
+        port             = 3001
+        interval_seconds = 10
+        timeout          = 5
+        failure_count_threshold = 3
+        success_count_threshold = 1
+      }
+
+      liveness_probe {
+        transport        = "HTTP"
+        path             = "/api/health"
+        port             = 3001
+        interval_seconds = 30
+        timeout          = 5
+        failure_count_threshold = 3
+      }
     }
   }
 
@@ -273,4 +310,54 @@ resource "azurerm_cosmosdb_sql_role_assignment" "api" {
   role_definition_id  = azurerm_cosmosdb_sql_role_definition.data_contributor.id
   principal_id        = azurerm_container_app.api.identity[0].principal_id
   scope               = azurerm_cosmosdb_account.main.id
+}
+
+# ─── Cloudflare R2 ────────────────────────────────────────────────────────────
+
+resource "cloudflare_r2_bucket" "vault" {
+  account_id = var.cloudflare_account_id
+  name       = var.r2_bucket_name
+}
+
+# CORS policy: allows the SPA to PUT blobs directly (presigned upload) and
+# GET blobs directly (presigned download). Only the production Pages origin
+# is allowed — adjust allowed_origins if a custom domain is added.
+resource "cloudflare_r2_bucket_cors" "vault" {
+  account_id  = var.cloudflare_account_id
+  bucket_name = cloudflare_r2_bucket.vault.name
+
+  rules = [
+    {
+      allowed = {
+        methods = ["GET", "PUT", "HEAD"]
+        origins = [var.allowed_origin]
+        headers = ["Content-Type", "x-ms-blob-type"]
+      }
+      max_age_seconds = 3600
+    }
+  ]
+}
+
+# ─── Cloudflare Pages ─────────────────────────────────────────────────────────
+
+# The Pages project is provisioning-only. The actual deployment (build +
+# upload) is handled by `wrangler pages deploy` in deploy.yml, not Terraform.
+# Terraform ensures the project exists before the first CI deploy runs.
+resource "cloudflare_pages_project" "vault" {
+  account_id        = var.cloudflare_account_id
+  name              = var.pages_project_name
+  production_branch = "main"
+
+  # Disable Cloudflare's git integration — GitHub Actions (deploy.yml) owns
+  # deployment via Direct Upload. Connecting both would double-deploy.
+  deployment_configs = {
+    production = {
+      environment_variables = {
+        VITE_API_URL = "https://${azurerm_container_app.api.ingress[0].fqdn}"
+      }
+    }
+    preview = {
+      environment_variables = {}
+    }
+  }
 }

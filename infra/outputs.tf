@@ -22,3 +22,18 @@ output "managed_identity_principal_id" {
   description = "System-assigned managed identity principal ID"
   value       = azurerm_container_app.api.identity[0].principal_id
 }
+
+output "r2_bucket_name" {
+  description = "R2 bucket name"
+  value       = cloudflare_r2_bucket.vault.name
+}
+
+output "pages_project_name" {
+  description = "Cloudflare Pages project name"
+  value       = cloudflare_pages_project.vault.name
+}
+
+output "pages_url" {
+  description = "Default Cloudflare Pages URL (*.pages.dev)"
+  value       = "https://${cloudflare_pages_project.vault.name}.pages.dev"
+}

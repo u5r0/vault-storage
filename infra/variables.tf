@@ -71,3 +71,22 @@ variable "email_from" {
   type        = string
   default     = "noreply@vault.app"
 }
+
+# ─── Cloudflare ───────────────────────────────────────────────────────────────
+
+variable "cloudflare_account_id" {
+  description = "Cloudflare account ID (Dashboard → top-right → Account ID)"
+  type        = string
+}
+
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token with R2:Edit + Pages:Edit permissions"
+  type        = string
+  sensitive   = true
+}
+
+variable "pages_project_name" {
+  description = "Cloudflare Pages project name"
+  type        = string
+  default     = "vault"
+}

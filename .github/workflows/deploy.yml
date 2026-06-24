@@ -1,10 +1,19 @@
-name: Deploy API
+name: Deploy
 
+# Continuous deployment: runs after CI succeeds on main.
+# Two independent jobs fan out from one CI-success event:
+#   deploy-api  → build image → push to ghcr.io → update Azure Container App
+#   deploy-web  → build SPA   → deploy to Cloudflare Pages (production)
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
+
+# Supersede an in-flight deploy when a newer commit lands.
+concurrency:
+  group: deploy-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
 
 permissions:
   id-token: write
@@ -18,7 +27,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          # Pin to the exact commit that triggered the upstream CI run.
+          # Without this, workflow_run uses the default-branch tip, which
+          # can differ from the CI commit on fast-push branches.
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Login to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -26,7 +40,9 @@ jobs:
       - name: Build and push Docker image
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/vault-api"
-          SHA="${{ github.sha }}"
+          # Use the CI commit SHA, not github.sha (which is the workflow file
+          # SHA under workflow_run — they can diverge).
+          SHA="${{ github.event.workflow_run.head_sha }}"
 
           docker build -f apps/server/Dockerfile -t "$IMAGE:$SHA" .
           docker tag "$IMAGE:$SHA" "$IMAGE:latest"
@@ -42,7 +58,50 @@ jobs:
 
       - name: Deploy to Container App
         run: |
+          # Container App name and resource group must match infra/main.tf
+          # (azurerm_container_app.api.name = "vault-api",
+          #  azurerm_resource_group.main.name = "vault-prod-rg").
+          # If those are renamed in Terraform, update here too.
           az containerapp update \
             --name vault-api \
             --resource-group vault-prod-rg \
-            --image "ghcr.io/${{ github.repository_owner }}/vault-api:${{ github.sha }}"
+            --image "ghcr.io/${{ github.repository_owner }}/vault-api:${{ github.event.workflow_run.head_sha }}"
+
+  deploy-web:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SPA
+        run: pnpm --filter @vault/web build
+        env:
+          # Public API URL baked into the bundle at build time.
+          # Set as a repository variable (Settings → Variables → Actions).
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # The Pages project must already exist (provisioned once — see infra).
+          command: pages deploy apps/web/dist --project-name=vault --branch=main
