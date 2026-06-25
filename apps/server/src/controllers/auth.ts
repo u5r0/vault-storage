@@ -7,6 +7,7 @@ import {
   ResendVerificationBody,
   ResetPasswordBody,
 } from "@vault/sdk"
+import { loadConfig } from "../lib/config"
 import {
   createRegisterLimiter,
   createLoginLimiter,
@@ -75,7 +76,7 @@ app.post("/refresh", async (c) => {
   const token = getCookie(c, "refresh")
   if (!token) return c.json({ error: "Unauthenticated" }, 401)
   try {
-    const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me"
+    const { JWT_SECRET } = loadConfig()
     const payload = (await verify(token, JWT_SECRET, "HS256")) as any
     if (!payload || payload.type !== "refresh") {
       return c.json({ error: "Unauthenticated" }, 401)
@@ -100,7 +101,7 @@ app.post("/logout", async (c) => {
   const token = getCookie(c, "refresh")
   if (token) {
     try {
-      const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me"
+      const { JWT_SECRET } = loadConfig()
       const payload = (await verify(token, JWT_SECRET, "HS256")) as any
       if (payload?.jti) await authService.logout(payload.jti)
     } catch { /* ignore */ }

@@ -14,6 +14,10 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "~> 5.0"
     }
+    infisical = {
+      source  = "infisical/infisical"
+      version = "~> 0.15"
+    }
   }
 
   backend "azurerm" {
@@ -32,4 +36,15 @@ provider "azurerm" {
 # Set TF_VAR_cloudflare_api_token or export CLOUDFLARE_API_TOKEN before running.
 provider "cloudflare" {
   api_token = var.cloudflare_api_token
+}
+
+# Infisical provider — authenticated via a machine identity using Universal Auth.
+# The client_id and client_secret belong to a Terraform-only machine identity
+# in Infisical (separate from the Container App's runtime identity).
+# Set TF_VAR_infisical_client_id and TF_VAR_infisical_client_secret as GitHub
+# Actions secrets (or export them locally from infra/envs/.env.local).
+provider "infisical" {
+  host          = "https://app.infisical.com"
+  client_id     = var.infisical_client_id
+  client_secret = var.infisical_client_secret
 }

@@ -1,33 +1,38 @@
 import "dotenv/config"
 import { serve } from "@hono/node-server"
 import { createApp } from "./app"
-import { env } from "./lib/azure"
 import { isBlobConfigured, getProvider } from "./lib/blob-provider"
 import { ensureCorsForBrowserUploads } from "./lib/cors-bootstrap"
 import { initializeDatabase } from "./db"
-import { validateProductionSecrets } from "./lib/config"
+import { hydrateFromInfisical } from "./lib/infisical"
+import { loadConfig } from "./lib/config"
 
 const app = createApp({ withLogger: true })
 
-const port = env.port
-
 async function start() {
-  // Refuse to boot in production with missing or default secrets.
-  validateProductionSecrets()
+  // 1. Fetch secrets from Infisical via managed identity (production).
+  //    No-op in local dev when INFISICAL_IDENTITY_ID is not set — process.env
+  //    is already populated by dotenv/config from .env above.
+  await hydrateFromInfisical()
 
-  // Initialize Cosmos DB database and container
+  // 2. Validate all environment variables against the Zod schema.
+  //    Throws with clear field-level messages on missing / invalid config.
+  const config = loadConfig()
+
+  // 3. Initialize Cosmos DB database and container.
   await initializeDatabase()
 
-  // Configure CORS on the local blob backend so the SPA can PUT directly
-  // to presigned URLs. No-op when running against production storage.
+  // 4. Configure CORS on the local blob backend for browser direct-uploads.
+  //    No-op against production storage (R2/Azure managed externally).
   await ensureCorsForBrowserUploads()
 
-  serve({ fetch: app.fetch, port }, (info) => {
+  serve({ fetch: app.fetch, port: config.PORT }, (info) => {
     console.log(`[server] Vault API running on http://localhost:${info.port}`)
     console.log(`[server] Blob provider: ${getProvider()}`)
     if (!isBlobConfigured()) {
       console.warn(
-        `[server] Blob storage credentials are NOT set. Check BLOB_PROVIDER and related env vars in .env`,
+        "[server] Blob storage credentials are NOT set. " +
+        "Check BLOB_PROVIDER and related env vars in .env",
       )
     }
   })

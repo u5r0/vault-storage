@@ -36,59 +36,6 @@ variable "r2_bucket_name" {
   default     = "vault"
 }
 
-variable "r2_access_key_id" {
-  description = "R2 API token access key ID"
-  type        = string
-  sensitive   = true
-}
-
-variable "r2_secret_access_key" {
-  description = "R2 API token secret access key"
-  type        = string
-  sensitive   = true
-}
-
-variable "jwt_secret" {
-  description = "Secret for signing JWTs"
-  type        = string
-  sensitive   = true
-}
-
-variable "auth_secret" {
-  description = "Secret for magic link tokens"
-  type        = string
-  sensitive   = true
-}
-
-variable "smtp_host" {
-  description = "SMTP server host (e.g. smtp.resend.com)"
-  type        = string
-}
-
-variable "smtp_port" {
-  description = "SMTP server port (e.g. 587 for STARTTLS)"
-  type        = string
-  default     = "587"
-}
-
-variable "smtp_secure" {
-  description = "Use SSL/TLS (true for port 465, false for STARTTLS on port 587)"
-  type        = bool
-  default     = false
-}
-
-variable "smtp_user" {
-  description = "SMTP authentication username"
-  type        = string
-  sensitive   = true
-}
-
-variable "smtp_pass" {
-  description = "SMTP authentication password"
-  type        = string
-  sensitive   = true
-}
-
 variable "email_from" {
   description = "From address for transactional emails"
   type        = string
@@ -112,4 +59,40 @@ variable "pages_project_name" {
   description = "Cloudflare Pages project name"
   type        = string
   default     = "vault"
+}
+
+# ─── Infisical ────────────────────────────────────────────────────────────────
+# Two separate machine identities:
+#   1. Terraform identity  — Universal Auth; reads secrets during terraform apply.
+#      client_id + client_secret are passed as TF_VAR_* GitHub Actions secrets.
+#   2. Container App identity — Azure Auth (managed identity, zero creds in env).
+#      Only the non-secret identity ID is needed here so the Container App env
+#      block can reference it.
+
+variable "infisical_client_id" {
+  description = "Infisical machine identity client ID for Terraform (Universal Auth)"
+  type        = string
+  sensitive   = true
+}
+
+variable "infisical_client_secret" {
+  description = "Infisical machine identity client secret for Terraform (Universal Auth)"
+  type        = string
+  sensitive   = true
+}
+
+variable "infisical_project_id" {
+  description = "Infisical project (workspace) ID"
+  type        = string
+}
+
+variable "infisical_env" {
+  description = "Infisical environment slug (e.g. prod, staging, dev)"
+  type        = string
+  default     = "prod"
+}
+
+variable "infisical_identity_id" {
+  description = "Infisical machine identity ID used by the Container App at runtime (Azure Auth)"
+  type        = string
 }

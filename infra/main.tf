@@ -69,23 +69,21 @@ resource "azurerm_cosmosdb_sql_container" "entries" {
   }
 }
 
-# ─── Key Vault ────────────────────────────────────────────────────────────────
+# ─── Infisical secrets ────────────────────────────────────────────────────────
+# Pull application runtime secrets from Infisical at terraform apply time.
+# The server re-fetches them at cold-start via the Container App's managed
+# identity (Infisical Azure Auth), so no plaintext secrets live in env vars.
+#
+# Two Infisical machine identities are in play:
+#   1. Terraform identity (Universal Auth, credentials below) — used here to
+#      read secrets during `terraform apply` and write Container App secret blocks.
+#   2. Container App runtime identity (Azure Auth, zero creds in env) — used by
+#      the Node server at startup via DefaultAzureCredential + Infisical SDK.
 
-resource "azurerm_key_vault" "main" {
-  name                       = "vault-kv-${random_string.suffix.result}"
-  resource_group_name        = azurerm_resource_group.main.name
-  location                   = azurerm_resource_group.main.location
-  tenant_id                  = data.azurerm_client_config.current.tenant_id
-  sku_name                   = "standard"
-  soft_delete_retention_days = 7
-  purge_protection_enabled   = false
-
-  access_policy {
-    tenant_id = data.azurerm_client_config.current.tenant_id
-    object_id = data.azurerm_client_config.current.object_id
-
-    secret_permissions = ["Get", "List", "Set", "Delete", "Purge"]
-  }
+data "infisical_secrets" "app" {
+  workspace_id = var.infisical_project_id
+  env_slug     = var.infisical_env
+  folder_path  = "/"
 }
 
 # ─── Log Analytics ────────────────────────────────────────────────────────────
@@ -232,17 +230,17 @@ resource "azurerm_container_app" "api" {
 
       env {
         name  = "SMTP_HOST"
-        value = var.smtp_host
+        value = data.infisical_secrets.app.secrets["SMTP_HOST"].value
       }
 
       env {
         name  = "SMTP_PORT"
-        value = var.smtp_port
+        value = data.infisical_secrets.app.secrets["SMTP_PORT"].value
       }
 
       env {
         name  = "SMTP_SECURE"
-        value = tostring(var.smtp_secure)
+        value = data.infisical_secrets.app.secrets["SMTP_SECURE"].value
       }
 
       env {

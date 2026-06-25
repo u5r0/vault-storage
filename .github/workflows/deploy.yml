@@ -33,21 +33,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      # Azure login is required before `terraform init` because the azurerm
+      # backend (Azure Storage) needs credentials to read/write state.
+      - name: Login to Azure
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          auth-type: service-principal
+
       - uses: hashicorp/setup-terraform@v4
+
       - name: Terraform Apply
         run: |
           cd infra
           terraform init
           terraform apply -var-file=envs/prod.tfvars -auto-approve \
             -var="ghcr_token=${{ secrets.TF_VAR_ghcr_token }}" \
-            -var="r2_access_key_id=${{ secrets.TF_VAR_r2_access_key_id }}" \
-            -var="r2_secret_access_key=${{ secrets.TF_VAR_r2_secret_access_key }}" \
-            -var="jwt_secret=${{ secrets.TF_VAR_jwt_secret }}" \
-            -var="auth_secret=${{ secrets.TF_VAR_auth_secret }}" \
-            -var="smtp_url=${{ secrets.TF_VAR_smtp_url }}" \
-            -var="cloudflare_api_token=${{ secrets.TF_VAR_cloudflare_api_token }}"
+            -var="cloudflare_api_token=${{ secrets.TF_VAR_cloudflare_api_token }}" \
+            -var="infisical_client_id=${{ secrets.TF_VAR_infisical_client_id }}" \
+            -var="infisical_client_secret=${{ secrets.TF_VAR_infisical_client_secret }}" \
+            -var="infisical_project_id=${{ vars.INFISICAL_PROJECT_ID }}" \
+            -var="infisical_identity_id=${{ vars.INFISICAL_IDENTITY_ID }}"
+
       - name: Set GitHub Variable
         run: |
+          cd infra
           API_URL=$(terraform output -raw api_url)
           gh variable set VITE_API_URL -b "$API_URL"
 
