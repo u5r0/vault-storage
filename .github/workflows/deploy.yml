@@ -9,6 +9,13 @@ on:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_terraform:
+        description: "Run terraform apply (infrastructure changes)"
+        required: false
+        default: false
+        type: boolean
 
 # Supersede an in-flight deploy when a newer commit lands.
 concurrency:
@@ -21,6 +28,29 @@ permissions:
   packages: write
 
 jobs:
+  terraform:
+    if: github.event.inputs.run_terraform == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
+      - name: Terraform Apply
+        run: |
+          cd infra
+          terraform init
+          terraform apply -var-file=envs/prod.tfvars -auto-approve \
+            -var="ghcr_token=${{ secrets.TF_VAR_ghcr_token }}" \
+            -var="r2_access_key_id=${{ secrets.TF_VAR_r2_access_key_id }}" \
+            -var="r2_secret_access_key=${{ secrets.TF_VAR_r2_secret_access_key }}" \
+            -var="jwt_secret=${{ secrets.TF_VAR_jwt_secret }}" \
+            -var="auth_secret=${{ secrets.TF_VAR_auth_secret }}" \
+            -var="smtp_url=${{ secrets.TF_VAR_smtp_url }}" \
+            -var="cloudflare_api_token=${{ secrets.TF_VAR_cloudflare_api_token }}"
+      - name: Set GitHub Variable
+        run: |
+          API_URL=$(terraform output -raw api_url)
+          gh variable set VITE_API_URL -b "$API_URL"
+
   deploy-api:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
@@ -50,11 +80,12 @@ jobs:
           docker push "$IMAGE:latest"
 
       - name: Login to Azure
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          auth-type: service-principal
 
       - name: Deploy to Container App
         run: |
@@ -80,12 +111,12 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 9
+          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -104,4 +135,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           # The Pages project must already exist (provisioned once — see infra).
-          command: pages deploy apps/web/dist --project-name=vault --branch=main
+          command: pages deploy apps/web/dist --project-name=vault-storage --branch=main

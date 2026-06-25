@@ -41,43 +41,65 @@ r2_account_id         = "<cloudflare-account-id>"
 cloudflare_account_id = "<cloudflare-account-id>"   # Dashboard → top-right → Account ID
 ```
 
-Secrets are passed via environment variables — never committed:
+Secrets are passed via environment variables for local runs, and via GitHub Secrets for CI/CD:
+
+**Local runs:** Create `infra/envs/.env.local` (gitignored) with:
 
 ```bash
-export TF_VAR_ghcr_token="<github-pat-with-read:packages>"
-export TF_VAR_r2_access_key_id="<r2-access-key-id>"
-export TF_VAR_r2_secret_access_key="<r2-secret-access-key>"
-export TF_VAR_jwt_secret="$(openssl rand -hex 32)"
-export TF_VAR_auth_secret="$(openssl rand -hex 32)"
-export TF_VAR_smtp_url="smtp://resend:<resend-api-key>@smtp.resend.com:587"
-export TF_VAR_cloudflare_api_token="<cloudflare-api-token>"
+TF_VAR_ghcr_token="<github-pat-with-read:packages>"
+TF_VAR_r2_access_key_id="<r2-access-key-id>"
+TF_VAR_r2_secret_access_key="<r2-secret-access-key>"
+TF_VAR_jwt_secret="$(openssl rand -hex 32)"
+TF_VAR_auth_secret="$(openssl rand -hex 32)"
+TF_VAR_smtp_url="smtp://resend:<resend-api-key>@smtp.resend.com:587"
+TF_VAR_cloudflare_api_token="<cloudflare-api-token>"
 ```
+
+**CI/CD:** Add these as GitHub Secrets (Settings → Secrets and variables → Actions):
+- `TF_VAR_ghcr_token`
+- `TF_VAR_r2_access_key_id`
+- `TF_VAR_r2_secret_access_key`
+- `TF_VAR_jwt_secret`
+- `TF_VAR_auth_secret`
+- `TF_VAR_smtp_url`
+- `TF_VAR_cloudflare_api_token`
 
 The Cloudflare API token needs two permissions: **R2:Edit** (to create the bucket and set CORS) and **Pages:Edit** (to create the Pages project). Create it at Cloudflare Dashboard → My Profile → API Tokens.
 
 The R2 Access Key ID and Secret (for `TF_VAR_r2_access_key_id` / `TF_VAR_r2_secret_access_key`) are a separate S3-compatible credential — create them at Cloudflare Dashboard → R2 → Manage R2 API Tokens.
 
-### 3. Provision all infrastructure
+### 3. Provision all infrastructure (initial setup)
 
 ```bash
 cd infra
 terraform init
-source envs/.env.local  # Fill secrets for terraform
+source envs/.env.local  # Load secrets for terraform
 terraform plan -var-file=envs/prod.tfvars
 terraform apply -var-file=envs/prod.tfvars
 ```
 
 A single `terraform apply` creates everything:
 - **Azure:** Cosmos DB account + database + container, Key Vault, Log Analytics workspace, Container App environment, Container App (with system-assigned managed identity + Cosmos role assignment)
-- **Cloudflare:** R2 bucket (`vault`) + CORS policy, Pages project (`vault`) with `VITE_API_URL` set to the Container App URL
+- **Cloudflare:** R2 bucket (`vault`) + CORS policy, Pages project (`vault-storage`)
 
 Note the outputs — you'll need `api_url` and `pages_url` for the next step.
+
+### 3b. Optional: Run terraform via CI/CD
+
+After initial setup, infrastructure changes can be applied via GitHub Actions:
+
+1. Go to Actions → Deploy workflow
+2. Click "Run workflow"
+3. Check "Run terraform apply (infrastructure changes)"
+4. Click "Run workflow"
+
+This applies terraform using GitHub Secrets and automatically updates the `VITE_API_URL` GitHub variable.
 
 ### 4. Configure GitHub repository secrets for the deploy pipeline
 
 The `deploy.yml` workflow needs these (Settings → Secrets and variables → Actions):
 
-**Secrets:**
+**Secrets (for deploy-api and deploy-web jobs):**
 
 | Secret | How to get it |
 |--------|---------------|
@@ -87,23 +109,47 @@ The `deploy.yml` workflow needs these (Settings → Secrets and variables → Ac
 | `CLOUDFLARE_API_TOKEN` | Same token used for Terraform (R2:Edit + Pages:Edit) |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → top-right → Account ID |
 
+**Secrets (for optional terraform job):**
+
+| Secret | Value |
+|--------|-------|
+| `TF_VAR_ghcr_token` | GitHub PAT with read:packages scope |
+| `TF_VAR_r2_access_key_id` | R2 API token access key |
+| `TF_VAR_r2_secret_access_key` | R2 API token secret |
+| `TF_VAR_jwt_secret` | Random secret for JWT signing |
+| `TF_VAR_auth_secret` | Random secret for magic link tokens |
+| `TF_VAR_smtp_url` | SMTP connection URL (e.g., smtp://resend:...) |
+| `TF_VAR_cloudflare_api_token` | Cloudflare API token (R2:Edit + Pages:Edit) |
+
 **Variables:**
 
 | Variable | Value |
 |----------|-------|
-| `VITE_API_URL` | `https://<api_url from terraform output>` (baked into the SPA bundle at build time) |
+| `VITE_API_URL` | `https://<api_url from terraform output>` (set automatically by terraform job, or manually after initial setup) |
 
-To create a service principal with Container App access:
+To create a service principal with Container App access (using OIDC):
 
-```bash
-az ad sp create-for-rbac \
-  --name "vault-github-deploy" \
-  --role "Contributor" \
-  --scopes "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/vault-prod-rg" \
-  --output json
-```
+1. Go to [Azure Portal → App Registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
+2. Click "New registration"
+3. Name: `vault-storage-deploy`
+4. Supported account types: "Accounts in this organizational directory only"
+5. Register (leave Redirect URI blank — not needed for OIDC)
+6. Copy the **Application (client) ID** → this is `AZURE_CLIENT_ID`
+7. Copy the **Directory (tenant) ID** → this is `AZURE_TENANT_ID`
+8. Go to "Certificates & secrets" → "Federated credentials" → "Add credential"
+9. Fill in:
+   - **Federated credential scenario:** "GitHub Actions deploying Azure resources"
+   - **GitHub organization:** your GitHub username/org
+   - **Repository:** your repo name
+   - **Entity type:** "Branch"
+   - **Branch:** `main`
+   - **Name:** `github-deploy`
+   - **Audience:** `api://AzureADTokenExchange`
+10. Add
+11. Go to your resource group `vault-prod-rg` → "Access control (IAM)"
+12. Add role assignment → "Contributor" → search for `vault-storage-deploy` → assign
 
-Use the returned `appId` as `AZURE_CLIENT_ID`, `tenant` as `AZURE_TENANT_ID`.
+Note: No `AZURE_CLIENT_SECRET` is needed — the workflow uses OpenID Connect (OIDC) which is more secure.
 
 ### 5. Push to main
 
@@ -185,10 +231,18 @@ az containerapp ingress traffic set \
 
 ## Infrastructure changes
 
-To update infrastructure after provisioning:
+To update infrastructure after provisioning, you have two options:
 
+**Option 1: Run via CI/CD (recommended)**
+1. Go to Actions → Deploy workflow
+2. Click "Run workflow"
+3. Check "Run terraform apply (infrastructure changes)"
+4. Click "Run workflow"
+
+**Option 2: Run locally**
 ```bash
 cd infra
+source envs/.env.local  # Load secrets
 terraform plan -var-file=envs/prod.tfvars
 terraform apply -var-file=envs/prod.tfvars
 ```

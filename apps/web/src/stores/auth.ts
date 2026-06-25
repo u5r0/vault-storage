@@ -1,7 +1,7 @@
 import { ref, computed } from "vue"
 import { defineStore } from "pinia"
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000"
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000"
 
 interface User {
   id: string
