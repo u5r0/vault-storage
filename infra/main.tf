@@ -139,8 +139,13 @@ resource "azurerm_container_app" "api" {
   }
 
   secret {
-    name  = "smtp-url"
-    value = var.smtp_url
+    name  = "smtp-user"
+    value = var.smtp_user
+  }
+
+  secret {
+    name  = "smtp-pass"
+    value = var.smtp_pass
   }
 
   secret {
@@ -226,8 +231,28 @@ resource "azurerm_container_app" "api" {
       }
 
       env {
-        name        = "SMTP_URL"
-        secret_name = "smtp-url"
+        name  = "SMTP_HOST"
+        value = var.smtp_host
+      }
+
+      env {
+        name  = "SMTP_PORT"
+        value = var.smtp_port
+      }
+
+      env {
+        name  = "SMTP_SECURE"
+        value = tostring(var.smtp_secure)
+      }
+
+      env {
+        name        = "SMTP_USER"
+        secret_name = "smtp-user"
+      }
+
+      env {
+        name        = "SMTP_PASS"
+        secret_name = "smtp-pass"
       }
 
       env {

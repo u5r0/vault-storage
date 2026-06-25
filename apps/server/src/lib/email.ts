@@ -1,10 +1,22 @@
 import nodemailer from "nodemailer"
 
-const SMTP_URL = process.env.SMTP_URL || "smtp://localhost:1025"
+const SMTP_HOST = process.env.SMTP_HOST || "localhost"
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || "1025")
+const SMTP_SECURE = process.env.SMTP_SECURE === "true"
+const SMTP_USER = process.env.SMTP_USER
+const SMTP_PASS = process.env.SMTP_PASS
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@vault.app"
 const APP_URL = process.env.APP_URL || "http://localhost:3000"
 
-const transporter = nodemailer.createTransport(SMTP_URL)
+const transporter = nodemailer.createTransport({
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: SMTP_SECURE,
+  auth: SMTP_USER && SMTP_PASS ? {
+    user: SMTP_USER,
+    pass: SMTP_PASS,
+  } : undefined,
+})
 
 export async function sendVerificationEmail(email: string, token: string) {
   const verificationUrl = `${APP_URL}/verify?token=${token}`

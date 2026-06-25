@@ -60,8 +60,31 @@ variable "auth_secret" {
   sensitive   = true
 }
 
-variable "smtp_url" {
-  description = "SMTP connection URL (e.g. smtp://resend:<key>@smtp.resend.com:587)"
+variable "smtp_host" {
+  description = "SMTP server host (e.g. smtp.resend.com)"
+  type        = string
+}
+
+variable "smtp_port" {
+  description = "SMTP server port (e.g. 587 for STARTTLS)"
+  type        = string
+  default     = "587"
+}
+
+variable "smtp_secure" {
+  description = "Use SSL/TLS (true for port 465, false for STARTTLS on port 587)"
+  type        = bool
+  default     = false
+}
+
+variable "smtp_user" {
+  description = "SMTP authentication username"
+  type        = string
+  sensitive   = true
+}
+
+variable "smtp_pass" {
+  description = "SMTP authentication password"
   type        = string
   sensitive   = true
 }

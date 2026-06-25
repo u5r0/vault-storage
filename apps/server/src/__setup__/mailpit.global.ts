@@ -4,16 +4,17 @@ import type { TestProject } from "vitest/node"
  * Vitest global setup — uses Docker-based Mailpit for integration tests.
  *
  * Mailpit is expected to be running via docker-compose on host ports 1025
- * (SMTP) and 8025 (HTTP API + Web UI). We `provide()` the URLs so per-worker
- * `setupFiles` (mailpit.env.ts) can set `SMTP_URL` before any server module
- * loads.
+ * (SMTP) and 8025 (HTTP API + Web UI). We `provide()` the SMTP config so
+ * per-worker `setupFiles` (mailpit.env.ts) can set environment variables
+ * before any server module loads.
  *
  * See ADR 0019 §E0.
  */
 
 const MAILPIT_API = "http://127.0.0.1:8025"
 const MAILPIT_SMTP_HOST = "127.0.0.1"
-const MAILPIT_SMTP_PORT = 1025
+const MAILPIT_SMTP_PORT = "1025"
+const MAILPIT_SMTP_SECURE = "false"
 
 export default async function setup(project: TestProject) {
   // Wait for Mailpit to be ready (docker-compose may still be starting).
@@ -42,7 +43,9 @@ export default async function setup(project: TestProject) {
   }
 
   project.provide("mailpitApi", MAILPIT_API)
-  project.provide("smtpUrl", `smtp://${MAILPIT_SMTP_HOST}:${MAILPIT_SMTP_PORT}`)
+  project.provide("smtpHost", MAILPIT_SMTP_HOST)
+  project.provide("smtpPort", MAILPIT_SMTP_PORT)
+  project.provide("smtpSecure", MAILPIT_SMTP_SECURE)
 
   return async () => {
     /* docker-compose manages lifecycle */
@@ -52,6 +55,8 @@ export default async function setup(project: TestProject) {
 declare module "vitest" {
   export interface ProvidedContext {
     mailpitApi: string
-    smtpUrl: string
+    smtpHost: string
+    smtpPort: string
+    smtpSecure: string
   }
 }
