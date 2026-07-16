@@ -5,8 +5,11 @@ import path from "node:path"
 import { playwright } from "@vitest/browser-playwright"
 
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
+const root = path.resolve(fileURLToPath(import.meta.url), "../")
+
 
 export default defineConfig({
+  root,
   plugins: [vue()],
   resolve: {
     alias: {
@@ -16,8 +19,8 @@ export default defineConfig({
   },
   test: {
     name: "web-browser",
-    include: ["apps/web/src/**/*.browser.test.ts"],
-    setupFiles: ["apps/web/src/__test__/browser-setup.ts"],
+    include: ["src/**/*.browser.test.ts"],
+    setupFiles: ["src/__test__/browser-setup.ts"],
     browser: {
       enabled: true,
       provider: playwright(),
