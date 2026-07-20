@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from "uuid"
 import { db } from "../db"
 import { getBlobStore } from "../lib/blob-provider"
 import { env } from "../lib/azure"
-import type { VaultEntry } from "@vault/sdk"
+import { normalizeSearchText, type VaultEntry } from "@vault/sdk"
 
 function isSafeName(name: string): boolean {
   if (!name || name.length > 255) return false
@@ -123,7 +123,10 @@ export class FilesService {
       { name: "@fileType", value: "file" },
       { name: "@folderType", value: "folder" },
       { name: "@ownerId", value: ownerId },
-      { name: "@q", value: q },
+      // Normalized needle for the indexed path, plus the raw lowercased
+      // needle for the legacy fallback (docs predating nameNormalized).
+      { name: "@qNorm", value: normalizeSearchText(q) },
+      { name: "@qRaw", value: q },
     ]
     let typeClause = ""
     if (opts.type) {
@@ -135,8 +138,15 @@ export class FilesService {
       {
         // Scope to file/folder docs (parameterized — cosmium drops literal
         // string equality) so non-file docs without a `name` can't slip into
-        // CONTAINS(LOWER(c.name), …) or the result set.
-        query: `SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND (c.ownerId = @ownerId OR c.ownerId = null) AND c.deletedAt = null AND CONTAINS(LOWER(c.name), LOWER(@q))${typeClause}`,
+        // the match predicate or the result set.
+        //
+        // Match against the persisted `nameNormalized` index (ADR 0028 §3.2)
+        // so alef/tashkeel/diacritic/case folding is consistent with the
+        // client. Documents created before the index existed have no
+        // `nameNormalized`; for those we fall back to the old
+        // CONTAINS(LOWER(c.name), …) behaviour so nothing silently drops out
+        // until a backfill runs.
+        query: `SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND (c.ownerId = @ownerId OR c.ownerId = null) AND c.deletedAt = null AND ((IS_DEFINED(c.nameNormalized) AND CONTAINS(c.nameNormalized, @qNorm)) OR (NOT IS_DEFINED(c.nameNormalized) AND CONTAINS(LOWER(c.name), LOWER(@qRaw))))${typeClause}`,
         parameters: params,
       },
       { maxItemCount: pageSize, continuationToken: opts.cursor },
@@ -186,6 +196,10 @@ export class FilesService {
         ownerId,
         parentId: parentId ?? null,
         name,
+        // Persisted search index (ADR 0028 §3.2): server writes it, the
+        // search query matches against it, so diacritic/alef/case folding
+        // stays identical on both sides via the shared SDK normalizer.
+        nameNormalized: normalizeSearchText(name),
         type: "folder",
         size: 0,
         contentType: null,
@@ -238,6 +252,7 @@ export class FilesService {
         const entry = {
           id, ownerId, parentId,
           name: file.name,
+          nameNormalized: normalizeSearchText(file.name),
           type: "file",
           size,
           contentType: file.type || "application/octet-stream",
@@ -388,6 +403,7 @@ export class FilesService {
       ownerId,
       parentId: parentId ?? null,
       name,
+      nameNormalized: normalizeSearchText(name),
       type: "file",
       size: meta.size,
       contentType,
@@ -451,7 +467,12 @@ export class FilesService {
     checkOwner(resource, ownerId)
     if (resource.name === name) return
     try {
-      await db.item(id).replace({ ...resource, name, modifiedAt: new Date().toISOString() })
+      await db.item(id).replace({
+        ...resource,
+        name,
+        nameNormalized: normalizeSearchText(name),
+        modifiedAt: new Date().toISOString(),
+      })
     } catch (err) {
       rethrowBackendError(err, `Rename failed for ${id}`)
     }
