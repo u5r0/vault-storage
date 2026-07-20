@@ -218,6 +218,55 @@ export class FilesService {
     return { entries, cursor: continuationToken ?? null }
   }
 
+  /**
+   * Flat, whole-vault listing used to hydrate the client search index
+   * (ADR 0028 §3.2).
+   *
+   * Unlike `list()` this is intentionally NOT parent-scoped — it returns
+   * every non-deleted file/folder the caller owns across all folders,
+   * mirroring the `quickLinks()` cross-partition scoping. That is what fixes
+   * the root-only hydration bug where the local index only ever saw entries
+   * living at the root.
+   *
+   * The result is capped at INDEX_HARD_LIMIT (10 000). We deliberately read
+   * one entry beyond the cap: if the vault yields more than 10 000 entries the
+   * list is sliced to the first 10 000 and `truncated` is set so the client
+   * abandons the local index and uses server-side search exclusively.
+   */
+  async listAll(ownerId: string): Promise<{ entries: VaultEntry[]; truncated: boolean }> {
+    const INDEX_HARD_LIMIT = 10_000
+    try {
+      const iterator = db.items.query(
+        {
+          query:
+            "SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND (c.ownerId = @ownerId OR c.ownerId = null) AND c.deletedAt = null",
+          parameters: [
+            { name: "@fileType", value: "file" },
+            { name: "@folderType", value: "folder" },
+            { name: "@ownerId", value: ownerId },
+          ],
+        },
+        { maxItemCount: 1000 },
+      )
+
+      // Accumulate pages until we have read past the cap (so truncation can be
+      // detected) or the query is exhausted.
+      const resources: any[] = []
+      while (resources.length <= INDEX_HARD_LIMIT) {
+        const segment = await iterator.fetchNext()
+        resources.push(...segment.resources)
+        if (!segment.continuationToken) break
+      }
+
+      const truncated = resources.length > INDEX_HARD_LIMIT
+      const entries = resources.slice(0, INDEX_HARD_LIMIT).map((r) => this.toVaultEntry(r))
+
+      return { entries, truncated }
+    } catch (err) {
+      rethrowBackendError(err, "List all entries failed")
+    }
+  }
+
   async createFolder(
     parentId: string | null,
     name: string,

@@ -43,6 +43,7 @@ vi.mock("../services/files", () => ({
   filesService: {
     list: vi.fn().mockResolvedValue({ entries: [], cursor: null }),
     search: vi.fn().mockResolvedValue({ entries: [], cursor: null }),
+    listAll: vi.fn().mockResolvedValue({ entries: [], truncated: false }),
     createFolder: vi.fn().mockResolvedValue({ id: "folder-id" }),
     upload: vi.fn().mockResolvedValue([]),
     download: vi.fn().mockResolvedValue({
@@ -65,6 +66,7 @@ vi.mock("../services/files", () => ({
 const ROUTE_ORDER = [
   "GET /",
   "GET /search",
+  "GET /all",
   "GET /download",
   "GET /download-url",
   "GET /quick-links",
@@ -108,6 +110,7 @@ describe("files controller — limiter wiring", () => {
     const expected: Record<(typeof ROUTE_ORDER)[number], RateLimiterMemory> = {
       "GET /":                  readLimiter,
       "GET /search":            readLimiter,
+      "GET /all":               readLimiter,
       "GET /download":          readLimiter,
       "GET /download-url":      readLimiter,
       "GET /quick-links":       readLimiter,

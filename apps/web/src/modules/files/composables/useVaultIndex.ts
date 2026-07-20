@@ -1,6 +1,6 @@
-import { shallowRef, readonly } from "vue"
+import { shallowRef, readonly, watch } from "vue"
 import MiniSearch from "minisearch"
-import { useInfiniteQuery } from "@tanstack/vue-query"
+import { useQuery } from "@tanstack/vue-query"
 import { client as defaultClient } from "@/lib/client"
 import { normalizeSearchText } from "@vault/sdk"
 import type { VaultEntry, VaultStore } from "@vault/sdk"
@@ -21,13 +21,11 @@ import { filesKeys } from "../lib/queryKeys"
 //     without a full server round-trip.
 //
 // Index ceiling (ADR 0028 §3.2): MiniSearch is practical up to ~50k documents.
-// Personal vaults are expected in the hundreds–thousands range. If a hydration
-// batch returns more than INDEX_HARD_LIMIT total documents the index is
-// considered "too large" and the composable sets `indexTooLarge = true` so
-// `useSearch` can fall back to the server for every query.
-
-const INDEX_HARD_LIMIT = 10_000
-const BATCH_SIZE = 100
+// Personal vaults are expected in the hundreds–thousands range. The server caps
+// the flat listing at its own INDEX_HARD_LIMIT (10 000) and reports
+// `truncated: true` when the vault exceeds it; the composable then sets
+// `indexTooLarge = true` so `useSearch` falls back to the server for every
+// query.
 
 function makeMiniSearch() {
   return new MiniSearch<VaultEntry>({
@@ -54,83 +52,53 @@ const hydrateError = shallowRef<Error | null>(null)
 // ─── Composable ───────────────────────────────────────────────────────────────
 
 export function useVaultIndex(client: VaultStore = defaultClient) {
-  // Hydrate: drain all pages of the root listing to seed the index.
+  // Hydrate: a single flat listing of the whole vault seeds the index.
   // `enabled` is false once hydrated so this query never re-runs automatically.
   // Re-hydration is triggered only by `invalidateQueries(filesKeys.all)` from
   // mutations — which TanStack Query will honour automatically because this
   // query key begins with `["files"]`.
-  const hydrateQuery = useInfiniteQuery({
+  const hydrateQuery = useQuery({
     queryKey: [...filesKeys.all, "__index__"] as const,
-    queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
-      return client.listFiles({
-        entityId: undefined,
-        cursor: pageParam,
-        pageSize: BATCH_SIZE,
-      })
-    },
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.cursor ?? undefined,
+    queryFn: () => client.listAllEntries(),
     enabled: !hydrated.value && !indexTooLarge.value,
     staleTime: Infinity,
   })
 
-  // Watch the query pages as they arrive and ingest them into MiniSearch.
-  // We can't use `watchEffect` on `hydrateQuery.data` directly for the first
-  // load because TanStack Query batches pages — instead, wire into `onSuccess`
-  // via a watcher on `data`.
-  //
-  // Pattern: whenever the page list grows, ingest only the newest page to
-  // avoid re-adding already-indexed documents.
-  let lastPageCount = 0
-
-  function ingestNewPages() {
-    const pages = hydrateQuery.data.value?.pages ?? []
-    if (pages.length <= lastPageCount) return
-
-    for (let i = lastPageCount; i < pages.length; i++) {
-      const entries = pages[i].entries
-      for (const e of entries) {
-        if (ms.has(e.id)) {
-          ms.replace(e)
-        } else {
-          ms.add(e)
-        }
-      }
-    }
-    lastPageCount = pages.length
-
-    const total = pages.reduce((acc, p) => acc + p.entries.length, 0)
-    if (total >= INDEX_HARD_LIMIT) {
-      indexTooLarge.value = true
-    }
-
-    // All pages loaded (no next page cursor) → mark hydrated
-    const lastPage = pages[pages.length - 1]
-    if (!lastPage?.cursor && !hydrateQuery.hasNextPage.value) {
-      hydrated.value = true
-      hydrating.value = false
-    }
-  }
-
-  // Kick off page fetching and watch for new pages arriving
+  // Ingest the flat listing into MiniSearch once it resolves. A `truncated`
+  // response means the vault is too large to index locally, so we flag
+  // `indexTooLarge` and let `useSearch` fall back to the server.
   if (!hydrated.value && !indexTooLarge.value) {
     hydrating.value = true
-    // Watch data changes — fires as each page arrives
-    import("vue").then(({ watch }) => {
-      watch(() => hydrateQuery.data.value, () => {
-        ingestNewPages()
-        if (hydrateQuery.hasNextPage.value && !hydrateQuery.isFetchingNextPage.value) {
-          hydrateQuery.fetchNextPage()
-        }
-      }, { immediate: true, deep: false })
 
-      watch(() => hydrateQuery.error.value, (err) => {
+    watch(
+      () => hydrateQuery.data.value,
+      (data) => {
+        if (!data) return
+        for (const e of data.entries) {
+          if (ms.has(e.id)) {
+            ms.replace(e)
+          } else {
+            ms.add(e)
+          }
+        }
+        if (data.truncated) {
+          indexTooLarge.value = true
+        }
+        hydrated.value = true
+        hydrating.value = false
+      },
+      { immediate: true },
+    )
+
+    watch(
+      () => hydrateQuery.error.value,
+      (err) => {
         if (err) {
           hydrateError.value = err as Error
           hydrating.value = false
         }
-      })
-    })
+      },
+    )
   }
 
   // ─── Public search ───────────────────────────────────────────────────────

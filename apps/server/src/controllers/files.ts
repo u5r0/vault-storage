@@ -52,6 +52,12 @@ files.get("/search", userRateLimit(readLimiter), zValidator("query", SearchFiles
   return c.json({ entries, cursor: nextCursor })
 })
 
+files.get("/all", userRateLimit(readLimiter), async (c) => {
+  const ownerId = (c as any).get("userId") as string
+  const { entries, truncated } = await filesService.listAll(ownerId)
+  return c.json({ entries, truncated })
+})
+
 files.get("/download", userRateLimit(readLimiter), async (c) => {
   const id = c.req.query("id")
   if (!id) return c.json({ error: "Missing 'id' query param" }, 400)
