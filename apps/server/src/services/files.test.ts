@@ -2,15 +2,29 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { HTTPException } from "hono/http-exception"
 import { filesService } from "./files"
 
-vi.mock("../db", () => ({
-  db: {
-    items: {
-      query: vi.fn(),
-      create: vi.fn(),
+vi.mock("../db", () => {
+  // db === entries (same container proxy). Tests mock db.* by convention so
+  // db and entries must share the same vi.fn() instances.
+  const sharedItems = { query: vi.fn(), create: vi.fn() }
+  const sharedItem = vi.fn()
+  const entriesContainer = { items: sharedItems, item: sharedItem }
+  return {
+    db: entriesContainer,
+    entries: entriesContainer,
+    // lookup is used by entry-lookup.ts (resolvePointer, putPointer,
+    // deletePointer). Default lookup.item().read() returns null so
+    // readEntryById falls through to the db.items.query fallback scan —
+    // keeping every test that mocks db.item() working unchanged.
+    lookup: {
+      items: { upsert: vi.fn() },
+      item: vi.fn().mockReturnValue({
+        read: vi.fn().mockResolvedValue({ resource: null }),
+        delete: vi.fn().mockResolvedValue(undefined),
+      }),
     },
-    item: vi.fn(),
-  },
-}))
+    authContainer: { items: { query: vi.fn(), create: vi.fn() }, item: vi.fn() },
+  }
+})
 
 vi.mock("../lib/azure", () => ({
   env: { maxUploadMb: 100 },
@@ -90,12 +104,17 @@ describe("FilesService", () => {
 
       const result = await filesService.list(null, ownerId)
 
+      // HPK list: no @ownerId param — partition key prefix [ownerId, parentId]
+      // scopes the query; only @parentId appears in the SQL params.
       expect(db.items.query).toHaveBeenCalledWith(
         expect.objectContaining({
-          query: expect.stringContaining("c.ownerId = @ownerId"),
-          parameters: expect.arrayContaining([{ name: "@ownerId", value: ownerId }]),
+          query: expect.stringContaining("c.parentId = @parentId"),
+          parameters: expect.arrayContaining([{ name: "@parentId", value: null }]),
         }),
-        expect.objectContaining({ maxItemCount: 100 }),
+        expect.objectContaining({
+          maxItemCount: 100,
+          partitionKey: [ownerId, null],
+        }),
       )
       expect(result.entries).toHaveLength(2)
       expect(result.cursor).toBe(null)
@@ -133,7 +152,9 @@ describe("FilesService", () => {
       } as any)
 
       const result = await filesService.list(null, ownerId, { pageSize: 1 })
-      expect(result.cursor).toBe("next-page-token")
+      // Cursor is JSON-encoded { phase, token } so the next call knows which
+      // phase to resume and which Cosmos continuation token to pass.
+      expect(result.cursor).toBe(JSON.stringify({ phase: "own", token: "next-page-token" }))
     })
 
     /**
@@ -194,7 +215,7 @@ describe("FilesService", () => {
       // Two segments fetched; the second one filled the page so we stopped.
       expect(fetchNext).toHaveBeenCalledTimes(2)
       expect(result.entries).toHaveLength(2)
-      expect(result.cursor).toBe("p3")
+      expect(result.cursor).toBe(JSON.stringify({ phase: "own", token: "p3" }))
     })
   })
 

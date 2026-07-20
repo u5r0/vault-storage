@@ -67,33 +67,83 @@ function rethrowBackendError(err: unknown, contextMessage: string): never {
 }
 
 export class FilesService {
+  /**
+   * HPK-scoped split query (ADR 0028 §3.1 point 2/3): two single-partition
+   * reads instead of the old `OR c.ownerId = null` cross-partition fan-out.
+   *
+   *  - "own" phase scopes to the partial hierarchical partition key
+   *    [ownerId, parentId] — every document a user owns in this folder
+   *    shares that (ownerId, parentId) prefix, so Cosmos resolves this to
+   *    exactly the physical partitions holding this folder's contents.
+   *  - "global" phase scopes to [null, parentId] — files.ts never writes
+   *    an entry with ownerId: null today (every write path sets the
+   *    caller's ownerId), but `checkOwner`/`toVaultEntry` already treat
+   *    `ownerId === null` as a first-class "global file" case, so the
+   *    read path scopes for it regardless of whether anything populates it
+   *    yet.
+   *
+   * "own" is always fully drained before "global" begins, and a phase
+   * transition happening mid-page falls through into the next phase within
+   * the same call — so no entry is ever skipped or duplicated across a
+   * page boundary, and the caller never sees a spurious empty page at the
+   * own→global seam.
+   */
   async list(
     parentId: string | null,
     ownerId: string,
     opts: { cursor?: string; pageSize?: number } = {},
   ): Promise<{ entries: VaultEntry[]; cursor: string | null }> {
     const pageSize = opts.pageSize ?? 100
-    const iterator = db.items.query(
-      {
-        query:
-          "SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND c.parentId = @parentId AND c.deletedAt = null AND (c.ownerId = @ownerId OR c.ownerId = null)",
-        parameters: [
-          { name: "@fileType", value: "file" },
-          { name: "@folderType", value: "folder" },
-          { name: "@parentId", value: parentId ?? null },
-          { name: "@ownerId", value: ownerId },
-        ],
-      },
-      { maxItemCount: pageSize, continuationToken: opts.cursor },
-    )
+
+    type ListCursor = { phase: "own" | "global"; token?: string }
+    const startCursor: ListCursor = opts.cursor ? JSON.parse(opts.cursor) : { phase: "own" }
+
+    const query = {
+      query:
+        "SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND c.parentId = @parentId AND c.deletedAt = null",
+      parameters: [
+        { name: "@fileType", value: "file" },
+        { name: "@folderType", value: "folder" },
+        { name: "@parentId", value: parentId ?? null },
+      ],
+    }
+
+    const drainPartition = async (
+      partitionKey: [string | null, string | null],
+      token: string | undefined,
+      resources: any[],
+    ): Promise<string | undefined> => {
+      const iterator = db.items.query(query, {
+        maxItemCount: pageSize,
+        continuationToken: token,
+        partitionKey: partitionKey as unknown as string,
+      })
+      let continuationToken: string | undefined
+      while (resources.length < pageSize) {
+        const segment = await iterator.fetchNext()
+        resources.push(...segment.resources)
+        continuationToken = segment.continuationToken ?? undefined
+        if (!continuationToken) break
+      }
+      return continuationToken
+    }
 
     const resources: any[] = []
-    let continuationToken: string | undefined
-    while (resources.length < pageSize) {
-      const segment = await iterator.fetchNext()
-      resources.push(...segment.resources)
-      continuationToken = segment.continuationToken ?? undefined
-      if (!continuationToken) break
+    let nextCursor: ListCursor | null = null
+
+    if (startCursor.phase === "own") {
+      const ownToken = await drainPartition([ownerId, parentId ?? null], startCursor.token, resources)
+      if (ownToken) {
+        nextCursor = { phase: "own", token: ownToken }
+      } else if (resources.length < pageSize) {
+        const globalToken = await drainPartition([null, parentId ?? null], undefined, resources)
+        nextCursor = globalToken ? { phase: "global", token: globalToken } : null
+      } else {
+        nextCursor = { phase: "global" }
+      }
+    } else {
+      const globalToken = await drainPartition([null, parentId ?? null], startCursor.token, resources)
+      nextCursor = globalToken ? { phase: "global", token: globalToken } : null
     }
 
     const entries: VaultEntry[] = resources.map((r: any) => ({
@@ -116,7 +166,7 @@ export class FilesService {
       return (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" })
     })
 
-    return { entries, cursor: continuationToken ?? null }
+    return { entries, cursor: nextCursor ? JSON.stringify(nextCursor) : null }
   }
 
   async search(
@@ -504,11 +554,32 @@ export class FilesService {
     // we must create the document in the new partition and delete the old one.
     // Create-then-delete (not the reverse) so a crash mid-move leaves the item
     // reachable rather than lost; the pointer is repointed last.
+    //
+    // Both operations are made idempotent so retry/resume is safe:
+    //   - 409 on create  → already exists in new partition (prior attempt got
+    //     this far); safe to continue.
+    //   - 404 on delete  → already gone from old partition (prior attempt
+    //     completed the delete); safe to continue.
+    //   putPointer is an upsert, so it is inherently idempotent.
     const oldPk = entryPartitionKey({ id, ownerId: resource.ownerId, parentId: oldParentId })
     const moved = { ...resource, parentId: newParentId, modifiedAt: new Date().toISOString() }
     try {
-      await entriesContainer.items.create(moved)
-      await entriesContainer.item(id, oldPk).delete().catch(() => {})
+      try {
+        await entriesContainer.items.create(moved)
+      } catch (createErr: unknown) {
+        const ce = createErr as { code?: number; statusCode?: number }
+        const createCode = ce?.code ?? ce?.statusCode
+        if (createCode !== 409) throw createErr
+        // 409 = doc already exists in new partition — prior partial move; continue.
+      }
+      try {
+        await entriesContainer.item(id, oldPk).delete()
+      } catch (delErr: unknown) {
+        const de = delErr as { code?: number; statusCode?: number }
+        const delCode = de?.code ?? de?.statusCode
+        if (delCode !== 404) throw delErr
+        // 404 = doc already gone from old partition — prior partial move; continue.
+      }
       await putPointer({ id, ownerId: resource.ownerId, parentId: newParentId })
     } catch (err) {
       rethrowBackendError(err, `Move failed for ${id}`)

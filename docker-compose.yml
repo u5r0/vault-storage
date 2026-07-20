@@ -9,7 +9,8 @@ services:
       - MP_SMTP_AUTH_ACCEPT_ANY=1
     command: ["--smtp-auth-allow-insecure"]
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:8025 -o /dev/null"]
+      # Image ships wget, not curl.
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:8025/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,7 +29,9 @@ services:
       - azurite_data:/data
     command: "azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --skipApiVersionCheck"
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:10000/devstoreaccount1?comp=list -o /dev/null"]
+      # Image ships node, not curl; any HTTP response (even 4xx) means the
+      # blob endpoint is up.
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:10000/devstoreaccount1?comp=list').then(()=>process.exit(0)).catch(()=>process.exit(1))\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -49,11 +52,14 @@ services:
     volumes:
       - cosmos_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsk https://localhost:8081/ -o /dev/null || exit 1"]
-      interval: 5s
-      timeout: 3s
+      # -k: self-signed cert. No -f: the gateway may answer 401 before auth is
+      # fully wired — any HTTP response means it's up. The vnext emulator takes
+      # 60–120s to warm up, so allow a generous start period.
+      test: ["CMD-SHELL", "curl -sk https://localhost:8081/ -o /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
       retries: 30
-      start_period: 60s
+      start_period: 90s
 
   rustfs:
     image: rustfs/rustfs:latest

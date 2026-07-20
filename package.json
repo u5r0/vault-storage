@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "docker compose up -d && concurrently -n api,web -c \"#a78bfa,#22d3ee\" \"pnpm dev:api\" \"pnpm dev:web\"",
+    "dev": "docker compose up -d --wait && concurrently -n api,web -c \"#a78bfa,#22d3ee\" \"pnpm dev:api\" \"pnpm dev:web\"",
     "dev:web": "pnpm --filter @vault/web dev",
     "dev:api": "tsx watch apps/server/src/index.ts",
     "seed": "tsx apps/server/scripts/seed.ts",

@@ -22,15 +22,23 @@ vi.mock("../lib/email", () => ({
   sendAccountLockedEmail: vi.fn(),
 }))
 
-vi.mock("../db", () => ({
-  db: {
-    items: {
-      query: vi.fn(),
-      create: vi.fn(),
-    },
-    item: vi.fn(),
-  },
-}))
+vi.mock("../db", () => {
+  // auth.ts imports authContainer (as authDb) for ALL operations — queries,
+  // creates, reads, replaces. Tests mock `db.*` by convention, so we make
+  // authContainer share the exact same vi.fn() instances as db so that
+  // `vi.mocked(db.items.query).mockReturnValue(...)` automatically governs
+  // authContainer.items.query too, with zero changes to test bodies.
+  const sharedItems = {
+    query: vi.fn(),
+    create: vi.fn(),
+  }
+  const sharedItem = vi.fn()
+  const container = { items: sharedItems, item: sharedItem }
+  return {
+    db: container,
+    authContainer: container,
+  }
+})
 
 describe("AuthService", () => {
   beforeEach(() => {

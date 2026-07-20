@@ -12,7 +12,7 @@
  */
 import "dotenv/config"
 import { createVaultClient } from "@vault/sdk"
-import { db } from "../src/db"
+import { entries as entriesContainer, authContainer } from "../src/db"
 import { getBlobStore } from "../src/lib/blob-provider"
 import { clearMailpit, waitForMessage, extractLinkToken } from "../src/__setup__/mailpit"
 
@@ -192,46 +192,62 @@ async function cleanup() {
     const store = await getBlobStore()
     const count = await store.deletePrefix("")
     console.log(`  ${count} blob(s) deleted`)
-  } catch (e: any) {
-    console.log(`  blob cleanup: ${e.message}`)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.log(`  blob cleanup: ${msg}`)
   }
 
-  // Delete every doc the seed manages: the demo user(s) (a fresh uuid is
-  // minted each run), their refresh/spent tokens, AND all file/folder docs.
-  //
-  // File/folder docs MUST be cleared too. The demo user is recreated with a
-  // new id on every run, but folders/files were previously left behind —
-  // orphaning entire datasets owned by now-deleted users and ballooning the
-  // container (38 folder docs for a 19-folder seed). Wiping them gives each
-  // run one clean, consistent dataset owned by the new demo user.
-  //
-  // We fetch broadly (an unfiltered SELECT, which cosmium handles correctly)
-  // and filter in JS. Each delete surfaces its error so a broken cleanup
-  // fails the seed instead of leaving stale docs behind.
+  // Auth docs (user, refresh_token, spent_token) live in vault_auth keyed by
+  // /id — simple scalar partition key, no HPK needed.
   try {
-    const { resources: allDocs } = await db.items
+    const { resources: authDocs } = await authContainer.items
       .query({ query: "SELECT c.id, c.type FROM c" })
       .fetchAll()
-
-    // This is a single-user dev seed: clear all users, tokens, and entries
-    // so nothing from a previous run survives to confuse the listing.
-    const toDelete = allDocs.filter((d: any) =>
-      ["user", "refresh_token", "spent_token", "file", "folder"].includes(d.type),
-    )
-
-    for (const { id } of toDelete) {
-      // Cosmium uses /id as the default partition key, so the second arg is
-      // required. A missing PK throws and would otherwise be swallowed.
-      await db.item(id, id).delete()
+    const authToDelete = authDocs.filter((d: unknown) => {
+      const doc = d as { type?: string }
+      return ["user", "refresh_token", "spent_token"].includes(doc.type ?? "")
+    })
+    for (const doc of authToDelete) {
+      const { id } = doc as { id: string }
+      await authContainer.item(id, id).delete()
     }
-
-    const counts = toDelete.reduce((acc: Record<string, number>, d: any) => {
-      acc[d.type] = (acc[d.type] ?? 0) + 1
+    const authCounts = authToDelete.reduce((acc: Record<string, number>, d: unknown) => {
+      const doc = d as { type: string }
+      acc[doc.type] = (acc[doc.type] ?? 0) + 1
       return acc
     }, {})
-    console.log(`  cleared docs:`, counts)
-  } catch (e: any) {
-    throw new Error(`doc cleanup failed: ${e.message ?? e}`)
+    console.log(`  cleared auth docs:`, authCounts)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    throw new Error(`auth doc cleanup failed: ${msg}`)
+  }
+
+  // File/folder docs live in vault_entries with HPK [/ownerId, /parentId, /id].
+  // SELECT must return ownerId and parentId so we can build the full partition
+  // key array — a scalar /id delete is rejected by the vnext emulator on a
+  // MultiHash container.
+  try {
+    const { resources: entryDocs } = await entriesContainer.items
+      .query({ query: "SELECT c.id, c.type, c.ownerId, c.parentId FROM c" })
+      .fetchAll()
+    const entriesToDelete = entryDocs.filter((d: unknown) => {
+      const doc = d as { type?: string }
+      return ["file", "folder"].includes(doc.type ?? "")
+    })
+    for (const doc of entriesToDelete) {
+      const { id, ownerId, parentId } = doc as { id: string; ownerId: string; parentId: string | null }
+      // Full HPK array [ownerId, parentId ?? null, id] required for MultiHash container.
+      await entriesContainer.item(id, [ownerId, parentId ?? null, id]).delete()
+    }
+    const entryCounts = entriesToDelete.reduce((acc: Record<string, number>, d: unknown) => {
+      const doc = d as { type: string }
+      acc[doc.type] = (acc[doc.type] ?? 0) + 1
+      return acc
+    }, {})
+    console.log(`  cleared entry docs:`, entryCounts)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    throw new Error(`entry doc cleanup failed: ${msg}`)
   }
 
   console.log()

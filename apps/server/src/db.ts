@@ -5,7 +5,7 @@ import {
   type Container,
   type PartitionKeyDefinition,
 } from "@azure/cosmos"
-import { createCosmosClient } from "./lib/cosmos-credentials"
+import { createCosmosClient, emulatorTlsAgent } from "./lib/cosmos-credentials"
 
 /**
  * Well-known emulator key — used when COSMOS_DB_KEY is unset AND we're
@@ -72,17 +72,15 @@ const _containers: Partial<Record<ContainerKind, Container>> = {}
 
 /**
  * Apply env-var defaults required for talking to a localhost Cosmos emulator:
- *   - disable TLS verification (self-signed cert)
- *   - inject the well-known emulator key if no real key is configured
+ * inject the well-known emulator key if no real key is configured. (The
+ * emulator's self-signed TLS cert is handled by a scoped https.Agent on the
+ * Cosmos client — see emulatorTlsAgent — NOT by disabling TLS process-wide.)
  *
  * Idempotent. Must run before any Cosmos network call (eager dev, lazy test,
  * or explicit `initializeDatabase()`).
  */
 function bootstrapEmulatorEnv() {
   const endpoint = getEndpoint()
-  if (endpoint.includes("localhost") && process.env.NODE_ENV !== "test") {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
-  }
   if (!process.env.COSMOS_DB_KEY && endpoint.includes("localhost")) {
     process.env.COSMOS_DB_KEY = EMULATOR_KEY
   }
@@ -103,7 +101,7 @@ function getContainer(kind: ContainerKind): Container {
     )
   }
   // Key-based auth (dev / CI / emulator): build the client and container lazily.
-  if (!_client) _client = new CosmosClient({ endpoint, key })
+  if (!_client) _client = new CosmosClient({ endpoint, key, agent: emulatorTlsAgent(endpoint) })
   const container = _client.database(getDatabaseName()).container(getContainerName(kind))
   _containers[kind] = container
   return container
@@ -140,6 +138,29 @@ export const authContainer: Container = containerProxy("auth")
 export const db: Container = entries
 
 export let cosmosClient: CosmosClient = null!
+
+/**
+ * Errors worth retrying while the emulator warms up. The vnext emulator
+ * accepts the TCP socket before its TLS endpoint is ready, so in addition to
+ * ECONNREFUSED (socket not yet listening) we see ECONNRESET / socket-hangup
+ * errors from the Azure SDK's RestError while the handshake is dropped.
+ */
+function isTransientNetworkError(error: unknown): boolean {
+  const err = error as { code?: unknown; message?: unknown }
+  const code = typeof err?.code === "string" ? err.code : ""
+  const message = typeof err?.message === "string" ? err.message : ""
+  return (
+    code === "ECONNREFUSED" ||
+    code === "ECONNRESET" ||
+    code === "ECONNABORTED" ||
+    code === "ETIMEDOUT" ||
+    message.includes("ECONNREFUSED") ||
+    message.includes("ECONNRESET") ||
+    message.includes("socket disconnected") ||
+    message.includes("socket hang up") ||
+    message.includes("TLS connection")
+  )
+}
 
 /**
  * Initialize the Cosmos DB database and all three containers (create if not
@@ -194,7 +215,7 @@ export async function initializeDatabase() {
         console.error(`[Cosmos DB] Failed to initialize after ${timeout}ms:`, error.message)
         throw new Error(`Cosmos DB initialization timeout: ${error.message}`)
       }
-      if (error.code === "ECONNREFUSED" || error.message?.includes("ECONNREFUSED")) {
+      if (isTransientNetworkError(error)) {
         console.log(`[Cosmos DB] Waiting for emulator to be ready...`)
         await new Promise((resolve) => setTimeout(resolve, 2000))
         continue
