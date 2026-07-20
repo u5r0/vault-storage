@@ -1,5 +1,6 @@
 import { beforeAll, afterEach } from 'vitest'
 import { clearMailpit } from './mailpit'
+import { entryPartitionKey } from '../lib/entry-lookup'
 
 /**
  * Test fixtures following Epic Web patterns.
@@ -9,7 +10,9 @@ import { clearMailpit } from './mailpit'
  */
 
 let app: any
-let db: any
+let entries: any
+let lookup: any
+let authContainer: any
 let blobStore: any
 
 /**
@@ -24,14 +27,23 @@ export async function setupApp() {
 }
 
 /**
- * Setup the database instance
+ * Resolve the three logical Cosmos containers (ADR 0028 §3.1):
+ *  - entries:       file/folder docs, HPK [/ownerId, /parentId, /id]
+ *  - lookup:        id → HPK pointer records, keyed by /id
+ *  - authContainer: user / refresh_token / spent_token docs, keyed by /id
+ *
+ * Cleanup must delete each doc with the partition key its container actually
+ * uses, so keep the containers distinct rather than routing everything through
+ * the entries proxy.
  */
-export async function setupDb() {
-  if (!db) {
-    const { db: dbInstance } = await import('../db')
-    db = dbInstance
+export async function setupContainers() {
+  if (!entries || !lookup || !authContainer) {
+    const db = await import('../db')
+    entries = db.entries
+    lookup = db.lookup
+    authContainer = db.authContainer
   }
-  return db
+  return { entries, lookup, authContainer }
 }
 
 /**
@@ -47,51 +59,74 @@ export async function setupBlobStore() {
 }
 
 /**
- * Cleanup database users
+ * Cleanup database users. User docs live in the auth container, keyed by /id.
  */
 export async function clearUsers() {
-  const db = await setupDb()
-  const { resources } = await db.items.query("SELECT * FROM c WHERE c.type = 'user'").fetchAll()
+  const { authContainer } = await setupContainers()
+  const { resources } = await authContainer.items.query("SELECT * FROM c WHERE c.type = 'user'").fetchAll()
   for (const user of resources) {
-    await db.item(user.id).delete()
+    await authContainer.item(user.id, user.id).delete()
   }
 }
 
 /**
- * Cleanup refresh tokens
+ * Cleanup refresh tokens. Refresh-token docs live in the auth container,
+ * keyed by /id.
  */
 export async function clearRefreshTokens() {
-  const db = await setupDb()
-  const { resources } = await db.items.query("SELECT * FROM c WHERE c.type = 'refresh_token'").fetchAll()
+  const { authContainer } = await setupContainers()
+  const { resources } = await authContainer.items.query("SELECT * FROM c WHERE c.type = 'refresh_token'").fetchAll()
   for (const token of resources) {
-    await db.item(token.id).delete()
+    await authContainer.item(token.id, token.id).delete()
   }
 }
 
 /**
- * Cleanup all database entries
+ * Cleanup all data across the three containers. Entries docs need the full
+ * hierarchical partition key; auth docs and lookup pointers are keyed by /id.
  */
 export async function clearDatabase() {
-  const db = await setupDb()
-  const { resources } = await db.items.readAll().fetchAll()
-  for (const resource of resources) {
-    if (resource.id) {
-      await db.item(resource.id).delete()
+  const { entries, lookup, authContainer } = await setupContainers()
+
+  const { resources: entryDocs } = await entries.items
+    .query("SELECT c.id, c.ownerId, c.parentId FROM c")
+    .fetchAll()
+  for (const doc of entryDocs) {
+    await entries.item(doc.id, entryPartitionKey({ id: doc.id, ownerId: doc.ownerId, parentId: doc.parentId ?? null })).delete()
+  }
+
+  for (const container of [lookup, authContainer]) {
+    const { resources } = await container.items.readAll().fetchAll()
+    for (const doc of resources) {
+      if (doc.id) await container.item(doc.id, doc.id).delete()
     }
   }
 }
 
 /**
- * Cleanup only file/folder/spent_token entries — preserves users and refresh tokens.
- * Used by useFilesFixture so a registered user can persist across tests in a suite.
+ * Cleanup file/folder entries (+ their lookup pointers) and spent-token docs —
+ * preserves users and refresh tokens. Used by useFilesFixture so a registered
+ * user can persist across tests in a suite.
+ *
+ * Entries deletes use the full [ownerId, parentId, id] hierarchical key;
+ * spent-token docs live in the auth container and are keyed by /id.
  */
 export async function clearFileEntries() {
-  const db = await setupDb()
-  const { resources } = await db.items
-    .query("SELECT * FROM c WHERE c.type = 'file' OR c.type = 'folder' OR c.type = 'spent_token'")
+  const { entries, lookup, authContainer } = await setupContainers()
+
+  const { resources: fileDocs } = await entries.items
+    .query("SELECT c.id, c.ownerId, c.parentId FROM c WHERE c.type = 'file' OR c.type = 'folder'")
     .fetchAll()
-  for (const resource of resources) {
-    await db.item(resource.id).delete()
+  for (const doc of fileDocs) {
+    await entries.item(doc.id, entryPartitionKey({ id: doc.id, ownerId: doc.ownerId, parentId: doc.parentId ?? null })).delete()
+    await lookup.item(doc.id, doc.id).delete().catch(() => {})
+  }
+
+  const { resources: spentTokens } = await authContainer.items
+    .query("SELECT * FROM c WHERE c.type = 'spent_token'")
+    .fetchAll()
+  for (const doc of spentTokens) {
+    await authContainer.item(doc.id, doc.id).delete()
   }
 }
 
