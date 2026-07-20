@@ -26,6 +26,7 @@ const {
   hasNextPage,
   fetchNextPage,
   error,
+  isLocalSearch,
 } = useSearch()
 
 const scrollerRef = useTemplateRef<HTMLDivElement>("scrollerRef")
@@ -86,6 +87,12 @@ function handlePick(id: string) {
         <span v-if="tooShort">Type at least 2 characters to search.</span>
         <span v-else>
           Results for <strong class="text-foreground">{{ query }}</strong>
+        </span>
+        <span
+          v-if="!tooShort && isLocalSearch"
+          class="ml-auto rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[11px] text-muted-foreground"
+        >
+          instant
         </span>
       </div>
 

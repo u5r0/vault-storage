@@ -1,22 +1,33 @@
-import { computed } from "vue"
+import { computed, ref, watch } from "vue"
 import { useInfiniteQuery } from "@tanstack/vue-query"
 import { refDebounced } from "@vueuse/core"
 import { client as defaultClient } from "@/lib/client"
 import type { SearchFilesResult, VaultEntry, VaultStore } from "@vault/sdk"
 import { useUIStore } from "@/stores/ui"
 import { filesKeys } from "../lib/queryKeys"
+import { useVaultIndex } from "./useVaultIndex"
 
 /**
- * Server-side search per ADR 0018 §C.
+ * Hybrid search per ADR 0028 §3.2 Phase A (your "bounded local + server
+ * fallback" decision).
  *
- * - Reads the live query from the `ui` store (cross-page widget).
- * - Debounces 250ms via `refDebounced`.
- * - Skips queries shorter than 2 characters.
- * - Cancels in-flight requests automatically when the key changes (handled
- *   by TanStack Query's built-in AbortSignal plumbing through the SDK).
+ * Strategy:
+ *   1. While the local MiniSearch index is hydrated AND the vault is within
+ *      the index size ceiling, serve results instantly from MiniSearch.
+ *      Zero RUs, sub-1ms, works offline, full Arabic+Latin normalisation.
+ *   2. If the index is not yet hydrated, too large, or the local result set
+ *      is empty on a query the server might know about (cross-folder entries
+ *      loaded after a separate navigation), fall back to the server query.
+ *      The server query is the same TanStack infinite query that existed
+ *      before — no shape change, no new API endpoint.
+ *
+ * The composable's return contract is unchanged (entries, isLoading,
+ * isFetching, hasNextPage, fetchNextPage, error) so `search.vue` needs
+ * no changes.
  */
 export function useSearch(client: VaultStore = defaultClient) {
   const ui = useUIStore()
+  const index = useVaultIndex(client)
 
   const debouncedQuery = refDebounced(
     computed(() => ui.searchQuery.trim()),
@@ -24,10 +35,30 @@ export function useSearch(client: VaultStore = defaultClient) {
   )
 
   const typeFilter = computed(() => ui.searchType)
-
   const enabled = computed(() => debouncedQuery.value.length >= 2)
 
-  const query = useInfiniteQuery({
+  // ─── Local results (instant) ─────────────────────────────────────────────
+
+  const localEntries = computed<VaultEntry[]>(() => {
+    if (!enabled.value) return []
+    if (!index.hydrated.value || index.indexTooLarge.value) return []
+    return index.search(debouncedQuery.value, typeFilter.value)
+  })
+
+  // Use local results if the index is ready and returned something (or the
+  // index is ready and we are confident it is complete — even an empty result
+  // is authoritative once hydrated).
+  const useLocal = computed(
+    () => index.hydrated.value && !index.indexTooLarge.value,
+  )
+
+  // ─── Server fallback (TanStack infinite query) ────────────────────────────
+  // Only enabled when:
+  //   a) query is long enough, AND
+  //   b) we can't use the local index (not ready or too large)
+  const serverEnabled = computed(() => enabled.value && !useLocal.value)
+
+  const serverQuery = useInfiniteQuery({
     queryKey: computed(() =>
       filesKeys.search(debouncedQuery.value, typeFilter.value),
     ),
@@ -49,22 +80,61 @@ export function useSearch(client: VaultStore = defaultClient) {
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last: SearchFilesResult) => last.cursor ?? undefined,
-    enabled,
+    enabled: serverEnabled,
     staleTime: 30_000,
   })
 
-  const entries = computed<VaultEntry[]>(
-    () => query.data.value?.pages.flatMap((p) => p.entries) ?? [],
+  const serverEntries = computed<VaultEntry[]>(
+    () => serverQuery.data.value?.pages.flatMap((p) => p.entries) ?? [],
+  )
+
+  // ─── Unified surface ─────────────────────────────────────────────────────
+
+  const entries = computed<VaultEntry[]>(() =>
+    useLocal.value ? localEntries.value : serverEntries.value,
+  )
+
+  // isLoading: true while the index is hydrating (spinner shown in search.vue)
+  // OR while the server query is in flight.
+  const isLoading = computed(
+    () =>
+      (index.hydrating.value && !index.hydrated.value) ||
+      (!useLocal.value && serverQuery.isLoading.value),
+  )
+
+  const isFetching = computed(
+    () => index.hydrating.value || serverQuery.isFetching.value,
+  )
+
+  // Pagination only applies to the server path; local results are always complete.
+  const isFetchingNextPage = computed(() =>
+    useLocal.value ? false : serverQuery.isFetchingNextPage.value,
+  )
+
+  const hasNextPage = computed(() =>
+    useLocal.value ? false : serverQuery.hasNextPage.value,
+  )
+
+  function fetchNextPage() {
+    if (!useLocal.value) {
+      serverQuery.fetchNextPage()
+    }
+  }
+
+  const error = computed(() =>
+    useLocal.value ? index.hydrateError.value : serverQuery.error.value,
   )
 
   return {
     query: debouncedQuery,
     entries,
-    isLoading: query.isLoading,
-    isFetching: query.isFetching,
-    isFetchingNextPage: query.isFetchingNextPage,
-    hasNextPage: query.hasNextPage,
-    fetchNextPage: query.fetchNextPage,
-    error: query.error,
+    isLoading,
+    isFetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    error,
+    // Exposed for the search.vue status indicator
+    isLocalSearch: useLocal,
   }
 }
