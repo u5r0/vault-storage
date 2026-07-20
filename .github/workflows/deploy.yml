@@ -26,6 +26,7 @@ permissions:
   id-token: write
   contents: read
   packages: write
+  variables: write
 
 jobs:
   terraform:
@@ -38,16 +39,25 @@ jobs:
         run: |
           cd infra
           terraform init
+          # NOTE: variables.tf declares discrete smtp_user / smtp_pass — there
+          # is no `smtp_url` variable. Passing smtp_url made apply fail on the
+          # required smtp_user / smtp_pass inputs. Pass the real vars instead.
           terraform apply -var-file=envs/prod.tfvars -auto-approve \
             -var="ghcr_token=${{ secrets.TF_VAR_ghcr_token }}" \
             -var="r2_access_key_id=${{ secrets.TF_VAR_r2_access_key_id }}" \
             -var="r2_secret_access_key=${{ secrets.TF_VAR_r2_secret_access_key }}" \
             -var="jwt_secret=${{ secrets.TF_VAR_jwt_secret }}" \
             -var="auth_secret=${{ secrets.TF_VAR_auth_secret }}" \
-            -var="smtp_url=${{ secrets.TF_VAR_smtp_url }}" \
+            -var="smtp_user=${{ secrets.TF_VAR_smtp_user }}" \
+            -var="smtp_pass=${{ secrets.TF_VAR_smtp_pass }}" \
             -var="cloudflare_api_token=${{ secrets.TF_VAR_cloudflare_api_token }}"
       - name: Set GitHub Variable
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Each run-step resets to repo root, so the `cd infra` in the apply
+          # step above does not persist. terraform output must run in infra/.
+          cd infra
           API_URL=$(terraform output -raw api_url)
           gh variable set VITE_API_URL -b "$API_URL"
 
@@ -69,7 +79,10 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          IMAGE="ghcr.io/${{ github.repository_owner }}/vault-api"
+          # ghcr.io rejects uppercase letters in image names — downcase the
+          # owner (handles GitHub orgs/users that contain uppercase chars).
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/$OWNER/vault-api"
           # Use the CI commit SHA, not github.sha (which is the workflow file
           # SHA under workflow_run — they can diverge).
           SHA="${{ github.event.workflow_run.head_sha }}"
@@ -92,10 +105,11 @@ jobs:
           # (azurerm_container_app.api.name = "vault-api",
           #  azurerm_resource_group.main.name = "vault-prod-rg").
           # If those are renamed in Terraform, update here too.
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           az containerapp update \
             --name vault-api \
             --resource-group vault-prod-rg \
-            --image "ghcr.io/${{ github.repository_owner }}/vault-api:${{ github.event.workflow_run.head_sha }}"
+            --image "ghcr.io/$OWNER/vault-api:${{ github.event.workflow_run.head_sha }}"
 
   deploy-web:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
