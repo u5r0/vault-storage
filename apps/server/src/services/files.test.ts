@@ -595,14 +595,17 @@ describe("FilesService", () => {
       })
     })
 
-    it("move: Cosmos 429 on replace → HTTPException 429", async () => {
+    it("move: Cosmos 429 on create → HTTPException 429", async () => {
+      // HPK move is create-then-delete (parentId changes the partition key).
+      // The 429 comes from db.items.create, not db.item().replace.
       const { db } = await import("../db")
       vi.mocked(db.item).mockReturnValue({
         read: vi.fn().mockResolvedValue({
           resource: { id: "f1", ownerId, parentId: null, type: "file" },
         }),
-        replace: vi.fn().mockRejectedValue(makeCosmosError(429)),
+        delete: vi.fn().mockResolvedValue(undefined),
       } as any)
+      vi.mocked(db.items.create).mockRejectedValue(makeCosmosError(429))
       await expect(
         filesService.move("f1", "00000000-0000-0000-0000-000000000abc", ownerId),
       ).rejects.toMatchObject({ status: 429 })

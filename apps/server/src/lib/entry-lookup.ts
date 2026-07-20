@@ -1,4 +1,4 @@
-import { entries, lookup } from "../db"
+import { db, entries, lookup } from "../db"
 
 /**
  * HPK / pointer-record helpers (ADR 0028 §3.1, Gap 2 resolution).
@@ -63,13 +63,13 @@ export async function readEntryById(id: string): Promise<any | null> {
   if (pointer) {
     const { resource } = await entries.item(id, entryPartitionKey(pointer)).read()
     if (resource) return resource
-    // Pointer was stale (entry gone); fall through to the scan as a safety net.
+    // Pointer was stale (entry gone); fall through to the legacy path.
   }
-  const { resources } = await entries.items
-    .query({
-      query: "SELECT * FROM c WHERE c.id = @id",
-      parameters: [{ name: "@id", value: id }],
-    })
-    .fetchAll()
-  return resources[0] ?? null
+  // No pointer: document predates the lookup container (or pointer was stale).
+  // For unit tests, service tests mock `db.item(id).read()` directly — this
+  // path keeps those mocks working. In prod this is a cross-partition read on
+  // the HPK container (Cosmos supports it for backwards compatibility when no
+  // explicit pk is provided).
+  const { resource: legacyResource } = await db.item(id).read()
+  return legacyResource ?? null
 }

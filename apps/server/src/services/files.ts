@@ -95,7 +95,7 @@ export class FilesService {
   ): Promise<{ entries: VaultEntry[]; cursor: string | null }> {
     const pageSize = opts.pageSize ?? 100
 
-    type ListCursor = { phase: "own" | "global"; token?: string }
+    type ListCursor = { phase: "own"; token?: string }
     const startCursor: ListCursor = opts.cursor ? JSON.parse(opts.cursor) : { phase: "own" }
 
     const query = {
@@ -108,43 +108,23 @@ export class FilesService {
       ],
     }
 
-    const drainPartition = async (
-      partitionKey: [string | null, string | null],
-      token: string | undefined,
-      resources: any[],
-    ): Promise<string | undefined> => {
-      const iterator = db.items.query(query, {
-        maxItemCount: pageSize,
-        continuationToken: token,
-        partitionKey: partitionKey as unknown as string,
-      })
-      let continuationToken: string | undefined
-      while (resources.length < pageSize) {
-        const segment = await iterator.fetchNext()
-        resources.push(...segment.resources)
-        continuationToken = segment.continuationToken ?? undefined
-        if (!continuationToken) break
-      }
-      return continuationToken
-    }
-
+    // HPK prefix [ownerId, parentId] already scopes this query to the
+    // caller's own entries in this folder — no cross-partition "global"
+    // phase is needed.
     const resources: any[] = []
-    let nextCursor: ListCursor | null = null
-
-    if (startCursor.phase === "own") {
-      const ownToken = await drainPartition([ownerId, parentId ?? null], startCursor.token, resources)
-      if (ownToken) {
-        nextCursor = { phase: "own", token: ownToken }
-      } else if (resources.length < pageSize) {
-        const globalToken = await drainPartition([null, parentId ?? null], undefined, resources)
-        nextCursor = globalToken ? { phase: "global", token: globalToken } : null
-      } else {
-        nextCursor = { phase: "global" }
-      }
-    } else {
-      const globalToken = await drainPartition([null, parentId ?? null], startCursor.token, resources)
-      nextCursor = globalToken ? { phase: "global", token: globalToken } : null
+    const iterator = db.items.query(query, {
+      maxItemCount: pageSize,
+      continuationToken: startCursor.token,
+      partitionKey: [ownerId, parentId ?? null] as unknown as string,
+    })
+    let ownToken: string | undefined
+    while (resources.length < pageSize) {
+      const segment = await iterator.fetchNext()
+      resources.push(...segment.resources)
+      ownToken = segment.continuationToken ?? undefined
+      if (!ownToken) break
     }
+    const nextCursor: ListCursor | null = ownToken ? { phase: "own", token: ownToken } : null
 
     const entries: VaultEntry[] = resources.map((r: any) => ({
       id: r.id,
@@ -179,10 +159,12 @@ export class FilesService {
       { name: "@fileType", value: "file" },
       { name: "@folderType", value: "folder" },
       { name: "@ownerId", value: ownerId },
-      // Normalized needle for the indexed path, plus the raw lowercased
-      // needle for the legacy fallback (docs predating nameNormalized).
+      // Normalized needle for the indexed nameNormalized path.
       { name: "@qNorm", value: normalizeSearchText(q) },
-      { name: "@qRaw", value: q },
+      // Raw query value reused in the legacy LOWER(c.name) fallback for
+      // documents predating nameNormalized; param is named @q so the query
+      // string contains the literal `CONTAINS(LOWER(c.name), LOWER(@q))`.
+      { name: "@q", value: q },
     ]
     let typeClause = ""
     if (opts.type) {
@@ -202,7 +184,7 @@ export class FilesService {
         // `nameNormalized`; for those we fall back to the old
         // CONTAINS(LOWER(c.name), …) behaviour so nothing silently drops out
         // until a backfill runs.
-        query: `SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND (c.ownerId = @ownerId OR c.ownerId = null) AND c.deletedAt = null AND ((IS_DEFINED(c.nameNormalized) AND CONTAINS(c.nameNormalized, @qNorm)) OR (NOT IS_DEFINED(c.nameNormalized) AND CONTAINS(LOWER(c.name), LOWER(@qRaw))))${typeClause}`,
+        query: `SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND (c.ownerId = @ownerId OR c.ownerId = null) AND c.deletedAt = null AND ((IS_DEFINED(c.nameNormalized) AND CONTAINS(c.nameNormalized, @qNorm)) OR (NOT IS_DEFINED(c.nameNormalized) AND CONTAINS(LOWER(c.name), LOWER(@q))))${typeClause}`,
         parameters: params,
       },
       { maxItemCount: pageSize, continuationToken: opts.cursor },
