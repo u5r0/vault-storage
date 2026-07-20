@@ -2,6 +2,11 @@
 
 **Status:** Accepted
 **Date:** 2026-05-19
+**Amended:** 2026-07-20 — the single-collection model below is being revised to a
+three-container model (files/folders in a container with a hierarchical
+partition key `[/ownerId, /parentId, /id]`, an `/id`-keyed lookup container for
+id-only reads, and a separate `/id`-keyed auth container). ID-based routing is
+unchanged. See the private deployment/data-model ADR for status and rationale.
 
 ## Decision
 
