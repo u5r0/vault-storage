@@ -21,12 +21,13 @@ export function useCreateFolder(
   return useMutation({
     mutationFn: (name: string) =>
       client.createFolder({ parentId: toValue(parentId), name }),
-    onSuccess: (result) => {
+    onSuccess: (result, name) => {
       // Add the new folder to the local index immediately so it appears in
-      // search results before the list query re-fetches.
+      // search results before the list query re-fetches. CreateFolderResult
+      // has no name, so use the name the caller just submitted.
       index.addEntry({
         id: result.id,
-        name: result.name ?? "",
+        name,
         type: "folder",
         parentId: toValue(parentId),
         createdAt: new Date().toISOString(),
