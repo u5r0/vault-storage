@@ -183,6 +183,16 @@ export const SearchFilesResponse = z.object({
 });
 export type SearchFilesResult = z.infer<typeof SearchFilesResponse>;
 
+// Flat index-hydration endpoint: returns all of the authed user's entries in
+// one response, capped at INDEX_HARD_LIMIT (10 000). `truncated: true` means
+// the vault is too large to index locally and the client should use server
+// search exclusively.
+export const AllFilesResponse = z.object({
+  entries: z.array(VaultEntrySchema),
+  truncated: z.boolean(),
+});
+export type AllFilesResult = z.infer<typeof AllFilesResponse>;
+
 export const CreateFolderResponse = z.object({
   id: z.string().uuid(),
   parentId: z.string().nullable(),
@@ -265,4 +275,8 @@ export interface VaultStore {
   moveFile(input: MoveInput): Promise<MoveResult>;
   deleteFile(input: DeleteInput): Promise<DeleteResult>;
   getQuickLinks(): Promise<QuickLinksResult>;
+  /** Flat index-hydration: returns all entries for the authed user, capped
+   *  at 10 000. `truncated: true` means the vault is too large to index
+   *  locally and server search should be used exclusively. */
+  listAllEntries(): Promise<AllFilesResult>;
 }

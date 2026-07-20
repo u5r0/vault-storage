@@ -1,6 +1,7 @@
 import { CookieJar } from "tough-cookie";
 import type {
   AckResult,
+  AllFilesResult,
   AuthResult,
   CreateFolderInput,
   CreateFolderResult,
@@ -189,6 +190,10 @@ export class VaultClient implements VaultStore {
     return this.request<SearchFilesResult>(`/api/files/search?${params.toString()}`, {
       signal: init.signal,
     });
+  }
+
+  async listAllEntries(): Promise<AllFilesResult> {
+    return this.request<AllFilesResult>("/api/files/all");
   }
 
   async createFolder(input: CreateFolderInput): Promise<CreateFolderResult> {
