@@ -375,14 +375,22 @@ resource "cloudflare_pages_project" "vault" {
 
   # Disable Cloudflare's git integration — GitHub Actions (deploy.yml) owns
   # deployment via Direct Upload. Connecting both would double-deploy.
+  #
+  # NOTE: Cloudflare Terraform provider v5 renamed `environment_variables` →
+  # `env_vars` and changed the value shape to { value, type } objects.
+  # Using the old `environment_variables` key is silently ignored — env vars
+  # would never be set.  Use `env_vars` with type = "plain_text".
   deployment_configs = {
     production = {
-      environment_variables = {
-        VITE_API_URL = "https://${azurerm_container_app.api.ingress[0].fqdn}"
+      env_vars = {
+        VITE_API_URL = {
+          value = "https://${azurerm_container_app.api.ingress[0].fqdn}"
+          type  = "plain_text"
+        }
       }
     }
     preview = {
-      environment_variables = {}
+      env_vars = {}
     }
   }
 }
