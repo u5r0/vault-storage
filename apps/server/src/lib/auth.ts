@@ -1,6 +1,8 @@
 import argon2 from "argon2"
 import { sign, verify } from "hono/jwt"
-import { db } from "../db"
+// Auth documents (user / refresh_token) live in the dedicated auth container
+// keyed by /id (ADR 0028 §3.1).
+import { authContainer as authDb } from "../db"
 import { randomUUID } from "crypto"
 import { JWT_SECRET } from "./config"
 const ACCESS_EXPIRES_SECS = Number(process.env.ACCESS_EXPIRES_SECONDS || 15 * 60)
@@ -55,7 +57,7 @@ export async function createUser(email: string, password: string, name?: string)
       { name: "@email", value: email },
     ],
   }
-  const { resources } = await db.items.query(querySpec).fetchAll()
+  const { resources } = await authDb.items.query(querySpec).fetchAll()
   if (resources.length > 0) throw new Error("User exists")
 
   const id = randomUUID()
@@ -75,7 +77,7 @@ export async function createUser(email: string, password: string, name?: string)
     lastLoginAt: null,
   }
 
-  await db.items.create(user)
+  await authDb.items.create(user)
 
   return { id, email, name: user.name, createdAt }
 }
@@ -87,16 +89,16 @@ export async function storeRefreshToken(jti: string, userId: string, expiresAt: 
     userId,
     expiresAt: expiresAt.toISOString(),
   }
-  await db.items.create(token)
+  await authDb.items.create(token)
 }
 
 export async function findRefreshToken(jti: string) {
-  const { resource } = await db.item(jti).read()
+  const { resource } = await authDb.item(jti, jti).read()
   return resource
 }
 
 export async function deleteRefreshToken(jti: string) {
-  await db.item(jti).delete()
+  await authDb.item(jti, jti).delete()
 }
 
 /**
@@ -109,7 +111,7 @@ export async function deleteRefreshToken(jti: string) {
  * sweep of expired tokens by `expiresAt` keeps the document count bounded.
  */
 export async function deleteAllRefreshTokensForUser(userId: string) {
-  const { resources } = await db.items
+  const { resources } = await authDb.items
     .query({
       query: "SELECT c.id FROM c WHERE c.type = @type AND c.userId = @uid",
       parameters: [
@@ -119,7 +121,7 @@ export async function deleteAllRefreshTokensForUser(userId: string) {
     })
     .fetchAll()
   await Promise.all(
-    resources.map(({ id }: { id: string }) => db.item(id).delete().catch(() => {})),
+    resources.map(({ id }: { id: string }) => authDb.item(id, id).delete().catch(() => {})),
   )
 }
 

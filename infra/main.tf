@@ -35,12 +35,17 @@ resource "azurerm_cosmosdb_sql_database" "main" {
   account_name        = azurerm_cosmosdb_account.main.name
 }
 
+# File & folder documents. Hierarchical partition key [/ownerId, /parentId, /id]
+# (ADR 0028 §3.1): a folder listing is a single-partition query and a known
+# (owner, parent, id) is a 1-RU point read.
 resource "azurerm_cosmosdb_sql_container" "entries" {
-  name                = "vault_entries"
-  resource_group_name = azurerm_resource_group.main.name
-  account_name        = azurerm_cosmosdb_account.main.name
-  database_name       = azurerm_cosmosdb_sql_database.main.name
-  partition_key_paths = ["/ownerId"]
+  name                  = "vault_entries"
+  resource_group_name   = azurerm_resource_group.main.name
+  account_name          = azurerm_cosmosdb_account.main.name
+  database_name         = azurerm_cosmosdb_sql_database.main.name
+  partition_key_kind    = "MultiHash"
+  partition_key_paths   = ["/ownerId", "/parentId", "/id"]
+  partition_key_version = 2
 
   indexing_policy {
     indexing_mode = "consistent"
@@ -65,6 +70,33 @@ resource "azurerm_cosmosdb_sql_container" "entries" {
       path = "/_etag/?"
     }
   }
+}
+
+# Pointer records { id, ownerId, parentId } keyed by /id. Lets id-only
+# operations resolve an entry's hierarchical key with a single point read
+# instead of a cross-partition scan (ADR 0028 Gap 2).
+resource "azurerm_cosmosdb_sql_container" "lookup" {
+  name                = "vault_lookup"
+  resource_group_name = azurerm_resource_group.main.name
+  account_name        = azurerm_cosmosdb_account.main.name
+  database_name       = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths = ["/id"]
+}
+
+# User / refresh_token / spent_token documents, keyed by /id. Split out of the
+# entries container because they have no ownerId/parentId (ADR 0028 §3.1,
+# superseding the single-container design of ADR 0007).
+resource "azurerm_cosmosdb_sql_container" "auth" {
+  name                = "vault_auth"
+  resource_group_name = azurerm_resource_group.main.name
+  account_name        = azurerm_cosmosdb_account.main.name
+  database_name       = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths = ["/id"]
+
+  # Cosmos honours a per-document `ttl` (seconds) only when the container has
+  # default TTL enabled (-1 = on, no container-wide expiry). spent_token docs
+  # set ttl:900 to self-expire; without this the field is inert.
+  default_ttl = -1
 }
 
 # ─── Log Analytics ────────────────────────────────────────────────────────────

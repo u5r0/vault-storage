@@ -1,6 +1,8 @@
 import { performance } from "node:perf_hooks"
 import { HTTPException } from "hono/http-exception"
-import { db } from "../db"
+// Auth documents (user / refresh_token / spent_token) live in their own
+// container keyed by /id (ADR 0028 §3.1 — split out of the file HPK container).
+import { authContainer as authDb } from "../db"
 import {
   createUser,
   verifyPassword,
@@ -22,7 +24,7 @@ const LOCKOUT_DURATION_MS = 30 * 60 * 1000
 
 async function markNonceSpent(nonce: string) {
   try {
-    await db.items.create({ id: nonce, type: "spent_token", ttl: 900 })
+    await authDb.items.create({ id: nonce, type: "spent_token", ttl: 900 })
   } catch (e: any) {
     if (e.code === 409 || e.statusCode === 409) {
       throw new HTTPException(400, { message: "Token has already been used" })
@@ -36,7 +38,7 @@ async function findUserByEmail(email: string) {
   // equality in WHERE clauses (e.g. `c.type = 'user'`); parameterized
   // bindings work. So every condition must be a @param. Real Cosmos handles
   // both forms, so this is correct for production as well.
-  const { resources } = await db.items
+  const { resources } = await authDb.items
     .query({
       query: "SELECT * FROM c WHERE c.type = @type AND c.email = @email",
       parameters: [
@@ -137,7 +139,7 @@ export class AuthService {
       const lockedUntil = justLocked
         ? new Date(Date.now() + LOCKOUT_DURATION_MS).toISOString()
         : null
-      await db.item(user.id).replace({
+      await authDb.item(user.id, user.id).replace({
         ...user,
         failedLoginAttempts: failedAttempts,
         lockedUntil,
@@ -159,7 +161,7 @@ export class AuthService {
       })
     }
 
-    await db.item(user.id).replace({
+    await authDb.item(user.id, user.id).replace({
       ...user,
       failedLoginAttempts: 0,
       lockedUntil: null,
@@ -184,14 +186,14 @@ export class AuthService {
 
     await markNonceSpent(data.nonce)
 
-    const { resource: user } = await db.item(data.userId).read()
+    const { resource: user } = await authDb.item(data.userId, data.userId).read()
     if (!user || user.type !== "user") {
       throw new HTTPException(400, { message: "Invalid token" })
     }
 
     if (data.type === "email-verification") {
       const updated = { ...user, verified: "1" }
-      await db.item(user.id).replace(updated)
+      await authDb.item(user.id, user.id).replace(updated)
       return { type: "email-verification", user: toPublicUser(updated) }
     }
 
@@ -233,13 +235,13 @@ export class AuthService {
       throw new HTTPException(400, { message: "Invalid or expired token" })
     }
     await markNonceSpent(data.nonce)
-    const { resource: user } = await db.item(data.userId).read()
+    const { resource: user } = await authDb.item(data.userId, data.userId).read()
     if (!user || user.type !== "user") {
       throw new HTTPException(400, { message: "Invalid token" })
     }
     await deleteAllRefreshTokensForUser(user.id)
     const passwordHash = await hashPassword(password)
-    await db.item(user.id).replace({ ...user, passwordHash, failedLoginAttempts: 0, lockedUntil: null })
+    await authDb.item(user.id, user.id).replace({ ...user, passwordHash, failedLoginAttempts: 0, lockedUntil: null })
   }
 
   async validateAndConsumeRefreshToken(jti: string): Promise<void> {
@@ -253,7 +255,7 @@ export class AuthService {
   }
 
   async getUser(userId: string): Promise<PublicUser> {
-    const { resource: user } = await db.item(userId).read()
+    const { resource: user } = await authDb.item(userId, userId).read()
     if (!user || user.type !== "user") {
       throw new HTTPException(401, { message: "Unauthenticated" })
     }

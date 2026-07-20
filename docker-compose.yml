@@ -33,20 +33,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # Real Azure Cosmos DB Linux emulator (vNext). Unlike Cosmium it enforces
+  # partition-key semantics, so it validates the hierarchical partition key
+  # [/ownerId, /parentId, /id] used by the entries container (ADR 0028 §3.1).
+  # Uses the well-known emulator key (hardcoded in apps/server/src/db.ts) and a
+  # self-signed cert; the server disables TLS verification for localhost.
   cosmos:
-    image: ghcr.io/pikami/cosmium:latest
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-latest
     container_name: vault-cosmos
     ports:
-      - "8081:8081"
+      - "8081:8081"   # Gateway
+      - "1234:1234"   # Data Explorer
     environment:
-      - COSMIUM_PERSIST=/data/cosmos.json
+      PROTOCOL: https
     volumes:
       - cosmos_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsk https://localhost:8081/_explorer/emulator.pem -o /dev/null || curl -fsk https://localhost:8081/ -o /dev/null"]
+      test: ["CMD-SHELL", "curl -fsk https://localhost:8081/ -o /dev/null || exit 1"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 30
+      start_period: 60s
 
   rustfs:
     image: rustfs/rustfs:latest

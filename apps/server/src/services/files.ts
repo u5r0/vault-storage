@@ -1,10 +1,16 @@
 import { HTTPException } from "hono/http-exception"
 import { Readable } from "stream"
 import { v4 as uuidv4 } from "uuid"
-import { db } from "../db"
+import { db, entries as entriesContainer } from "../db"
 import { getBlobStore } from "../lib/blob-provider"
 import { env } from "../lib/azure"
 import { normalizeSearchText, type VaultEntry } from "@vault/sdk"
+import {
+  putPointer,
+  deletePointer,
+  readEntryById,
+  entryPartitionKey,
+} from "../lib/entry-lookup"
 
 function isSafeName(name: string): boolean {
   if (!name || name.length > 255) return false
@@ -210,6 +216,8 @@ export class FilesService {
         createdAt,
         modifiedAt: null,
       })
+      // Pointer record so id-only ops can resolve this entry's HPK (§Gap 2).
+      await putPointer({ id, ownerId, parentId: parentId ?? null })
     } catch (err) {
       rethrowBackendError(err, `Create folder failed for ${name}`)
     }
@@ -264,6 +272,7 @@ export class FilesService {
           modifiedAt: createdAt,
         }
         await db.items.create(entry)
+        await putPointer({ id, ownerId, parentId: parentId ?? null })
         uploaded.push({
           id, ownerId, parentId,
           name: file.name,
@@ -285,7 +294,7 @@ export class FilesService {
   }
 
   async download(id: string, ownerId: string) {
-    const { resource } = await db.item(id).read()
+    const resource = await readEntryById(id)
     if (!resource) throw new HTTPException(404, { message: "File not found" })
     checkOwner(resource, ownerId)
     if (!resource.blobName) throw new HTTPException(400, { message: "Not a file" })
@@ -417,10 +426,11 @@ export class FilesService {
 
     try {
       await db.items.create(doc)
+      await putPointer({ id, ownerId, parentId: parentId ?? null })
     } catch (err: any) {
       // 409 Conflict → entry already exists for this blob (idempotent retry).
       if (err?.code === 409 || err?.statusCode === 409) {
-        const { resource } = await db.item(id).read()
+        const resource = await readEntryById(id)
         if (resource && resource.ownerId === ownerId) {
           return this.toVaultEntry(resource)
         }
@@ -432,7 +442,7 @@ export class FilesService {
   }
 
   async createDownloadUrl(id: string, ownerId: string): Promise<{ url: string; expiresAt: Date }> {
-    const { resource } = await db.item(id).read()
+    const resource = await readEntryById(id)
     if (!resource) throw new HTTPException(404, { message: "File not found" })
     checkOwner(resource, ownerId)
     if (!resource.blobName) throw new HTTPException(400, { message: "Not a file" })
@@ -462,12 +472,15 @@ export class FilesService {
   }
 
   async rename(id: string, name: string, ownerId: string): Promise<void> {
-    const { resource } = await db.item(id).read()
+    const resource = await readEntryById(id)
     if (!resource) throw new HTTPException(404, { message: "Item not found" })
     checkOwner(resource, ownerId)
     if (resource.name === name) return
+    // Rename does not change the partition key (ownerId/parentId unchanged),
+    // so an in-place keyed replace is safe.
+    const pk = entryPartitionKey({ id, ownerId: resource.ownerId, parentId: resource.parentId ?? null })
     try {
-      await db.item(id).replace({
+      await entriesContainer.item(id, pk).replace({
         ...resource,
         name,
         nameNormalized: normalizeSearchText(name),
@@ -479,12 +492,24 @@ export class FilesService {
   }
 
   async move(id: string, parentId: string | null, ownerId: string): Promise<void> {
-    const { resource } = await db.item(id).read()
+    const resource = await readEntryById(id)
     if (!resource) throw new HTTPException(404, { message: "Item not found" })
     checkOwner(resource, ownerId)
-    if (resource.parentId === parentId) return
+    const oldParentId = resource.parentId ?? null
+    const newParentId = parentId ?? null
+    if (oldParentId === newParentId) return
+
+    // parentId is part of the hierarchical partition key, so a move changes
+    // the partition. Cosmos cannot mutate a document's partition key in place;
+    // we must create the document in the new partition and delete the old one.
+    // Create-then-delete (not the reverse) so a crash mid-move leaves the item
+    // reachable rather than lost; the pointer is repointed last.
+    const oldPk = entryPartitionKey({ id, ownerId: resource.ownerId, parentId: oldParentId })
+    const moved = { ...resource, parentId: newParentId, modifiedAt: new Date().toISOString() }
     try {
-      await db.item(id).replace({ ...resource, parentId, modifiedAt: new Date().toISOString() })
+      await entriesContainer.items.create(moved)
+      await entriesContainer.item(id, oldPk).delete().catch(() => {})
+      await putPointer({ id, ownerId: resource.ownerId, parentId: newParentId })
     } catch (err) {
       rethrowBackendError(err, `Move failed for ${id}`)
     }
@@ -492,28 +517,41 @@ export class FilesService {
 
   async delete(id: string, ownerId: string): Promise<{ deleted: number }> {
     const store = await getBlobStore()
-    const { resource } = await db.item(id).read()
+    const resource = await readEntryById(id)
     if (!resource) throw new HTTPException(404, { message: "Item not found" })
     checkOwner(resource, ownerId)
+
+    // Every entries delete needs the full hierarchical key. `own` captures
+    // the (ownerId, parentId, id) needed to build it for each doc.
+    type Node = { id: string; ownerId: string; parentId: string | null; blobName: string | null }
+    const keyFor = (n: Node) =>
+      entryPartitionKey({ id: n.id, ownerId: n.ownerId, parentId: n.parentId })
 
     try {
       if (resource.type === "folder") {
         // BFS: collect the full subtree before touching anything, so a
         // crash mid-delete can be safely retried (already-gone items are
-        // tolerated via .catch(() => {})).
-        const subtree: Array<{ id: string; blobName: string | null }> = []
+        // tolerated via .catch(() => {})). Select the partition-key fields so
+        // each delete is a keyed point delete rather than a scan.
+        const subtree: Node[] = []
         const queue: string[] = [id]
 
         while (queue.length > 0) {
           const parentId = queue.shift()!
           const { resources: children } = await db.items
             .query({
-              query: "SELECT c.id, c.type, c.blobName FROM c WHERE c.parentId = @parentId",
+              query:
+                "SELECT c.id, c.ownerId, c.parentId, c.type, c.blobName FROM c WHERE c.parentId = @parentId",
               parameters: [{ name: "@parentId", value: parentId }],
             })
             .fetchAll()
           for (const child of children) {
-            subtree.push({ id: child.id, blobName: child.blobName ?? null })
+            subtree.push({
+              id: child.id,
+              ownerId: child.ownerId,
+              parentId: child.parentId ?? null,
+              blobName: child.blobName ?? null,
+            })
             if (child.type === "folder") {
               queue.push(child.id)
             }
@@ -532,17 +570,24 @@ export class FilesService {
             }),
         )
         await Promise.all(
-          subtree.map((r) => db.item(r.id).delete().catch(() => {})),
+          subtree.map(async (r) => {
+            await entriesContainer.item(r.id, keyFor(r)).delete().catch(() => {})
+            await deletePointer(r.id)
+          }),
         )
 
-        await db.item(id).delete()
+        const rootKey = entryPartitionKey({ id, ownerId: resource.ownerId, parentId: resource.parentId ?? null })
+        await entriesContainer.item(id, rootKey).delete()
+        await deletePointer(id)
         return { deleted: subtree.length + 1 }
       }
 
       if (resource.blobName && (await store.exists(resource.blobName))) {
         await store.delete(resource.blobName)
       }
-      await db.item(id).delete()
+      const fileKey = entryPartitionKey({ id, ownerId: resource.ownerId, parentId: resource.parentId ?? null })
+      await entriesContainer.item(id, fileKey).delete()
+      await deletePointer(id)
       return { deleted: 1 }
     } catch (err) {
       rethrowBackendError(err, `Delete failed for ${id}`)
