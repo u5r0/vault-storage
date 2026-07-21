@@ -18,7 +18,7 @@ terraform {
 
   backend "azurerm" {
     resource_group_name  = "vault-tfstate-rg"
-    storage_account_name = "REPLACE_AFTER_BOOTSTRAP"
+    storage_account_name = "vaulttfstatefd7a10c1"
     container_name       = "tfstate"
     key                  = "prod.terraform.tfstate"
   }
@@ -26,6 +26,7 @@ terraform {
 
 provider "azurerm" {
   features {}
+  resource_provider_registrations = "core"
 }
 
 # Cloudflare provider — authenticated via CLOUDFLARE_API_TOKEN env var.

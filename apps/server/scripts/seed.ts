@@ -6,9 +6,6 @@
  *   1. Start docker-compose:  docker compose up -d
  *   2. Start API:             pnpm dev:api
  *   3. In another terminal:   pnpm seed
- *
- * With Cosmium replacing the official Cosmos emulator, there are no RU limits
- * or 408 timeouts — seeding completes in seconds without rate-limit bypass.
  */
 import "dotenv/config"
 import { createVaultClient } from "@vault/sdk"

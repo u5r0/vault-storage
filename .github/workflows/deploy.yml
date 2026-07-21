@@ -46,13 +46,13 @@ jobs:
           terraform init
           terraform apply -var-file=envs/prod.tfvars -auto-approve \
             -var="ghcr_token=${{ secrets.ghcr_token }}" \
-            -var="r2_access_key_id=${{ secrets.r2_access_key_id }}" \
-            -var="r2_secret_access_key=${{ secrets.r2_secret_access_key }}" \
             -var="jwt_secret=${{ secrets.jwt_secret }}" \
             -var="auth_secret=${{ secrets.auth_secret }}" \
+            -var="r2_access_key_id=${{ secrets.r2_access_key_id }}" \
+            -var="r2_secret_access_key=${{ secrets.r2_secret_access_key }}" \
+            -var="cloudflare_api_token=${{ secrets.cloudflare_api_token }}" \
             -var="smtp_user=${{ secrets.smtp_user }}" \
-            -var="smtp_pass=${{ secrets.smtp_pass }}" \
-            -var="cloudflare_api_token=${{ secrets.cloudflare_api_token }}"
+            -var="smtp_pass=${{ secrets.smtp_pass }}"
       - name: Set GitHub Variable
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
