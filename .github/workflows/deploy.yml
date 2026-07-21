@@ -52,7 +52,10 @@ jobs:
             -var="r2_secret_access_key=${{ secrets.r2_secret_access_key }}" \
             -var="cloudflare_api_token=${{ secrets.cloudflare_api_token }}" \
             -var="smtp_user=${{ secrets.smtp_user }}" \
-            -var="smtp_pass=${{ secrets.smtp_pass }}"
+            -var="smtp_pass=${{ secrets.smtp_pass }}" \
+            -var="smtp_host=${{ vars.smtp_host }}" \
+            -var="smtp_port=${{ vars.smtp_port }}" \
+            -var="smtp_secure=${{ vars.smtp_secure }}"
       - name: Set GitHub Variable
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
