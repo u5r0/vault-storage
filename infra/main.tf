@@ -379,29 +379,12 @@ resource "cloudflare_r2_bucket_cors" "vault" {
 # The Pages project is provisioning-only. The actual deployment (build +
 # upload) is handled by `wrangler pages deploy` in deploy.yml, not Terraform.
 # Terraform ensures the project exists before the first CI deploy runs.
+# DEPLOYMENT_CONFIGS REMOVED: Cloudflare provider v5 marks deployment_configs.env_vars
+# as sensitive, then returns a different value after apply, triggering the "inconsistent
+# values for sensitive attribute" error. The env vars were also unnecessary — VITE_API_URL
+# is baked at build time (deploy.yml pnpm build step), not runtime.
 resource "cloudflare_pages_project" "vault" {
   account_id        = var.cloudflare_account_id
   name              = var.pages_project_name
   production_branch = "main"
-
-  # Disable Cloudflare's git integration — GitHub Actions (deploy.yml) owns
-  # deployment via Direct Upload. Connecting both would double-deploy.
-  #
-  # NOTE: Cloudflare Terraform provider v5 renamed `environment_variables` →
-  # `env_vars` and changed the value shape to { value, type } objects.
-  # Using the old `environment_variables` key is silently ignored — env vars
-  # would never be set.  Use `env_vars` with type = "plain_text".
-  deployment_configs = {
-    production = {
-      env_vars = {
-        VITE_API_URL = {
-          value = "https://${azurerm_container_app.api.ingress[0].fqdn}"
-          type  = "plain_text"
-        }
-      }
-    }
-    preview = {
-      env_vars = {}
-    }
-  }
 }

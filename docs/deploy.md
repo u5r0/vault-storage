@@ -73,7 +73,9 @@ The R2 Access Key ID and Secret (for `TF_VAR_r2_access_key_id` / `TF_VAR_r2_secr
 ```bash
 cd infra
 terraform init
+set -a
 source envs/.env.local  # Load secrets for terraform
+set +a
 terraform plan -var-file=envs/prod.tfvars
 terraform apply -var-file=envs/prod.tfvars
 ```
@@ -242,7 +244,9 @@ To update infrastructure after provisioning, you have two options:
 **Option 2: Run locally**
 ```bash
 cd infra
+set -a
 source envs/.env.local  # Load secrets
+set +a
 terraform plan -var-file=envs/prod.tfvars
 terraform apply -var-file=envs/prod.tfvars
 ```
