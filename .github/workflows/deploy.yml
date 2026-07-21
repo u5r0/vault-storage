@@ -26,7 +26,6 @@ permissions:
   id-token: write
   contents: read
   packages: write
-  variables: write
 
 jobs:
   terraform:
@@ -45,18 +44,15 @@ jobs:
         run: |
           cd infra
           terraform init
-          # NOTE: variables.tf declares discrete smtp_user / smtp_pass — there
-          # is no `smtp_url` variable. Passing smtp_url made apply fail on the
-          # required smtp_user / smtp_pass inputs. Pass the real vars instead.
           terraform apply -var-file=envs/prod.tfvars -auto-approve \
-            -var="ghcr_token=${{ secrets.TF_VAR_ghcr_token }}" \
-            -var="r2_access_key_id=${{ secrets.TF_VAR_r2_access_key_id }}" \
-            -var="r2_secret_access_key=${{ secrets.TF_VAR_r2_secret_access_key }}" \
-            -var="jwt_secret=${{ secrets.TF_VAR_jwt_secret }}" \
-            -var="auth_secret=${{ secrets.TF_VAR_auth_secret }}" \
-            -var="smtp_user=${{ secrets.TF_VAR_smtp_user }}" \
-            -var="smtp_pass=${{ secrets.TF_VAR_smtp_pass }}" \
-            -var="cloudflare_api_token=${{ secrets.TF_VAR_cloudflare_api_token }}"
+            -var="ghcr_token=${{ secrets.ghcr_token }}" \
+            -var="r2_access_key_id=${{ secrets.r2_access_key_id }}" \
+            -var="r2_secret_access_key=${{ secrets.r2_secret_access_key }}" \
+            -var="jwt_secret=${{ secrets.jwt_secret }}" \
+            -var="auth_secret=${{ secrets.auth_secret }}" \
+            -var="smtp_user=${{ secrets.smtp_user }}" \
+            -var="smtp_pass=${{ secrets.smtp_pass }}" \
+            -var="cloudflare_api_token=${{ secrets.cloudflare_api_token }}"
       - name: Set GitHub Variable
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

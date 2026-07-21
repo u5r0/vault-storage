@@ -47,9 +47,9 @@ jobs:
       - name: Wait for Cosmos DB
         run: |
           for i in {1..90}; do
-            status=$(curl -sk -o /dev/null -w "%{http_code}" https://localhost:8081/)
-            if [ "$status" != "000" ]; then
-              echo "Cosmos DB ready (HTTP $status)"
+            health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' vault-cosmos 2>/dev/null || true)
+            if [ "$health" = "healthy" ]; then
+              echo "Cosmos DB ready"
               exit 0
             fi
             sleep 3
