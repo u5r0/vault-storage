@@ -27,6 +27,12 @@ terraform {
 provider "azurerm" {
   features {}
   resource_provider_registrations = "core"
+  
+  # Explicitly register the missing resource providers:
+  resource_providers_to_register = [
+    "Microsoft.DocumentDB",
+    "Microsoft.App"
+  ]
 }
 
 # Cloudflare provider — authenticated via CLOUDFLARE_API_TOKEN env var.
