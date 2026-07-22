@@ -61,6 +61,12 @@ export type LoginInput = z.infer<typeof LoginBody>;
 export const ResendVerificationBody = z.object({ email: z.email() });
 export type ResendVerificationInput = z.infer<typeof ResendVerificationBody>;
 
+export const ForgotPasswordBody = z.object({ email: z.email() });
+export type ForgotPasswordInput = z.infer<typeof ForgotPasswordBody>;
+ 
+export const MagicLinkBody = z.object({ email: z.email() });
+export type MagicLinkInput = z.infer<typeof MagicLinkBody>;
+
 export const ResetPasswordBody = z.object({
   token: z.string().min(1),
   password: passwordSchema,

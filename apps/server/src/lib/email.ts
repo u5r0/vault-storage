@@ -18,6 +18,27 @@ const transporter = nodemailer.createTransport({
   } : undefined,
 })
 
+/**
+ * Wrap every SMTP send so the underlying nodemailer error (auth failure,
+ * unverified from-domain, connection refused) is logged before it propagates.
+ * Callers at the service layer still catch and swallow the rejection so a
+ * failed delivery never turns a privacy-preserving 200 endpoint into a 500 —
+ * but without this log the operator would have no visibility into *why* the
+ * mail never arrived. The error is re-thrown so those callers can act on it.
+ */
+async function sendMail(options: nodemailer.SendMailOptions) {
+  try {
+    await transporter.sendMail(options)
+  } catch (error) {
+    console.error("[auth] email send failed", {
+      to: options.to,
+      subject: options.subject,
+      error,
+    })
+    throw error
+  }
+}
+
 export async function sendVerificationEmail(email: string, token: string) {
   const verificationUrl = `${APP_URL}/verify?token=${token}`
 
@@ -59,7 +80,7 @@ export async function sendVerificationEmail(email: string, token: string) {
     </html>
   `
 
-  await transporter.sendMail({
+  await sendMail({
     from: EMAIL_FROM,
     to: email,
     subject: "Verify Your Vault Account",
@@ -108,7 +129,7 @@ export async function sendPasswordResetEmail(email: string, token: string) {
     </html>
   `
 
-  await transporter.sendMail({
+  await sendMail({
     from: EMAIL_FROM,
     to: email,
     subject: "Reset Your Vault Password",
@@ -162,7 +183,7 @@ export async function sendAccountLockedEmail(email: string) {
     </html>
   `
 
-  await transporter.sendMail({
+  await sendMail({
     from: EMAIL_FROM,
     to: email,
     subject: "Your Vault Account Has Been Temporarily Locked",

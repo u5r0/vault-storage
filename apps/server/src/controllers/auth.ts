@@ -6,6 +6,8 @@ import {
   LoginBody,
   ResendVerificationBody,
   ResetPasswordBody,
+  ForgotPasswordBody,
+  MagicLinkBody,
 } from "@vault/sdk"
 import {
   createRegisterLimiter,
@@ -116,8 +118,9 @@ app.get("/me", authenticate(), async (c) => {
 
 app.post("/magic-link", async (c) => {
   const body = await c.req.json().catch(() => null)
-  const email = body?.email
-  if (!email || typeof email !== "string") return c.json({ error: "Email required" }, 400)
+  const parsed = MagicLinkBody.safeParse(body)
+  if (!parsed.success) return c.json({ error: "Invalid input", issues: parsed.error.issues }, 400)
+  const { email } = parsed.data
   const early = await consumeEmailLimit(magicLinkLimiter, email, c)
   if (early) return early
   await authService.requestMagicLink(email)
@@ -140,8 +143,9 @@ app.get("/verify", async (c) => {
 
 app.post("/forgot-password", async (c) => {
   const body = await c.req.json().catch(() => null)
-  const email = body?.email
-  if (!email || typeof email !== "string") return c.json({ error: "Email required" }, 400)
+  const parsed = ForgotPasswordBody.safeParse(body)
+  if (!parsed.success) return c.json({ error: "Invalid input", issues: parsed.error.issues }, 400)
+  const { email } = parsed.data
   const early = await consumeEmailLimit(passwordResetLimiter, email, c)
   if (early) return early
   await authService.requestPasswordReset(email)

@@ -89,12 +89,23 @@ export class AuthService {
     if (existing) {
       const tokenType = existing.verified === "1" ? "login" : "email-verification"
       const token = generateMagicLinkToken(existing.id, existing.email, tokenType)
-      await sendVerificationEmail(existing.email, token)
+      await Promise.resolve(sendVerificationEmail(existing.email, token)).catch(
+        (err) => {
+          console.error("[auth] register: verification email send failed", err)
+        },
+      )
       return { ok: true }
     }
+    /**
+     * The user document is created before the email is sent, so a failed send
+     * must not surface as a 500 — otherwise the account exists but the caller
+     * sees an error. Swallow the SMTP failure (logged) and still return 200.
+     */
     const user = await createUser(email, password, name)
     const token = generateMagicLinkToken(user.id, user.email, "email-verification")
-    await sendVerificationEmail(user.email, token)
+    await Promise.resolve(sendVerificationEmail(user.email, token)).catch((err) => {
+      console.error("[auth] register: verification email send failed", err)
+    })
     return { ok: true }
   }
 
@@ -204,7 +215,9 @@ export class AuthService {
     const user = await findUserByEmail(email)
     if (!user) return
     const token = generateMagicLinkToken(user.id, user.email, "login")
-    await sendVerificationEmail(user.email, token)
+    await Promise.resolve(sendVerificationEmail(user.email, token)).catch((err) => {
+      console.error("[auth] requestMagicLink: magic link email send failed", err)
+    })
   }
 
   /**
@@ -216,14 +229,18 @@ export class AuthService {
     const user = await findUserByEmail(email)
     if (!user || user.verified === "1") return
     const token = generateMagicLinkToken(user.id, user.email, "email-verification")
-    await sendVerificationEmail(user.email, token)
+    await Promise.resolve(sendVerificationEmail(user.email, token)).catch((err) => {
+      console.error("[auth] resendVerification: verification email send failed", err)
+    })
   }
 
   async requestPasswordReset(email: string): Promise<void> {
     const user = await findUserByEmail(email)
     if (!user) return
     const token = generateMagicLinkToken(user.id, user.email, "password-reset")
-    await sendPasswordResetEmail(user.email, token)
+    await Promise.resolve(sendPasswordResetEmail(user.email, token)).catch((err) => {
+      console.error("[auth] requestPasswordReset: reset email send failed", err)
+    })
   }
 
   /**
