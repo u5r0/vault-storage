@@ -1,9 +1,9 @@
 location              = "eastus"
 ghcr_username         = "u5r0"
 
-pages_project_name    = "vault-storage"
-allowed_origin        = "https://vault-storage.pages.dev"
-app_url               = "https://vault-storage.pages.dev"
+pages_project_name    = "vault-store-7zv"
+allowed_origin        = "https://vault-store-7zv.pages.dev"
+app_url               = "https://vault-store-7zv.pages.dev"
 cloudflare_account_id = "8076f1c1560b58efe3e3c26bf268a55c"
 r2_account_id         = "8076f1c1560b58efe3e3c26bf268a55c"
 r2_bucket_name        = "vault-bucket"
