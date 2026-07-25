@@ -378,18 +378,17 @@ resource "cloudflare_r2_bucket_cors" "vault" {
 
 # The Worker hosts the SPA. Terraform creates the script resource and route.
 # The actual code deployment is handled by `wrangler deploy` in deploy.yml.
-resource "cloudflare_workers_script" "vault_storage" {
-  account_id   = var.cloudflare_account_id
-  script_name  = "vault-storage"
-  # Provide a valid empty Worker script template instead of a plain text comment
-    content = "export default { async fetch(request) { return new Response('Initializing...'); } }"
-}
+# resource "cloudflare_workers_script" "vault_storage" {
+#   account_id   = var.cloudflare_account_id
+#   script_name  = "vault-storage"
+#   content = "export default { async fetch(request) { return new Response('Initializing...'); } }"
+# }
 
-resource "cloudflare_workers_script_subdomain" "vault_storage_subdomain" {
-  account_id  = var.cloudflare_account_id
-  script_name = cloudflare_workers_script.vault_storage.script_name
-  enabled     = true
-}
+# resource "cloudflare_workers_script_subdomain" "vault_storage_subdomain" {
+#   account_id  = var.cloudflare_account_id
+#   script_name = cloudflare_workers_script.vault_storage.script_name
+#   enabled     = true
+# }
 # resource "cloudflare_workers_route" "vault" {
 #   zone_id  = var.cloudflare_zone_id
 #   pattern  = var.worker_hostname
