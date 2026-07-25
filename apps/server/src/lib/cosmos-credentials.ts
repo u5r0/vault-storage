@@ -1,5 +1,8 @@
 import { CosmosClient } from "@azure/cosmos"
 import { Agent as HttpsAgent } from "node:https"
+import { getServerConfig } from "./env"
+
+const serverConfig = getServerConfig()
 
 /**
  * TLS agent for the localhost Cosmos emulator ONLY. The vnext emulator serves
@@ -28,7 +31,7 @@ export function emulatorTlsAgent(endpoint: string): HttpsAgent | undefined {
  * access Cosmos via its role assignment ("Cosmos DB Built-in Data Contributor").
  */
 export async function createCosmosClient(endpoint: string): Promise<CosmosClient> {
-  const key = process.env.COSMOS_DB_KEY
+  const key = serverConfig.COSMOS_DB_KEY
 
   if (key) {
     return new CosmosClient({ endpoint, key, agent: emulatorTlsAgent(endpoint) })

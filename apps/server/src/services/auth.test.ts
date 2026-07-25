@@ -1,6 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { authService } from "./auth"
 
+// auth.ts talks only to the auth container (imported as authDb) — user /
+// refresh_token / spent_token docs keyed by /id. The service never touches the
+// entries or lookup containers, so the mock models just the auth container.
+vi.mock("../db", () => ({
+  authContainer: {
+    items: { query: vi.fn(), create: vi.fn() },
+    item: vi.fn(),
+  },
+}))
+
 vi.mock("../lib/auth", () => ({
   createUser: vi.fn(),
   verifyPassword: vi.fn(),
@@ -19,16 +29,6 @@ vi.mock("../lib/email", () => ({
   sendVerificationEmail: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
   sendAccountLockedEmail: vi.fn(),
-}))
-
-// auth.ts talks only to the auth container (imported as authDb) — user /
-// refresh_token / spent_token docs keyed by /id. The service never touches the
-// entries or lookup containers, so the mock models just the auth container.
-vi.mock("../db", () => ({
-  authContainer: {
-    items: { query: vi.fn(), create: vi.fn() },
-    item: vi.fn(),
-  },
 }))
 
 /**

@@ -9,6 +9,7 @@ import {
   DeleteObjectsCommand,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
+import { getServerConfig } from "./env"
 import type {
   BlobStore,
   BlobListItem,
@@ -43,14 +44,9 @@ export type R2Config = {
   accessKeyId: string
   secretAccessKey: string
   bucket: string
-  /** Override endpoint for local dev (RustFS, MinIO). Omit for production R2. */
   endpoint?: string
 }
 
-/**
- * Cloudflare R2 / S3-compatible blob store adapter.
- * Works against production R2 and local S3-compatible stores (RustFS, MinIO).
- */
 export class R2BlobStore implements BlobStore {
   private client: S3Client
   private bucket: string
@@ -64,7 +60,6 @@ export class R2BlobStore implements BlobStore {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,
       },
-      // Required for path-style access with local S3-compatible stores
       forcePathStyle: !!config.endpoint,
     })
   }

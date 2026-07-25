@@ -14,8 +14,11 @@ import type {
   DownloadUrlOptions,
 } from "./storage"
 import { Readable } from "stream"
-import { resolveAccountCredentials, env as azureEnv } from "./azure"
+import { getServerConfig } from "./env"
+import { resolveAccountCredentials } from "./azure"
 import { StorageSharedKeyCredential } from "@azure/storage-blob"
+
+const serverConfig = getServerConfig()
 
 /**
  * Azure Blob Storage adapter implementing the BlobStore interface.
@@ -155,7 +158,7 @@ export class AzureBlobStore implements BlobStore {
 
     const sas = generateBlobSASQueryParameters(
       {
-        containerName: azureEnv.containerName,
+        containerName: serverConfig.AZURE_STORAGE_CONTAINER_NAME,
         blobName: path,
         permissions,
         startsOn,
@@ -187,7 +190,7 @@ export class AzureBlobStore implements BlobStore {
 
     const sas = generateBlobSASQueryParameters(
       {
-        containerName: azureEnv.containerName,
+        containerName: serverConfig.AZURE_STORAGE_CONTAINER_NAME,
         blobName: path,
         permissions,
         startsOn,

@@ -1,8 +1,10 @@
 import { getCookie } from "hono/cookie"
 import { verify } from "hono/jwt"
 import type { Context, Next } from "hono"
+import { getServerConfig } from "../lib/env"
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me"
+const serverConfig = getServerConfig()
+const JWT_SECRET = serverConfig.JWT_SECRET
 
 export function authenticate(required = true) {
   return async (c: Context, next: Next) => {

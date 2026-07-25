@@ -12,8 +12,10 @@ import { createVaultClient } from "@vault/sdk"
 import { entries as entriesContainer, authContainer } from "../src/db"
 import { getBlobStore } from "../src/lib/blob-provider"
 import { clearMailpit, waitForMessage, extractLinkToken } from "../src/__setup__/mailpit"
+import { getServerConfig } from "../src/lib/env"
 
-const API_URL = process.env.SEED_API_URL || `http://localhost:${process.env.PORT || 3001}`
+const serverConfig = getServerConfig()
+const API_URL = serverConfig.SEED_API_URL || `http://localhost:${serverConfig.PORT}`
 const client = createVaultClient(API_URL)
 
 /**

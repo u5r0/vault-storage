@@ -1,23 +1,14 @@
 import { BlobServiceClient } from "@azure/storage-blob"
 import {
   S3Client,
+  CreateBucketCommand,
   PutBucketCorsCommand,
 } from "@aws-sdk/client-s3"
 import { getProvider } from "./blob-provider"
+import { getServerConfig } from "./env"
 
-/**
- * Configure CORS on the local blob backend so the browser can PUT
- * directly to presigned URLs (ADR 0023). Only runs against local
- * emulators (Azurite, RustFS) — production storage CORS is managed
- * out-of-band (Azure Portal / Cloudflare dashboard) and the server
- * credentials may not have permission to set it anyway.
- *
- * Best-effort: a failure here logs a warning but does not abort
- * server startup. The server-proxied `POST /api/files/upload` keeps
- * working regardless.
- */
 export async function ensureCorsForBrowserUploads(): Promise<void> {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN ?? "http://localhost:3000"
+  const allowedOrigin = getServerConfig().ALLOWED_ORIGIN
   const provider = getProvider()
 
   try {
@@ -37,11 +28,8 @@ export async function ensureCorsForBrowserUploads(): Promise<void> {
 }
 
 async function configureAzuriteCors(origin: string): Promise<void> {
-  // Only act on local Azurite. Production Azure CORS is set via the
-  // management plane — the data-plane key may not authorize it, and
-  // overwriting prod CORS from app boot would be hostile.
-  const cs = process.env.AZURE_STORAGE_CONNECTION_STRING ?? ""
-  const accountName = process.env.AZURE_STORAGE_ACCOUNT_NAME ?? ""
+  const cs = getServerConfig().AZURE_STORAGE_CONNECTION_STRING
+  const accountName = getServerConfig().AZURE_STORAGE_ACCOUNT_NAME
   const isLocalAzurite =
     cs.includes("127.0.0.1") ||
     cs.includes("localhost") ||
@@ -55,8 +43,6 @@ async function configureAzuriteCors(origin: string): Promise<void> {
       {
         allowedOrigins: origin,
         allowedMethods: "PUT,GET,HEAD,OPTIONS",
-        // Azure Put Blob requires `x-ms-blob-type`. The rest covers
-        // anything fetch / XHR may add automatically.
         allowedHeaders:
           "x-ms-blob-type,x-ms-version,x-ms-date,Content-Type,Content-Length,Authorization,Accept,Origin",
         exposedHeaders: "*",
@@ -68,13 +54,11 @@ async function configureAzuriteCors(origin: string): Promise<void> {
 }
 
 async function configureLocalR2Cors(origin: string): Promise<void> {
-  // Production R2 is configured via Cloudflare dashboard / wrangler.
-  // Only run when an endpoint override is set (i.e. RustFS / MinIO).
-  const endpoint = process.env.R2_ENDPOINT
+  const endpoint = getServerConfig().R2_ENDPOINT
   if (!endpoint) return
 
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY
+  const accessKeyId = getServerConfig().R2_ACCESS_KEY_ID
+  const secretAccessKey = getServerConfig().R2_SECRET_ACCESS_KEY
   if (!accessKeyId || !secretAccessKey) return
 
   const client = new S3Client({
@@ -84,10 +68,23 @@ async function configureLocalR2Cors(origin: string): Promise<void> {
     forcePathStyle: true,
   })
 
+  const bucket = getServerConfig().R2_BUCKET_NAME
+
+  try {
+    await client.send(new CreateBucketCommand({ Bucket: bucket }))
+    console.log(`[server] Created R2 bucket "${bucket}" on ${endpoint}`)
+  } catch (err: any) {
+    const reason = err?.code === "BucketAlreadyExists" || err?.code === "BucketAlreadyOwnedByYou"
+    if (!reason) {
+      client.destroy()
+      throw err
+    }
+  }
+
   try {
     await client.send(
       new PutBucketCorsCommand({
-        Bucket: process.env.R2_BUCKET_NAME ?? "vault",
+        Bucket: bucket,
         CORSConfiguration: {
           CORSRules: [
             {

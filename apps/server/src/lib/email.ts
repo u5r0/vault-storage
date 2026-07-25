@@ -1,12 +1,15 @@
 import nodemailer from "nodemailer"
+import { getServerConfig } from "./env"
 
-const SMTP_HOST = process.env.SMTP_HOST || "localhost"
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || "1025")
-const SMTP_SECURE = process.env.SMTP_SECURE === "true"
-const SMTP_USER = process.env.SMTP_USER
-const SMTP_PASS = process.env.SMTP_PASS
-const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@vault.app"
-const APP_URL = process.env.APP_URL || "http://localhost:3000"
+const serverConfig = getServerConfig()
+
+const SMTP_HOST = serverConfig.SMTP_HOST || "localhost"
+const SMTP_PORT = parseInt(serverConfig.SMTP_PORT || "1025")
+const SMTP_SECURE = serverConfig.SMTP_SECURE === "true"
+const SMTP_USER = serverConfig.SMTP_USER
+const SMTP_PASS = serverConfig.SMTP_PASS
+const EMAIL_FROM = serverConfig.EMAIL_FROM || "noreply@vault.app"
+const APP_URL = serverConfig.APP_URL || "http://localhost:3000"
 
 const transporter = nodemailer.createTransport({
   host: SMTP_HOST,

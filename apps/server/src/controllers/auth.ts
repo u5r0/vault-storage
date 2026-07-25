@@ -1,6 +1,7 @@
 import { Hono } from "hono"
 import { getCookie } from "hono/cookie"
 import { verify } from "hono/jwt"
+import { getServerConfig } from "../lib/env"
 import {
   RegisterBody,
   LoginBody,
@@ -32,6 +33,8 @@ const REGISTER_ACK_MESSAGE =
 const RESEND_ACK_MESSAGE =
   "If the email is registered and unverified, a verification email has been sent."
 
+const JWT_SECRET = getServerConfig().JWT_SECRET
+
 app.post("/register", async (c) => {
   const body = await c.req.json().catch(() => null)
   const parsed = RegisterBody.safeParse(body)
@@ -52,7 +55,6 @@ app.post("/resend-verification", async (c) => {
     return c.json({ error: "Invalid input", issues: parsed.error.issues }, 400)
   }
   const { email } = parsed.data
-  // Shares the magic-link bucket per ADR 0001 amendment.
   const early = await consumeEmailLimit(magicLinkLimiter, email, c)
   if (early) return early
   await authService.resendVerification(email)
@@ -77,14 +79,11 @@ app.post("/refresh", async (c) => {
   const token = getCookie(c, "refresh")
   if (!token) return c.json({ error: "Unauthenticated" }, 401)
   try {
-    const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me"
     const payload = (await verify(token, JWT_SECRET, "HS256")) as any
     if (!payload || payload.type !== "refresh") {
       return c.json({ error: "Unauthenticated" }, 401)
     }
     await authService.validateAndConsumeRefreshToken(payload.jti)
-    // ADR 0019 §B3a-iii: enforce lockout on the refresh path so a session that
-    // started before the lockout cannot ride out access-token TTL.
     const user = await authService.getUser(payload.sub)
     if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
       clearAuthCookies(c)
@@ -102,7 +101,6 @@ app.post("/logout", async (c) => {
   const token = getCookie(c, "refresh")
   if (token) {
     try {
-      const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me"
       const payload = (await verify(token, JWT_SECRET, "HS256")) as any
       if (payload?.jti) await authService.logout(payload.jti)
     } catch { /* ignore */ }
@@ -127,11 +125,6 @@ app.post("/magic-link", async (c) => {
   return c.json({ message: "If user exists, magic link sent" })
 })
 
-/**
- * Consume a magic-link token. Both branches (email-verification, login)
- * issue session cookies per ADR 0019 §B6 — clicking the link is sufficient
- * proof of identity for a first session.
- */
 app.get("/verify", async (c) => {
   const token = c.req.query("token")
   if (!token) return c.json({ error: "Missing token" }, 400)

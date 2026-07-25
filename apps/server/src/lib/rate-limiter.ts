@@ -15,6 +15,7 @@
  * not as a generic per-request middleware.
  */
 import { RateLimiterMemory } from "rate-limiter-flexible"
+import { getServerConfig } from "./env"
 
 export const createRegisterLimiter      = () => new RateLimiterMemory({ points: 5,                 duration: 900  })
 export const createLoginLimiter         = () => new RateLimiterMemory({ points: 10,                duration: 900  })
@@ -36,10 +37,12 @@ export const createIpLimiter            = () => new RateLimiterMemory({ points: 
  * without tripping the user limiter. Honored only when NODE_ENV is not
  * "production"; in production it is a no-op regardless of value.
  */
-export const rateLimitsDisabled =
-  process.env.NODE_ENV !== "production" && process.env.RATE_LIMIT_DISABLED === "1"
+export const rateLimitsDisabled = () => {
+  const config = getServerConfig()
+  return config.NODE_ENV !== "production" && config.RATE_LIMIT_DISABLED === "1"
+}
 
-if (rateLimitsDisabled) {
+if (rateLimitsDisabled()) {
   // eslint-disable-next-line no-console
   console.warn("[rate-limit] RATE_LIMIT_DISABLED=1 — all rate limits bypassed (dev only)")
 }

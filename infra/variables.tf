@@ -5,7 +5,7 @@ variable "location" {
 }
 
 variable "allowed_origin" {
-  description = "CORS origin for the SPA (Cloudflare Pages URL)"
+  description = "CORS origin for R2 bucket (must match Worker hostname for presigned upload/download)"
   type        = string
 }
 
@@ -103,13 +103,18 @@ variable "cloudflare_account_id" {
 }
 
 variable "cloudflare_api_token" {
-  description = "Cloudflare API token with R2:Edit + Pages:Edit permissions"
+  description = "Cloudflare API token with R2:Edit + Workers Scripts:Edit + Workers Routes:Edit permissions"
   type        = string
   sensitive   = true
 }
 
-variable "pages_project_name" {
-  description = "Cloudflare Pages project name"
+variable "worker_hostname" {
+  description = "Hostname for the Cloudflare Worker (e.g. vault.example.com)"
   type        = string
-  default     = "vault"
+}
+
+variable "cloudflare_zone_id" {
+  description = "Cloudflare zone ID for the worker hostname"
+  type        = string
+  default = "value"
 }

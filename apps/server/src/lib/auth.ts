@@ -4,9 +4,12 @@ import { sign, verify } from "hono/jwt"
 // keyed by /id (ADR 0028 §3.1).
 import { authContainer as authDb } from "../db"
 import { randomUUID } from "crypto"
-import { JWT_SECRET } from "./config"
-const ACCESS_EXPIRES_SECS = Number(process.env.ACCESS_EXPIRES_SECONDS || 15 * 60)
-const REFRESH_EXPIRES_SECS = Number(process.env.REFRESH_EXPIRES_SECONDS || 7 * 24 * 60 * 60)
+import { getServerConfig } from "./env"
+
+const serverConfig = getServerConfig()
+const JWT_SECRET = serverConfig.JWT_SECRET
+const ACCESS_EXPIRES_SECS = Number(serverConfig.ACCESS_EXPIRES_SECONDS || 15 * 60)
+const REFRESH_EXPIRES_SECS = Number(serverConfig.REFRESH_EXPIRES_SECONDS || 7 * 24 * 60 * 60)
 
 export async function hashPassword(password: string) {
   return argon2.hash(password, { type: argon2.argon2id })

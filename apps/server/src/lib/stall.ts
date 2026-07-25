@@ -1,11 +1,14 @@
 import { performance } from "node:perf_hooks"
+import { getServerConfig } from "./env"
+
+const serverConfig = getServerConfig()
 
 /**
  * Default floor when callers don't pass an explicit value. Read on each call
  * (not at module load) so tests can override via `vi.stubEnv("LOGIN_STALL_MS")`.
  */
 function defaultStallMs(): number {
-  return Number(process.env.LOGIN_STALL_MS || 250)
+  return Number(serverConfig.LOGIN_STALL_MS)
 }
 
 /**

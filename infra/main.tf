@@ -356,8 +356,8 @@ resource "cloudflare_r2_bucket" "vault" {
 }
 
 # CORS policy: allows the SPA to PUT blobs directly (presigned upload) and
-# GET blobs directly (presigned download). Only the production Pages origin
-# is allowed — adjust allowed_origins if a custom domain is added.
+# GET blobs directly (presigned download). Only the production Worker origin
+# is allowed — adjust allowed_origin if a custom domain is added.
 resource "cloudflare_r2_bucket_cors" "vault" {
   account_id  = var.cloudflare_account_id
   bucket_name = cloudflare_r2_bucket.vault.name
@@ -374,17 +374,23 @@ resource "cloudflare_r2_bucket_cors" "vault" {
   ]
 }
 
-# ─── Cloudflare Pages ─────────────────────────────────────────────────────────
+# ─── Cloudflare Worker ────────────────────────────────────────────────────────
 
-# The Pages project is provisioning-only. The actual deployment (build +
-# upload) is handled by `wrangler pages deploy` in deploy.yml, not Terraform.
-# Terraform ensures the project exists before the first CI deploy runs.
-# DEPLOYMENT_CONFIGS REMOVED: Cloudflare provider v5 marks deployment_configs.env_vars
-# as sensitive, then returns a different value after apply, triggering the "inconsistent
-# values for sensitive attribute" error. The env vars were also unnecessary — VITE_API_URL
-# is baked at build time (deploy.yml pnpm build step), not runtime.
-resource "cloudflare_pages_project" "vault" {
-  account_id        = var.cloudflare_account_id
-  name              = var.pages_project_name
-  production_branch = "main"
+# The Worker hosts the SPA. Terraform creates the script resource and route.
+# The actual code deployment is handled by `wrangler deploy` in deploy.yml.
+resource "cloudflare_workers_script" "vault_storage" {
+  account_id   = var.cloudflare_account_id
+  script_name  = "vault-storage"
+  content      = "# placeholder - actual content deployed via wrangler deploy"
 }
+
+resource "cloudflare_workers_script_subdomain" "vault_storage_subdomain" {
+  account_id  = var.cloudflare_account_id
+  script_name = cloudflare_workers_script.vault_storage.script_name
+  enabled     = true
+}
+# resource "cloudflare_workers_route" "vault" {
+#   zone_id  = var.cloudflare_zone_id
+#   pattern  = var.worker_hostname
+#   script   = cloudflare_workers_script.vault.script_name
+# }

@@ -28,12 +28,12 @@ output "r2_bucket_name" {
   value       = cloudflare_r2_bucket.vault.name
 }
 
-output "pages_project_name" {
-  description = "Cloudflare Pages project name"
-  value       = cloudflare_pages_project.vault.name
+output "worker_hostname" {
+  description = "Cloudflare Worker hostname"
+  value       = var.worker_hostname
 }
 
-output "pages_url" {
-  description = "Default Cloudflare Pages URL (*.pages.dev)"
-  value       = "https://${cloudflare_pages_project.vault.name}.pages.dev"
+output "worker_url" {
+  description = "Cloudflare Worker URL"
+  value       = "https://${var.worker_hostname}.workers.dev"
 }

@@ -29,6 +29,7 @@ export default defineConfig({
             // Keep them out of the unit project.
             "apps/server/src/lib/**/*.integration.test.ts",
           ],
+          setupFiles: [],
         },
       },
       {
@@ -52,6 +53,7 @@ export default defineConfig({
             "./apps/server/src/__setup__/mailpit.global.ts",
           ],
           setupFiles: [
+            "./apps/server/src/__setup__/env.env.ts",
             "./apps/server/src/__setup__/blob.env.ts",
             "./apps/server/src/__setup__/cosmos.env.ts",
             "./apps/server/src/__setup__/mailpit.env.ts",

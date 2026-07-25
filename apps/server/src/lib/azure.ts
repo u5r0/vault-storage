@@ -3,22 +3,9 @@ import {
   StorageSharedKeyCredential,
   type ContainerClient,
 } from "@azure/storage-blob"
+import { getServerConfig } from "./env"
 import { AzureBlobStore } from "./azure-blob-store"
 import type { BlobStore } from "./storage"
-
-/**
- * Server-side configuration loaded from environment variables.
- * See `.env.example` for the full list and documentation.
- */
-export const env = {
-  port: Number(process.env.PORT ?? 3001),
-  allowedOrigin: process.env.ALLOWED_ORIGIN ?? "http://localhost:3000",
-  connectionString: process.env.AZURE_STORAGE_CONNECTION_STRING ?? "",
-  accountName: process.env.AZURE_STORAGE_ACCOUNT_NAME ?? "",
-  accountKey: process.env.AZURE_STORAGE_ACCOUNT_KEY ?? "",
-  containerName: process.env.AZURE_STORAGE_CONTAINER_NAME ?? "vault",
-  maxUploadMb: Number(process.env.VITE_MAX_UPLOAD_MB ?? 100),
-}
 
 let _container: ContainerClient | null = null
 let _ready: Promise<ContainerClient> | null = null
@@ -51,12 +38,13 @@ function parseConnectionString(connectionString: string): {
  * Used by `AzureBlobStore` to mint SAS tokens for presigned URLs.
  */
 export function resolveAccountCredentials(): { accountName: string; accountKey: string } {
-  if (env.accountName && env.accountKey) {
-    return { accountName: env.accountName, accountKey: env.accountKey }
+  const config = getServerConfig()
+  if (config.AZURE_STORAGE_ACCOUNT_NAME && config.AZURE_STORAGE_ACCOUNT_KEY) {
+    return { accountName: config.AZURE_STORAGE_ACCOUNT_NAME, accountKey: config.AZURE_STORAGE_ACCOUNT_KEY }
   }
 
-  if (env.connectionString) {
-    return parseConnectionString(env.connectionString)
+  if (config.AZURE_STORAGE_CONNECTION_STRING) {
+    return parseConnectionString(config.AZURE_STORAGE_CONNECTION_STRING)
   }
 
   throw new Error(
@@ -70,14 +58,15 @@ export function resolveAccountCredentials(): { accountName: string; accountKey: 
  * an account name + key pair. Throws if neither is configured.
  */
 function buildServiceClient(): BlobServiceClient {
-  if (env.connectionString) {
-    return BlobServiceClient.fromConnectionString(env.connectionString)
+  const config = getServerConfig()
+  if (config.AZURE_STORAGE_CONNECTION_STRING) {
+    return BlobServiceClient.fromConnectionString(config.AZURE_STORAGE_CONNECTION_STRING)
   }
 
-  if (env.accountName && env.accountKey) {
-    const credential = new StorageSharedKeyCredential(env.accountName, env.accountKey)
+  if (config.AZURE_STORAGE_ACCOUNT_NAME && config.AZURE_STORAGE_ACCOUNT_KEY) {
+    const credential = new StorageSharedKeyCredential(config.AZURE_STORAGE_ACCOUNT_NAME, config.AZURE_STORAGE_ACCOUNT_KEY)
     return new BlobServiceClient(
-      `https://${env.accountName}.blob.core.windows.net`,
+      `https://${config.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net`,
       credential,
     )
   }
@@ -101,7 +90,7 @@ function getContainer(): Promise<ContainerClient> {
 
   _ready = (async () => {
     const service = buildServiceClient()
-    const container = service.getContainerClient(env.containerName)
+    const container = service.getContainerClient(getServerConfig().AZURE_STORAGE_CONTAINER_NAME)
     await container.createIfNotExists()
     _container = container
     return container
@@ -115,7 +104,8 @@ function getContainer(): Promise<ContainerClient> {
  * Used by the /api/health endpoint to surface configuration issues.
  */
 export function isConfigured(): boolean {
-  return Boolean(env.connectionString || (env.accountName && env.accountKey))
+  const config = getServerConfig()
+  return Boolean(config.AZURE_STORAGE_CONNECTION_STRING || (config.AZURE_STORAGE_ACCOUNT_NAME && config.AZURE_STORAGE_ACCOUNT_KEY))
 }
 
 /**

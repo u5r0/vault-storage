@@ -1,5 +1,6 @@
 import crypto from "crypto"
-import { AUTH_SECRET } from "./config"
+import { getServerConfig } from "./env"
+const serverConfig = getServerConfig()
 const TOKEN_EXPIRY_SECONDS = 15 * 60 // 15 minutes
 
 interface MagicLinkToken {
@@ -22,7 +23,7 @@ export function generateMagicLinkToken(
   const token = Buffer.from(JSON.stringify(payload)).toString("base64url")
 
   const signature = crypto
-    .createHmac("sha256", AUTH_SECRET)
+    .createHmac("sha256", serverConfig.AUTH_SECRET)
     .update(token)
     .digest("base64url")
 
@@ -35,7 +36,7 @@ export function verifyMagicLinkToken(token: string): MagicLinkToken | null {
 
     // Verify signature
     const expectedSignature = crypto
-      .createHmac("sha256", AUTH_SECRET)
+      .createHmac("sha256", serverConfig.AUTH_SECRET)
       .update(payload)
       .digest("base64url")
 

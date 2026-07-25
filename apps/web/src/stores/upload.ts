@@ -2,6 +2,8 @@ import { defineStore } from "pinia"
 import { ref, shallowRef, computed } from "vue"
 import { UploadManager, type UploadHandle } from "@vault/sdk"
 import { client } from "@/lib/client"
+import { getClientConfig } from "@/lib/env"
+import { useVaultIndex } from "@/modules/files/composables/useVaultIndex"
 
 /**
  * Wraps the SDK's framework-agnostic `UploadManager` in a Pinia store so
@@ -12,9 +14,11 @@ import { client } from "@/lib/client"
  * On `completed`, the handle is dropped from the queue and `lastCompletedAt`
  * is bumped — the file-list view watches that timestamp to invalidate its
  * TanStack Query cache and pull the new entry from the server.
+ * The local MiniSearch index is also updated incrementally so search
+ * results reflect uploads immediately.
  */
 
-const MAX_UPLOAD_MB = Number(import.meta.env.VITE_MAX_UPLOAD_MB ?? 100)
+const MAX_UPLOAD_MB = getClientConfig().VITE_MAX_UPLOAD_MB
 const MAX_FILES = 20
 const CONCURRENCY = 3
 
@@ -37,6 +41,7 @@ export const useUploadStore = defineStore("upload", () => {
 
   const currentEntityId = shallowRef<string | null>(null)
   const lastCompletedAt = shallowRef(0)
+  const index = useVaultIndex(client)
 
   function sync() {
     files.value = manager.list().slice()
@@ -48,6 +53,12 @@ export const useUploadStore = defineStore("upload", () => {
     // and the file-list view refetches from the timestamp bump.
     manager.remove(handle.id)
     lastCompletedAt.value = Date.now()
+    
+    // Update the local MiniSearch index incrementally so search results
+    // reflect uploads immediately without waiting for re-hydration.
+    if (handle.state.status === "completed") {
+      index.addEntry(handle.state.entry)
+    }
   })
 
   const hasPending = computed(() =>

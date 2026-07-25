@@ -4,7 +4,7 @@
   <img src=".github/banner.svg" alt="Vault Storage" width="100%" />
 </p>
 
-A modern file storage and management application built with Vue.js, Hono, Azure Blob Storage, and Cosmos DB.
+A modern file storage and management application built with Vue.js, Hono, Cloudflare Workers, Cloudflare R2, and Cosmos DB.
 
 ## Status
 
@@ -17,7 +17,7 @@ This project is currently in active development. Core features are functional bu
 **Implemented:**
 - **Secure File Storage**: Upload, organize, and manage your files
 - **Authentication**: Secure access with email/password login, passwordless magic links, and password recovery
-- **Cloud-Native Infrastructure**: Built on Azure for reliable, scalable storage
+- **Cloud-Native Infrastructure**: Built on Cloudflare Workers and Azure for reliable, scalable storage
 - **Modern User Experience**: Clean, intuitive interface with dark/light theme support
 - **Type-Safe Architecture**: Robust API contracts ensuring data integrity
 
@@ -26,7 +26,7 @@ This project is currently in active development. Core features are functional bu
 
 - **Frontend**: Vue 3, Pinia, Tailwind CSS, Vue Router
 - **Backend**: Hono (Node.js), TypeScript
-- **Storage**: Azure Blob Storage, Azure Cosmos DB
+- **Storage**: Cloudflare R2, Azure Cosmos DB
 - **Authentication**: Argon2id password hashing, JWT tokens, magic links
 - **Testing**: Vitest (unit + integration tests)
 - **SDK**: Shared TypeScript/Zod schemas for API contracts

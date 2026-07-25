@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Production stack: **Cloudflare Pages** (SPA) + **Cloudflare R2** (blob storage) + **Azure Container Apps** (API) + **Azure Cosmos DB** (database).
+Production stack: **Cloudflare Worker** (SPA) + **Cloudflare R2** (blob storage) + **Azure Container Apps** (API) + **Azure Cosmos DB** (database).
 
 Everything runs on always-free tiers at low traffic — see [ADR 0020](../build-reasoning/adr-vault-storage/0020-deployment-strategy.md) for the full cost breakdown and rationale.
 
@@ -34,12 +34,16 @@ The script prints a `storage_account_name`. Open `infra/versions.tf` and replace
 Open `infra/envs/prod.tfvars` and set:
 
 ```hcl
-allowed_origin        = "https://<your-pages-subdomain>.pages.dev"
-app_url               = "https://<your-pages-subdomain>.pages.dev"
+worker_hostname       = "<your-worker-subdomain>.workers.dev"
+allowed_origin        = "https://<your-worker-subdomain>.workers.dev"
+app_url               = "https://<your-worker-subdomain>.workers.dev"
 ghcr_username         = "<your-github-username>"
-r2_account_id         = "<cloudflare-account-id>"
 cloudflare_account_id = "<cloudflare-account-id>"   # Dashboard → top-right → Account ID
+cloudflare_zone_id    = "<your-zone-id>"            # Dashboard → Overview → Zone ID
+r2_account_id         = "<cloudflare-account-id>"
 ```
+
+**Note:** `allowed_origin` is used for R2 bucket CORS (required for presigned upload/download), not for the Worker itself. For Workers, it must match the Worker's hostname.
 
 Secrets are passed via environment variables for local runs, and via GitHub Secrets for CI/CD:
 
@@ -64,7 +68,7 @@ TF_VAR_cloudflare_api_token="<cloudflare-api-token>"
 - `TF_VAR_smtp_url`
 - `TF_VAR_cloudflare_api_token`
 
-The Cloudflare API token needs two permissions: **R2:Edit** (to create the bucket and set CORS) and **Pages:Edit** (to create the Pages project). Create it at Cloudflare Dashboard → My Profile → API Tokens.
+The Cloudflare API token needs three permissions: **R2:Edit** (to create the bucket and set CORS), **Workers Scripts:Edit** (to create the Worker script), and **Workers Routes:Edit** (to route traffic to the Worker). Create it at Cloudflare Dashboard → My Profile → API Tokens.
 
 The R2 Access Key ID and Secret (for `TF_VAR_r2_access_key_id` / `TF_VAR_r2_secret_access_key`) are a separate S3-compatible credential — create them at Cloudflare Dashboard → R2 → Manage R2 API Tokens.
 
@@ -82,9 +86,9 @@ terraform apply -var-file=envs/prod.tfvars
 
 A single `terraform apply` creates everything:
 - **Azure:** Cosmos DB account + database + container, Key Vault, Log Analytics workspace, Container App environment, Container App (with system-assigned managed identity + Cosmos role assignment)
-- **Cloudflare:** R2 bucket (`vault`) + CORS policy, Pages project (`vault-storage`)
+  - **Cloudflare:** R2 bucket (`vault`) + CORS policy, Worker project (`vault-storage`)
 
-Note the outputs — you'll need `api_url` and `pages_url` for the next step.
+Note the outputs — you'll need `api_url` and `worker_hostname` for the next step.
 
 ### 3b. Optional: Run terraform via CI/CD
 
@@ -108,7 +112,7 @@ The `deploy.yml` workflow needs these (Settings → Secrets and variables → Ac
 | `AZURE_CLIENT_ID` | Service principal client ID (see below) |
 | `AZURE_TENANT_ID` | `az account show --query tenantId -o tsv` |
 | `AZURE_SUBSCRIPTION_ID` | `az account show --query id -o tsv` |
-| `CLOUDFLARE_API_TOKEN` | Same token used for Terraform (R2:Edit + Pages:Edit) |
+| `CLOUDFLARE_API_TOKEN` | Same token used for Terraform (R2:Edit + Workers Scripts:Edit) |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → top-right → Account ID |
 
 **Secrets (for optional terraform job):**
@@ -121,7 +125,7 @@ The `deploy.yml` workflow needs these (Settings → Secrets and variables → Ac
 | `TF_VAR_jwt_secret` | Random secret for JWT signing |
 | `TF_VAR_auth_secret` | Random secret for magic link tokens |
 | `TF_VAR_smtp_url` | SMTP connection URL (e.g., smtp://resend:...) |
-| `TF_VAR_cloudflare_api_token` | Cloudflare API token (R2:Edit + Pages:Edit) |
+| `TF_VAR_cloudflare_api_token` | Cloudflare API token (R2:Edit + Workers Scripts:Edit) |
 
 **Variables:**
 
@@ -158,7 +162,7 @@ Note: No `AZURE_CLIENT_SECRET` is needed — the workflow uses OpenID Connect (O
 CI runs tests. On success, `deploy.yml` triggers automatically and fans out to two jobs:
 
 - **`deploy-api`** — builds the Docker image from `apps/server/Dockerfile`, pushes to `ghcr.io/<your-username>/vault-api`, and updates the Container App.
-- **`deploy-web`** — builds the SPA (`pnpm --filter @vault/web build`) and deploys `apps/web/dist` to Cloudflare Pages (`wrangler pages deploy`).
+- **`deploy-web`** — builds the SPA (`pnpm --filter @vault/web build`) and deploys `apps/web/dist` to Cloudflare Worker (`wrangler pages deploy`).
 
 A newer push to `main` cancels an in-flight deploy (workflow `concurrency` guard).
 
@@ -203,7 +207,7 @@ az containerapp ingress traffic set \
   --revision-weight <previous-revision-name>=100
 ```
 
-**SPA** — one-click rollback in Cloudflare Pages dashboard, or redeploy a previous commit.
+**SPA** — one-click rollback in Cloudflare Workers dashboard, or redeploy a previous commit.
 
 ---
 
@@ -222,8 +226,8 @@ az containerapp ingress traffic set \
 | `R2_ENDPOINT` | `http://localhost:9000` (RustFS) | `http://localhost:9000` | unset |
 | `COSMOS_DB_ENDPOINT` | `https://localhost:8081` | `https://localhost:8081` | real endpoint |
 | `COSMOS_DB_KEY` | emulator key (auto-injected) | emulator key (auto-injected) | unset → managed identity |
-| `ALLOWED_ORIGIN` | `http://localhost:3000` | `http://localhost:3000` | Pages URL |
-| `APP_URL` | `http://localhost:3000` | `http://localhost:3000` | Pages URL |
+| `ALLOWED_ORIGIN` | `http://localhost:3000` | `http://localhost:3000` | Worker hostname |
+| `APP_URL` | `http://localhost:3000` | `http://localhost:3000` | Worker hostname |
 | `JWT_SECRET` | `.env` | random | Container App secret |
 | `AUTH_SECRET` | `.env` | random | Container App secret |
 | `SMTP_URL` | `smtp://localhost:1025` | Mailpit | Resend SMTP |

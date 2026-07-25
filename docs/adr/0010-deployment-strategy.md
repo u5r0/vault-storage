@@ -16,7 +16,7 @@ The application is deployed across these services, all within always-free / no-c
 | API | Azure Container Apps | Same cloud as Cosmos DB → managed identity auth. Scale-to-zero. |
 | Database | Azure Cosmos DB (free tier) | 1,000 RU/s + 25 GB always free. |
 | Blob storage | Cloudflare R2 | Free tier (10 GB, zero egress). S3-compatible. |
-| SPA | Cloudflare Pages | Free, global CDN. **Frontend deploys here, NOT Vercel.** |
+| SPA | Cloudflare Worker | Free, global CDN. **Frontend deploys here, NOT Vercel.** |
 | Container registry | ghcr.io | Free; built into GitHub Actions. |
 | SMTP | Resend | 3k emails/month free. |
 
@@ -30,7 +30,7 @@ Four commits on branch `vault-deployment-strategy`:
 
 | Commit | Summary |
 |--------|---------|
-| `92b2504` | **infra:** `cloudflare_pages_project` → provider v5 `env_vars = { KEY = { value, type } }` (old `environment_variables` key was silently ignored — `VITE_API_URL` never reached Pages). **Pushed.** |
+| `92b2504` | **infra:** `cloudflare_workers_site` → provider v5 `env_vars = { KEY = { value, type } }` (old `environment_variables` key was silently ignored — `VITE_API_URL` never reached Worker). **Pushed.** |
 | `0a174e2` | **deploy fixes:** `smtp_url` → `smtp_user`/`smtp_pass` (no `smtp_url` var exists — apply failed); added `variables: write` + `GH_TOKEN` to the "Set GitHub Variable" step; `cd infra` in that step (working dir did not persist across steps); downcase `github.repository_owner` before ghcr tag/push; removed unused `azurerm_key_vault` + `azurerm_client_config` (closes ADR 0026 F-KV / ADR 0027 removal). |
 | `50f818a` | **search (ADR 0028 Phase 2, server side):** `@vault/sdk` `normalizeSearchText()` — NFKD + strip all combining marks (`\p{M}`) unifies Arabic alef forms, tashkeel, tatweel, and Latin diacritics; server persists `nameNormalized` on all four write paths; search matches it, with a backfill-safe fallback for pre-existing docs. |
 | `c9dec16` | **data layer (ADR 0028 Phase 1, app + infra only):** hierarchical partition key + container split. See below. |
@@ -88,14 +88,14 @@ Set in **Settings → Secrets and variables → Actions** before the first deplo
 | `AZURE_CLIENT_ID` | App registration client ID (OIDC federated credential, branch `main`) |
 | `AZURE_TENANT_ID` | `az account show --query tenantId -o tsv` |
 | `AZURE_SUBSCRIPTION_ID` | `az account show --query id -o tsv` |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare → API Tokens: **R2:Edit + Pages:Edit** |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare → API Tokens: **R2:Edit + Workers Scripts:Edit** |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Dashboard → Account ID |
 | `TF_VAR_ghcr_token` | GitHub PAT, `read:packages` (Container App image pull) |
 | `TF_VAR_r2_access_key_id` / `TF_VAR_r2_secret_access_key` | R2 API token |
 | `TF_VAR_jwt_secret` / `TF_VAR_auth_secret` | `openssl rand -hex 32` each |
 | `TF_VAR_smtp_user` | Resend SMTP username (`resend`) |
 | `TF_VAR_smtp_pass` | Resend API key |
-| `TF_VAR_cloudflare_api_token` | Same Cloudflare token (R2:Edit + Pages:Edit) |
+| `TF_VAR_cloudflare_api_token` | Same Cloudflare token (R2:Edit + Workers Scripts:Edit) |
 
 **Variables (non-secret):** `VITE_API_URL` = `https://<container-app-fqdn>` — the deploy.yml terraform job auto-sets this via `gh variable set`, or set manually after the first `terraform apply`.
 
@@ -124,5 +124,5 @@ Set in **Settings → Secrets and variables → Actions** before the first deplo
 [ ] 8. Add all GitHub Actions secrets above; create Azure App Registration + federated OIDC cred (branch main); grant it Contributor on vault-prod-rg
 [ ] 9. Push to main — CI runs, deploy.yml triggers both deploy-api and deploy-web
 [ ] 10. Verify API: az containerapp revision list --name vault-api --resource-group vault-prod-rg
-[ ] 11. Verify SPA: https://vault-storage.pages.dev
+[ ] 11. Verify SPA: https://vault-storage.workers.dev
 ```

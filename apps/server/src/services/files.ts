@@ -3,7 +3,7 @@ import { Readable } from "stream"
 import { v4 as uuidv4 } from "uuid"
 import { db, entries as entriesContainer } from "../db"
 import { getBlobStore } from "../lib/blob-provider"
-import { env } from "../lib/azure"
+import { getServerConfig } from "../lib/env"
 import { normalizeSearchText, type VaultEntry } from "@vault/sdk"
 import {
   putPointer,
@@ -11,6 +11,8 @@ import {
   readEntryById,
   entryPartitionKey,
 } from "../lib/entry-lookup"
+
+const MAX_UPLOAD_MB = getServerConfig().MAX_UPLOAD_MB
 
 function isSafeName(name: string): boolean {
   if (!name || name.length > 255) return false
@@ -310,12 +312,12 @@ export class FilesService {
     if (files.length === 0) throw new HTTPException(400, { message: "No files provided in 'files' field" })
 
     const store = await getBlobStore()
-    const limit = env.maxUploadMb * 1024 * 1024
+    const limit = MAX_UPLOAD_MB * 1024 * 1024
     const uploaded: VaultEntry[] = []
 
     for (const file of files) {
       if (!isSafeName(file.name)) throw new HTTPException(400, { message: `Invalid filename: ${file.name}` })
-      if (file.size > limit) throw new HTTPException(413, { message: `File "${file.name}" exceeds ${env.maxUploadMb}MB limit` })
+      if (file.size > limit) throw new HTTPException(413, { message: `File "${file.name}" exceeds ${MAX_UPLOAD_MB}MB limit` })
 
       const id = uuidv4()
       const blobName = `vault/blobs/${id}`
@@ -408,9 +410,9 @@ export class FilesService {
   ): Promise<{ blobName: string; uploadUrl: string; expiresAt: Date; requiredHeaders: Record<string, string> }> {
     if (!isSafeName(name)) throw new HTTPException(400, { message: `Invalid filename: ${name}` })
 
-    const limit = env.maxUploadMb * 1024 * 1024
+    const limit = MAX_UPLOAD_MB * 1024 * 1024
     if (size > limit) {
-      throw new HTTPException(413, { message: `File "${name}" exceeds ${env.maxUploadMb}MB limit` })
+      throw new HTTPException(413, { message: `File "${name}" exceeds ${MAX_UPLOAD_MB}MB limit` })
     }
 
     // Parent-ownership check is a future hardening step; today the API
@@ -476,12 +478,12 @@ export class FilesService {
     }
     if (!meta) throw new HTTPException(404, { message: "Upload not found — PUT to uploadUrl first" })
 
-    const limit = env.maxUploadMb * 1024 * 1024
+    const limit = MAX_UPLOAD_MB * 1024 * 1024
     if (meta.size > limit) {
       // Reject and clean up — client uploaded more than declared.
       await store.delete(blobName).catch(() => {})
       throw new HTTPException(413, {
-        message: `Uploaded blob exceeds ${env.maxUploadMb}MB limit`,
+        message: `Uploaded blob exceeds ${MAX_UPLOAD_MB}MB limit`,
       })
     }
 

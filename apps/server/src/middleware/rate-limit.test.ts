@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest"
+import { describe, it, expect, beforeEach, vi, beforeAll, afterAll } from "vitest"
 import { Hono } from "hono"
 import { RateLimiterMemory } from "rate-limiter-flexible"
 
@@ -10,6 +10,11 @@ import { RateLimiterMemory } from "rate-limiter-flexible"
  * module copy via `vi.resetModules()` + a scoped dynamic import. Tests
  * for the non-bypass paths share a single import to keep the suite fast.
  */
+
+vi.mock("../lib/env", () => ({
+  getServerConfig: vi.fn(),
+  resetConfigs: vi.fn(),
+}))
 
 function makeApp(setUserId: (c: any) => string | undefined, mw: any) {
   const app = new Hono()
@@ -24,8 +29,16 @@ function makeApp(setUserId: (c: any) => string | undefined, mw: any) {
 }
 
 async function loadFresh(env: Record<string, string | undefined>) {
-  const { vi } = await import("vitest")
   vi.resetModules()
+  
+  const { getServerConfig } = await import("../lib/env")
+  vi.mocked(getServerConfig).mockReturnValue({
+    NODE_ENV: env.NODE_ENV ?? "test",
+    RATE_LIMIT_DISABLED: env.RATE_LIMIT_DISABLED,
+    AUTH_SECRET: "test-secret",
+    JWT_SECRET: "test-jwt-secret",
+  })
+  
   const original: Record<string, string | undefined> = {}
   for (const [k, v] of Object.entries(env)) {
     original[k] = process.env[k]

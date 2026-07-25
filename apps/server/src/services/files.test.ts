@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { HTTPException } from "hono/http-exception"
+
 import { filesService } from "./files"
 
 vi.mock("../db", () => {
@@ -25,8 +26,9 @@ vi.mock("../db", () => {
   }
 })
 
-vi.mock("../lib/azure", () => ({
-  env: { maxUploadMb: 100 },
+vi.mock("../lib/env", () => ({
+  getServerConfig: vi.fn().mockReturnValue({ MAX_UPLOAD_MB: 100 }),
+  resetConfigs: vi.fn(),
 }))
 
 vi.mock("../lib/blob-provider", () => ({
