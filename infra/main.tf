@@ -381,7 +381,8 @@ resource "cloudflare_r2_bucket_cors" "vault" {
 resource "cloudflare_workers_script" "vault_storage" {
   account_id   = var.cloudflare_account_id
   script_name  = "vault-storage"
-  content      = "# placeholder - actual content deployed via wrangler deploy"
+  # Provide a valid empty Worker script template instead of a plain text comment
+    content = "export default { async fetch(request) { return new Response('Initializing...'); } }"
 }
 
 resource "cloudflare_workers_script_subdomain" "vault_storage_subdomain" {
