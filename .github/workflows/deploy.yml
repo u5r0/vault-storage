@@ -64,7 +64,9 @@ jobs:
           cd infra
           API_URL=$(terraform output -json | jq -r '.api_url.value')
           echo "api_url=$API_URL" >> $GITHUB_OUTPUT
-          
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   deploy-api:
     needs: [terraform]
     if: always() && (github.event.workflow_run.conclusion == 'success' || github.event.type == 'workflow_dispatch') && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped')
@@ -119,7 +121,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 10
+          version: 11
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

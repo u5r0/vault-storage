@@ -11,3 +11,6 @@ allowBuilds:
 
 catalog:
   zod: "^4.4.3"
+
+minimumReleaseAgeExclude:
+  - '@cloudflare/workers-types@5.20260726.1'
