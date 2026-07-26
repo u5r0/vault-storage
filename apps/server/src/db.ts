@@ -99,9 +99,25 @@ function isTransientNetworkError(error: unknown): boolean {
   )
 }
 
+function isCosmosUnauthorizedError(error: unknown): boolean {
+  const err = error as { code?: unknown; statusCode?: unknown; message?: unknown }
+  const code = typeof err?.code === "string" ? err.code : ""
+  const statusCode = typeof err?.statusCode === "number" ? err.statusCode : 0
+  const message = typeof err?.message === "string" ? err.message : ""
+  return (
+    code === "Unauthorized" ||
+    statusCode === 401 ||
+    statusCode === 403 ||
+    message.includes("Unauthorized") ||
+    message.includes("Forbidden") ||
+    message.includes("authentication")
+  )
+}
+
 export async function initializeDatabase() {
-  const timeout = 30_000
+  const timeout = 120_000
   const startTime = Date.now()
+  let attempt = 0
 
   _containers.entries = undefined
   _containers.lookup = undefined
@@ -140,8 +156,21 @@ export async function initializeDatabase() {
         throw new Error(`Cosmos DB initialization timeout: ${error.message}`)
       }
       if (isTransientNetworkError(error)) {
-        console.log(`[Cosmos DB] Waiting for emulator to be ready...`)
-        await new Promise((resolve) => setTimeout(resolve, 2000))
+        attempt++
+        const delay = Math.min(10_000, 500 * Math.pow(2, attempt))
+        console.log(
+          `[Cosmos DB] Network error, retrying in ${delay}ms... (attempt ${attempt})`,
+        )
+        await new Promise((resolve) => setTimeout(resolve, delay))
+        continue
+      }
+      if (isCosmosUnauthorizedError(error)) {
+        attempt++
+        const delay = Math.min(10_000, 500 * Math.pow(2, attempt))
+        console.log(
+          `[Cosmos DB] Authentication pending (managed identity propagation), retrying in ${delay}ms... (attempt ${attempt})`,
+        )
+        await new Promise((resolve) => setTimeout(resolve, delay))
         continue
       }
       console.error(`[Cosmos DB] Failed to initialize:`, error.message)

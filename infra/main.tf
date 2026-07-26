@@ -346,6 +346,10 @@ resource "azurerm_cosmosdb_sql_role_assignment" "api" {
   role_definition_id  = azurerm_cosmosdb_sql_role_definition.data_contributor.id
   principal_id        = azurerm_container_app.api.identity[0].principal_id
   scope               = azurerm_cosmosdb_account.main.id
+
+  depends_on = [
+    azurerm_container_app.api,
+  ]
 }
 
 # ─── Cloudflare R2 ────────────────────────────────────────────────────────────
