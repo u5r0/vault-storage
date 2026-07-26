@@ -10,5 +10,5 @@
     "strict": true
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.browser.test.ts", "src/__test__/**", "src/**/__tests__/*"]
+  "exclude": ["src/**/*.test.ts", "src/**/*.browser.test.ts", "src/__test__/**", "src/**/__tests__/*", "src/worker.ts"]
 }

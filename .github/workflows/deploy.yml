@@ -1,9 +1,6 @@
 name: Deploy
 
 # Continuous deployment: runs after CI succeeds on main.
-# Two independent jobs fan out from one CI-success event:
-#   deploy-api  → build image → push to ghcr.io → update Azure Container App
-#   deploy-web  → build SPA   → deploy to Cloudflare Worker (production)
 on:
   workflow_run:
     workflows: [CI]
@@ -17,7 +14,6 @@ on:
         default: false
         type: boolean
 
-# Supersede an in-flight deploy when a newer commit lands.
 concurrency:
   group: deploy-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
@@ -26,13 +22,16 @@ permissions:
   id-token: write
   contents: read
   packages: write
-  # `gh variable set` in the terraform job requires actions:write.
   actions: write
 
 jobs:
   terraform:
     if: github.event.inputs.run_terraform == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      api_url: ${{ steps.tf-output.outputs.api_url }}
     steps:
       - uses: actions/checkout@v6
       - uses: hashicorp/setup-terraform@v4
@@ -59,39 +58,32 @@ jobs:
             -var="smtp_port=${{ vars.smtp_port }}" \
             -var="smtp_secure=${{ vars.smtp_secure }}"
 
-      - name: Save Terraform Outputs as GitHub Variables
+      - name: Get Terraform Output
+        id: tf-output
         run: |
           cd infra
           API_URL=$(terraform output -json | jq -r '.api_url.value')
-          gh variable set VITE_API_URL --body "$API_URL"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+          
   deploy-api:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    needs: [terraform]
+    if: always() && (github.event.workflow_run.conclusion == 'success' || github.event.type == 'workflow_dispatch') && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped')
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Pin to the exact commit that triggered the upstream CI run.
-          # Without this, workflow_run uses the default-branch tip, which
-          # can differ from the CI commit on fast-push branches.
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Login to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Build and push Docker image
         run: |
-          # ghcr.io rejects uppercase letters in image names — downcase the
-          # owner (handles GitHub orgs/users that contain uppercase chars).
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           IMAGE="ghcr.io/$OWNER/vault-api"
-          # Use the CI commit SHA, not github.sha (which is the workflow file
-          # SHA under workflow_run — they can diverge).
-          SHA="${{ github.event.workflow_run.head_sha }}"
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
 
           docker build -f apps/server/Dockerfile -t "$IMAGE:$SHA" .
           docker tag "$IMAGE:$SHA" "$IMAGE:latest"
@@ -107,25 +99,22 @@ jobs:
 
       - name: Deploy to Container App
         run: |
-          # Container App name and resource group must match infra/main.tf
-          # (azurerm_container_app.api.name = "vault-api",
-          #  azurerm_resource_group.main.name = "vault-prod-rg").
-          # If those are renamed in Terraform, update here too.
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           az containerapp update \
             --name vault-api \
             --resource-group vault-prod-rg \
-            --image "ghcr.io/$OWNER/vault-api:${{ github.event.workflow_run.head_sha }}"
+            --image "ghcr.io/$OWNER/vault-api:${{ github.event.workflow_run.head_sha || github.sha }}"
 
   deploy-web:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    needs: [terraform]
+    if: always() && (github.event.workflow_run.conclusion == 'success' || github.event.type == 'workflow_dispatch') && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped')
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -144,10 +133,11 @@ jobs:
       - name: Build SPA
         run: pnpm --filter @vault/web build
         env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_API_URL: ${{ needs.terraform.outputs.api_url || vars.VITE_API_URL }}
 
       - name: Deploy to Cloudflare Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler@4 deploy
+          VITE_API_URL: ${{ needs.terraform.outputs.api_url || vars.VITE_API_URL }}
+        run: npx wrangler@4 deploy --config apps/web/wrangler.toml --var VITE_API_URL="${VITE_API_URL}"

@@ -1,0 +1,11 @@
+name = "vault-storage"
+main = "src/worker.ts"
+compatibility_date = "2026-07-26"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[vars]
+VITE_API_URL = "https://vault-api.grayplant-875852eb.eastus.azurecontainerapps.io"
