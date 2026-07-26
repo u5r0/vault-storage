@@ -18,17 +18,18 @@ concurrency:
   group: deploy-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
-permissions:
-  id-token: write
-  contents: read
-  packages: write
-  actions: write
+# permissions:
+#   id-token: write
+#   contents: read
+#   packages: write
+#   actions: write
 
 jobs:
   terraform:
     if: github.event.inputs.run_terraform == 'true'
     runs-on: ubuntu-latest
     permissions:
+      id-token: write
       contents: read
     outputs:
       api_url: ${{ steps.tf-output.outputs.api_url }}
@@ -71,6 +72,10 @@ jobs:
     needs: [terraform]
     if: always() && (github.event.workflow_run.conclusion == 'success' || github.event.type == 'workflow_dispatch') && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped')
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout
@@ -111,6 +116,8 @@ jobs:
     needs: [terraform]
     if: always() && (github.event.workflow_run.conclusion == 'success' || github.event.type == 'workflow_dispatch') && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
