@@ -47,4 +47,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
 
 USER node
 EXPOSE 3001
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/index.mjs"]
