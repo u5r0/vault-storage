@@ -4,15 +4,30 @@ import { filesRoutes }    from "./modules/files"
 import { settingsRoutes } from "./modules/settings"
 import { profileRoutes }  from "./modules/profile"
 import { useAuthStore }   from "./stores/auth"
+import AppLayout from "./layouts/AppLayout.vue"
+import AuthLayout from "./layouts/AuthLayout.vue"
+import AccountLayout from "./layouts/AccountLayout.vue"
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/", redirect: "/contents" },
-    ...authRoutes,
-    ...filesRoutes,
-    ...settingsRoutes,
-    ...profileRoutes,
+    ...authRoutes.map(route => ({
+      ...route,
+      meta: { layout: AuthLayout }
+    })),
+    ...filesRoutes.map(route => ({
+      ...route,
+      meta: { layout: AppLayout }
+    })),
+    ...settingsRoutes.map(route => ({
+      ...route,
+      meta: { layout: AccountLayout }
+    })),
+    ...profileRoutes.map(route => ({
+      ...route,
+      meta: { layout: AccountLayout }
+    })),
   ],
 })
 
