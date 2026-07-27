@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue"
+import { ref, onMounted, watch } from "vue"
 import {
   FolderOpen,
   Star,
@@ -9,6 +9,9 @@ import {
   HardDrive,
 } from "@lucide/vue"
 import { client } from "@/lib/client"
+import { useAuthStore } from "@/stores/auth"
+
+const auth = useAuthStore()
 
 const quickLinks = ref([
   { id: "starred", name: "Starred", icon: Star, count: 0 },
@@ -20,7 +23,7 @@ const quickLinks = ref([
 const usedGB = 624
 const totalGB = 1200
 
-onMounted(async () => {
+async function loadQuickLinks() {
   try {
     const data = await client.getQuickLinks()
     quickLinks.value[0].count = data.starred
@@ -30,7 +33,22 @@ onMounted(async () => {
   } catch (err) {
     console.error("Failed to load quick links:", err)
   }
+}
+
+onMounted(async () => {
+  if (auth.isAuthenticated) {
+    await loadQuickLinks()
+  }
 })
+
+watch(
+  () => auth.isAuthenticated,
+  (isAuthenticated) => {
+    if (isAuthenticated) {
+      loadQuickLinks()
+    }
+  },
+)
 </script>
 
 <template>

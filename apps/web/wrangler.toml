@@ -8,4 +8,4 @@ binding = "ASSETS"
 not_found_handling = "single-page-application"
 
 [vars]
-VITE_API_URL = "https://vault-api.grayplant-875852eb.eastus.azurecontainerapps.io"
+VITE_MAX_UPLOAD_MB = 500

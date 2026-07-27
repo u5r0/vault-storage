@@ -5,6 +5,7 @@ import { client as defaultClient } from "@/lib/client"
 import { normalizeSearchText } from "@vault/sdk"
 import type { VaultEntry, VaultStore } from "@vault/sdk"
 import { filesKeys } from "../lib/queryKeys"
+import { useAuthStore } from "@/stores/auth"
 
 // ─── MiniSearch configuration ────────────────────────────────────────────────
 //
@@ -52,6 +53,8 @@ const hydrateError = shallowRef<Error | null>(null)
 // ─── Composable ───────────────────────────────────────────────────────────────
 
 export function useVaultIndex(client: VaultStore = defaultClient) {
+  const auth = useAuthStore()
+
   // Hydrate: a single flat listing of the whole vault seeds the index.
   // `enabled` is false once hydrated so this query never re-runs automatically.
   // Re-hydration is triggered only by `invalidateQueries(filesKeys.all)` from
@@ -60,7 +63,7 @@ export function useVaultIndex(client: VaultStore = defaultClient) {
   const hydrateQuery = useQuery({
     queryKey: [...filesKeys.all, "__index__"] as const,
     queryFn: () => client.listAllEntries(),
-    enabled: !hydrated.value && !indexTooLarge.value,
+    enabled: auth.isAuthenticated && !hydrated.value && !indexTooLarge.value,
     staleTime: Infinity,
   })
 

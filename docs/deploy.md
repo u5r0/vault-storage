@@ -213,6 +213,8 @@ az containerapp ingress traffic set \
 
 ## Environment variable reference
 
+### Server (apps/server/.env)
+
 | Variable | Local dev | CI | Production |
 |----------|-----------|----|------------|
 | `PORT` | `3001` | `3001` | `3001` |
@@ -231,7 +233,13 @@ az containerapp ingress traffic set \
 | `JWT_SECRET` | `.env` | random | Container App secret |
 | `AUTH_SECRET` | `.env` | random | Container App secret |
 | `SMTP_URL` | `smtp://localhost:1025` | Mailpit | Resend SMTP |
-| `VITE_API_URL` | unset (Vite proxy) | — | Container App URL |
+
+### Client (apps/web/.env)
+
+| Variable | Local dev | CI | Production |
+|----------|-----------|----|------------|
+| `VITE_API_URL` | `http://localhost:3001` | — | Worker hostname |
+| `VITE_MAX_UPLOAD_MB` | `500` | `500` | `500` |
 
 ---
 

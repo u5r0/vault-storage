@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 const ClientEnvSchema = z.object({
-  VITE_API_URL: z.url().optional().default(""),
+  VITE_API_URL: z.string().url(),
   VITE_MAX_UPLOAD_MB: z.coerce.number().default(100),
 })
 

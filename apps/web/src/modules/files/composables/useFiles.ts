@@ -3,11 +3,14 @@ import { useInfiniteQuery } from "@tanstack/vue-query"
 import { client as defaultClient } from "@/lib/client"
 import type { ListFilesResult, VaultEntry, VaultStore } from "@vault/sdk"
 import { filesKeys } from "../lib/queryKeys"
+import { useAuthStore } from "@/stores/auth"
 
 export function useFiles(
   entityId: MaybeRefOrGetter<string | null>,
   client: VaultStore = defaultClient,
 ) {
+  const auth = useAuthStore()
+
   const query = useInfiniteQuery({
     queryKey: computed(() => filesKeys.list(toValue(entityId))),
     queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
@@ -18,6 +21,7 @@ export function useFiles(
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last: ListFilesResult) => last.cursor ?? undefined,
+    enabled: auth.isAuthenticated,
     staleTime: 60_000,
   })
 

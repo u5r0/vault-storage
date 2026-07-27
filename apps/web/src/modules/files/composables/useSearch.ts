@@ -6,6 +6,7 @@ import type { SearchFilesResult, VaultEntry, VaultStore } from "@vault/sdk"
 import { useUIStore } from "@/stores/ui"
 import { filesKeys } from "../lib/queryKeys"
 import { useVaultIndex } from "./useVaultIndex"
+import { useAuthStore } from "@/stores/auth"
 
 /**
  * Hybrid search per ADR 0028 §3.2 Phase A (your "bounded local + server
@@ -28,6 +29,7 @@ import { useVaultIndex } from "./useVaultIndex"
 export function useSearch(client: VaultStore = defaultClient) {
   const ui = useUIStore()
   const index = useVaultIndex(client)
+  const auth = useAuthStore()
 
   const debouncedQuery = refDebounced(
     computed(() => ui.searchQuery.trim()),
@@ -55,8 +57,9 @@ export function useSearch(client: VaultStore = defaultClient) {
   // ─── Server fallback (TanStack infinite query) ────────────────────────────
   // Only enabled when:
   //   a) query is long enough, AND
-  //   b) we can't use the local index (not ready or too large)
-  const serverEnabled = computed(() => enabled.value && !useLocal.value)
+  //   b) we can't use the local index (not ready or too large), AND
+  //   c) user is authenticated
+  const serverEnabled = computed(() => enabled.value && !useLocal.value && auth.isAuthenticated)
 
   const serverQuery = useInfiniteQuery({
     queryKey: computed(() =>
