@@ -30,12 +30,17 @@ export async function ensureCorsForBrowserUploads(): Promise<void> {
 async function configureAzuriteCors(origin: string): Promise<void> {
   const cs = getServerConfig().AZURE_STORAGE_CONNECTION_STRING
   const accountName = getServerConfig().AZURE_STORAGE_ACCOUNT_NAME
+  
+  // Return early if connection string is not set
+  if (!cs) return
+  
   const isLocalAzurite =
     cs.includes("127.0.0.1") ||
     cs.includes("localhost") ||
     cs.includes("devstoreaccount1") ||
     accountName === "devstoreaccount1"
-  if (!isLocalAzurite || !cs) return
+  
+  if (!isLocalAzurite) return
 
   const service = BlobServiceClient.fromConnectionString(cs)
   await service.setProperties({
