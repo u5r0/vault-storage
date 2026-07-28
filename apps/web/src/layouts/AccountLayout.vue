@@ -6,12 +6,16 @@ import { useQueryClient } from "@tanstack/vue-query"
 import { useUIStore, type ThemeMode } from "@/stores/ui"
 import { useAuthStore } from "@/stores/auth"
 import AccountNav from "@/components/AccountNav.vue"
+import AuthLoading from "@/components/AuthLoading.vue"
 
 const route       = useRoute()
 const router      = useRouter()
 const ui          = useUIStore()
 const auth        = useAuthStore()
 const queryClient = useQueryClient()
+
+const requiresAuth = route.meta.requiresAuth ?? true
+const showLoading = auth.isInitializing && requiresAuth
 
 const mode = computed(() => ui.theme)
 const user = computed(() => auth.user)
@@ -48,7 +52,8 @@ function backToVault() {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col bg-[var(--color-background)]">
+  <AuthLoading v-if="showLoading" />
+  <div v-else class="flex min-h-screen flex-col bg-[var(--color-background)]">
     <!-- Slim top bar -->
     <header class="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-background)]/90 backdrop-blur">
       <div class="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4 md:px-6">

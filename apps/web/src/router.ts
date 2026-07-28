@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from "vue-router"
+import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router"
 import { authRoutes }     from "./modules/auth"
 import { filesRoutes }    from "./modules/files"
 import { settingsRoutes } from "./modules/settings"
@@ -8,34 +8,40 @@ import AppLayout from "./layouts/AppLayout.vue"
 import AuthLayout from "./layouts/AuthLayout.vue"
 import AccountLayout from "./layouts/AccountLayout.vue"
 
+const publicRoutes = new Set(["login", "signup", "check-email", "forgot-password", "reset-password", "verify"])
+
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/", redirect: "/contents" },
     ...authRoutes.map(route => ({
       ...route,
-      meta: { layout: AuthLayout }
+      meta: { layout: AuthLayout, requiresAuth: false }
     })),
     ...filesRoutes.map(route => ({
       ...route,
-      meta: { layout: AppLayout }
+      meta: { layout: AppLayout, requiresAuth: true }
     })),
     ...settingsRoutes.map(route => ({
       ...route,
-      meta: { layout: AccountLayout }
+      meta: { layout: AccountLayout, requiresAuth: true }
     })),
     ...profileRoutes.map(route => ({
       ...route,
-      meta: { layout: AccountLayout }
+      meta: { layout: AccountLayout, requiresAuth: true }
     })),
   ],
 })
 
-const publicRoutes = new Set(["login", "signup", "check-email", "forgot-password", "reset-password", "verify"])
-
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const auth = useAuthStore()
-  if (!publicRoutes.has(to.name as string) && !auth.isAuthenticated) {
+  
+  if (auth.isInitializing) {
+    await auth.waitForInitialization()
+  }
+  
+  const requiresAuth = to.meta.requiresAuth ?? true
+  if (requiresAuth && !auth.isAuthenticated) {
     next({ name: "login" })
   } else if (to.name === "login" && auth.isAuthenticated) {
     next({ name: "content" })

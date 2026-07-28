@@ -21,7 +21,9 @@ export class AuthError extends Error {
 }
 
 export const useAuthStore = defineStore("auth", () => {
+  const isInitializing = ref(true)
   const user = ref<User | null>(null)
+  let checkAuthPromise: Promise<void> | null = null
 
   const isAuthenticated = computed(() => user.value !== null)
   const userEmail = computed(() => user.value?.email ?? null)
@@ -32,17 +34,30 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   async function checkAuth() {
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
-      if (res.ok) {
-        const data = await res.json()
-        user.value = data.user
-      } else {
-        user.value = null
-      }
-    } catch {
-      user.value = null
+    if (checkAuthPromise) {
+      return checkAuthPromise
     }
+    checkAuthPromise = (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
+        if (res.ok) {
+          const data = await res.json()
+          user.value = data.user
+        } else {
+          user.value = null
+        }
+      } catch {
+        user.value = null
+      } finally {
+        isInitializing.value = false
+        checkAuthPromise = null
+      }
+    })()
+    return checkAuthPromise
+  }
+
+  function waitForInitialization(): Promise<void> {
+    return checkAuth()
   }
 
   async function signUp(email: string, password: string, name?: string) {
@@ -157,11 +172,13 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   return {
+    isInitializing,
     user,
     isAuthenticated,
     userEmail,
     userId,
     checkAuth,
+    waitForInitialization,
     signUp,
     signIn,
     signOut,
