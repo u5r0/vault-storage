@@ -15,7 +15,11 @@ const auth        = useAuthStore()
 const queryClient = useQueryClient()
 
 const requiresAuth = route.meta.requiresAuth ?? true
-const showLoading = auth.isInitializing && requiresAuth
+const showLoading = computed(() => {
+  if (auth.isInitializing) return true
+  if (requiresAuth && !auth.isAuthenticated) return true
+  return false
+})
 
 const mode = computed(() => ui.theme)
 const user = computed(() => auth.user)
@@ -52,8 +56,9 @@ function backToVault() {
 </script>
 
 <template>
-  <AuthLoading v-if="showLoading" />
-  <div v-else class="flex min-h-screen flex-col bg-[var(--color-background)]">
+  <Transition name="auth-fade" mode="out-in">
+    <AuthLoading v-if="showLoading" key="loading" />
+    <div v-else key="account" class="flex min-h-screen flex-col bg-[var(--color-background)]">
     <!-- Slim top bar -->
     <header class="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-background)]/90 backdrop-blur">
       <div class="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4 md:px-6">
@@ -125,5 +130,17 @@ function backToVault() {
         <slot />
       </div>
     </div>
-  </div>
+    </div>
+  </Transition>
 </template>
+
+<style scoped>
+.auth-fade-enter-active,
+.auth-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.auth-fade-enter-from,
+.auth-fade-leave-to {
+  opacity: 0;
+}
+</style>

@@ -15,6 +15,10 @@ export default defineConfig({
         extends: true,
         test: {
           name: "unit",
+          env: {                                                                                                                                                                                                      
+            AUTH_SECRET: "unit-test-auth-secret",                                                                                                                                                                     
+            JWT_SECRET: "unit-test-jwt-secret",                                                                                                                                                                       
+          },
           include: [
             "apps/server/src/services/**/*.test.ts",
             "apps/server/src/lib/**/*.test.ts",
@@ -53,7 +57,6 @@ export default defineConfig({
             "./apps/server/src/__setup__/mailpit.global.ts",
           ],
           setupFiles: [
-            "./apps/server/src/__setup__/env.env.ts",
             "./apps/server/src/__setup__/blob.env.ts",
             "./apps/server/src/__setup__/cosmos.env.ts",
             "./apps/server/src/__setup__/mailpit.env.ts",

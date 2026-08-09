@@ -25,7 +25,7 @@ export function createApp(opts: { withLogger?: boolean } = {}) {
 
   const ipLimiter = createIpLimiter()
   app.use("*", async (c, next) => {
-    if (rateLimitsDisabled) return next()
+    if (rateLimitsDisabled()) return next()
     const ip =
       c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
       c.req.header("x-real-ip") ??

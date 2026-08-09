@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023", "DOM"],
+    "lib": ["ESNext", "DOM"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "types": ["node"],
@@ -9,9 +9,13 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "strict": true,
-    "noEmit": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.integration.test.ts"]
+  "include": ["src/**/*", "scripts/**/*"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.integration.test.ts", "dist"]
 }

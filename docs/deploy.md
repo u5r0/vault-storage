@@ -2,7 +2,7 @@
 
 Production stack: **Cloudflare Worker** (SPA) + **Cloudflare R2** (blob storage) + **Azure Container Apps** (API) + **Azure Cosmos DB** (database).
 
-Everything runs on always-free tiers at low traffic — see [ADR 0020](../build-reasoning/adr-vault-storage/0020-deployment-strategy.md) for the full cost breakdown and rationale.
+Everything runs on always-free tiers at low traffic — see [ADR 0010](adr/0010-deployment-strategy.md) for the full cost breakdown and rationale.
 
 ---
 
@@ -13,6 +13,27 @@ Everything runs on always-free tiers at low traffic — see [ADR 0020](../build-
 - [Docker](https://docs.docker.com/get-docker/)
 - A Cloudflare account (free)
 - A GitHub account with access to the repo
+- An [Infisical](https://infisical.com) account (free tier)
+
+---
+
+## Secrets strategy (Infisical)
+
+Runtime secrets (JWT signing, SMTP credentials, R2 API keys) are fetched during deployment by the `Infisical/secrets-action` GitHub Action using **GitHub OIDC authentication** and injected as Container App environment variables. No secrets are baked into the Docker image, and no Infisical CLI runs inside the container.
+
+| Secret | Managed by |
+|--------|-----------|
+| `JWT_SECRET` | Infisical (project / env `prod`) |
+| `AUTH_SECRET` | Infisical |
+| `SMTP_USER` | Infisical |
+| `SMTP_PASS` | Infisical |
+| `R2_ACCESS_KEY_ID` | Infisical |
+| `R2_SECRET_ACCESS_KEY` | Infisical |
+| `ghcr_token` | GitHub Secrets → Terraform (Container App image pull) |
+| `cloudflare_api_token` | GitHub Secrets → Terraform (Cloudflare provider) |
+| `INFISICAL_MACHINE_IDENTITY_ID` | GitHub Secrets → deploy workflow (Infisical OIDC auth) |
+
+See `.github/workflows/deploy.yml` for the secret injection step (`Infisical/secrets-action` → `az containerapp update --set-env-vars`).
 
 ---
 
@@ -31,109 +52,103 @@ The script prints a `storage_account_name`. Open `infra/versions.tf` and replace
 
 ### 2. Fill in `infra/envs/prod.tfvars`
 
-Open `infra/envs/prod.tfvars` and set:
+Copy `infra/envs/.env.example` to `infra/envs/prod.tfvars` and set the following values. Resource group and Container App names are defined in `infra/main.tf` — adjust them there if needed.
 
 ```hcl
-worker_hostname       = "<your-worker-subdomain>.workers.dev"
+# (copy infra/envs/.env.example to infra/envs/prod.tfvars)
+
+# Required — fill these in
+worker_hostname       = "<your-worker-subdomain>"
 allowed_origin        = "https://<your-worker-subdomain>.workers.dev"
 app_url               = "https://<your-worker-subdomain>.workers.dev"
 ghcr_username         = "<your-github-username>"
-cloudflare_account_id = "<cloudflare-account-id>"   # Dashboard → top-right → Account ID
-cloudflare_zone_id    = "<your-zone-id>"            # Dashboard → Overview → Zone ID
+cloudflare_account_id = "<cloudflare-account-id>"
 r2_account_id         = "<cloudflare-account-id>"
+r2_bucket_name        = "vault-bucket"
+smtp_host             = "smtp.resend.com"
+smtp_port             = "587"
+smtp_secure           = false
+email_from            = "<your-verified-sending-domain>"
 ```
 
-**Note:** `allowed_origin` is used for R2 bucket CORS (required for presigned upload/download), not for the Worker itself. For Workers, it must match the Worker's hostname.
+### 3. Set up Infisical project and machine identity (GitHub OIDC)
 
-Secrets are passed via environment variables for local runs, and via GitHub Secrets for CI/CD:
+First, create a project in your Infisical workspace and note its **project slug** (Project Settings → General).
 
-**Local runs:** Create `infra/envs/.env.local` (gitignored) with:
+Then create a machine identity for GitHub OIDC auth. See [Infisical docs: GitHub OIDC auth](https://infisical.com/docs/documentation/platform/identities/oidc-auth/github) for full details.
+
+1. In Infisical dashboard → **Organization Settings** → **Access Control** → **Machine Identities** → **Create**
+2. Give it a name (e.g. `github-deploy`) and a role
+3. Edit the identity's **Authentication** section: remove Universal Auth, add **OIDC Auth**
+4. Configure:
+   - **OIDC Discovery URL**: `https://token.actions.githubusercontent.com`
+   - **Issuer**: `https://token.actions.githubusercontent.com`
+   - **Subject**: `repo:<owner>/<repo>:ref:refs/heads/main`
+   - **Audiences**: `https://github.com/<owner>`
+5. Add the identity to your Infisical project with a project role
+6. Note the **Identity ID** — this is `INFISICAL_MACHINE_IDENTITY_ID` (the UUID in the URL or identity details)
+
+### 4. Populate Infisical secrets for `prod`
+
+In your Infisical project, environment `prod`, add:
 
 ```bash
-TF_VAR_ghcr_token="<github-pat-with-read:packages>"
-TF_VAR_r2_access_key_id="<r2-access-key-id>"
-TF_VAR_r2_secret_access_key="<r2-secret-access-key>"
-TF_VAR_jwt_secret="$(openssl rand -hex 32)"
-TF_VAR_auth_secret="$(openssl rand -hex 32)"
-TF_VAR_smtp_url="smtp://resend:<resend-api-key>@smtp.resend.com:587"
-TF_VAR_cloudflare_api_token="<cloudflare-api-token>"
+infisical secrets set JWT_SECRET="$(openssl rand -hex 32)"
+infisical secrets set AUTH_SECRET="$(openssl rand -hex 32)"
+infisical secrets set SMTP_USER="resend"
+infisical secrets set SMTP_PASS="<resend-api-key>"
+infisical secrets set R2_ACCESS_KEY_ID="<r2-access-key-id>"
+infisical secrets set R2_SECRET_ACCESS_KEY="<r2-secret-access-key>"
 ```
 
-**CI/CD:** Add these as GitHub Secrets (Settings → Secrets and variables → Actions):
-- `TF_VAR_ghcr_token`
-- `TF_VAR_r2_access_key_id`
-- `TF_VAR_r2_secret_access_key`
-- `TF_VAR_jwt_secret`
-- `TF_VAR_auth_secret`
-- `TF_VAR_smtp_url`
-- `TF_VAR_cloudflare_api_token`
-
-The Cloudflare API token needs three permissions: **R2:Edit** (to create the bucket and set CORS), **Workers Scripts:Edit** (to create the Worker script), and **Workers Routes:Edit** (to route traffic to the Worker). Create it at Cloudflare Dashboard → My Profile → API Tokens.
-
-The R2 Access Key ID and Secret (for `TF_VAR_r2_access_key_id` / `TF_VAR_r2_secret_access_key`) are a separate S3-compatible credential — create them at Cloudflare Dashboard → R2 → Manage R2 API Tokens.
-
-### 3. Provision all infrastructure (initial setup)
+### 5. Provision infrastructure (initial setup)
 
 ```bash
 cd infra
 terraform init
-set -a
-source envs/.env.local  # Load secrets for terraform
-set +a
-terraform plan -var-file=envs/prod.tfvars
-terraform apply -var-file=envs/prod.tfvars
+terraform plan -var-file=envs/prod.tfvars \
+  -var="ghcr_token=<github-pat-read:packages>" \
+  -var="cloudflare_api_token=<cloudflare-api-token>"
+terraform apply -var-file=envs/prod.tfvars \
+  -var="ghcr_token=<github-pat-read:packages>" \
+  -var="cloudflare_api_token=<cloudflare-api-token>"
 ```
 
-A single `terraform apply` creates everything:
-- **Azure:** Cosmos DB account + database + container, Key Vault, Log Analytics workspace, Container App environment, Container App (with system-assigned managed identity + Cosmos role assignment)
-  - **Cloudflare:** R2 bucket (`vault`) + CORS policy, Worker project (`vault-storage`)
+A single `terraform apply` creates:
+- **Azure:** Cosmos DB account + database + 3 containers, Log Analytics workspace, Container App environment, Container App (system-assigned managed identity + Cosmos role assignment)
+- **Cloudflare:** R2 bucket + CORS policy
 
-Note the outputs — you'll need `api_url` and `worker_hostname` for the next step.
+### 6. Configure GitHub repository secrets
 
-### 3b. Optional: Run terraform via CI/CD
+Before setting secrets, update the Infisical references in the repo:
 
-After initial setup, infrastructure changes can be applied via GitHub Actions:
-
-1. Go to Actions → Deploy workflow
-2. Click "Run workflow"
-3. Check "Run terraform apply (infrastructure changes)"
-4. Click "Run workflow"
-
-This applies terraform using GitHub Secrets and automatically updates the `VITE_API_URL` GitHub variable.
-
-### 4. Configure GitHub repository secrets for the deploy pipeline
+- **`.infisical.json`**: Replace `workspaceId` with your own Infisical workspace ID.
+- **`.github/workflows/deploy.yml`**: Replace `project-slug` (in the `Infisical/secrets-action` step) with your Infisical project slug from step 3.
 
 The `deploy.yml` workflow needs these (Settings → Secrets and variables → Actions):
 
-**Secrets (for deploy-api and deploy-web jobs):**
+**Secrets:**
 
 | Secret | How to get it |
 |--------|---------------|
-| `AZURE_CLIENT_ID` | Service principal client ID (see below) |
+| `AZURE_CLIENT_ID` | App registration client ID (OIDC federated, see step 7) |
 | `AZURE_TENANT_ID` | `az account show --query tenantId -o tsv` |
 | `AZURE_SUBSCRIPTION_ID` | `az account show --query id -o tsv` |
-| `CLOUDFLARE_API_TOKEN` | Same token used for Terraform (R2:Edit + Workers Scripts:Edit) |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → top-right → Account ID |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare → API Tokens: `R2:Edit` + `Workers Scripts:Edit` |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Dashboard → Account ID |
+| `ghcr_token` | GitHub PAT with `read:packages` scope |
+| `cloudflare_api_token` | Same Cloudflare API token |
+| `INFISICAL_MACHINE_IDENTITY_ID` | From Infisical dashboard → Machine Identities |
 
-**Secrets (for optional terraform job):**
-
-| Secret | Value |
-|--------|-------|
-| `TF_VAR_ghcr_token` | GitHub PAT with read:packages scope |
-| `TF_VAR_r2_access_key_id` | R2 API token access key |
-| `TF_VAR_r2_secret_access_key` | R2 API token secret |
-| `TF_VAR_jwt_secret` | Random secret for JWT signing |
-| `TF_VAR_auth_secret` | Random secret for magic link tokens |
-| `TF_VAR_smtp_url` | SMTP connection URL (e.g., smtp://resend:...) |
-| `TF_VAR_cloudflare_api_token` | Cloudflare API token (R2:Edit + Workers Scripts:Edit) |
-
-**Variables:**
+**Variables (non-secret):**
 
 | Variable | Value |
 |----------|-------|
-| `VITE_API_URL` | `https://<api_url from terraform output>` (set automatically by terraform job, or manually after initial setup) |
+| `smtp_host` | `smtp.resend.com` |
+| `smtp_port` | `587` |
+| `smtp_secure` | `false` |
 
-To create a service principal with Container App access (using OIDC):
+### 7. Create the Azure App Registration (OIDC federation for GitHub Actions)
 
 1. Go to [Azure Portal → App Registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
 2. Click "New registration"
@@ -155,14 +170,15 @@ To create a service principal with Container App access (using OIDC):
 11. Go to your resource group `vault-prod-rg` → "Access control (IAM)"
 12. Add role assignment → "Contributor" → search for `vault-storage-deploy` → assign
 
-Note: No `AZURE_CLIENT_SECRET` is needed — the workflow uses OpenID Connect (OIDC) which is more secure.
+Note: No `AZURE_CLIENT_SECRET` is needed — OIDC is more secure.
 
-### 5. Push to main
+### 8. Push to main
 
-CI runs tests. On success, `deploy.yml` triggers automatically and fans out to two jobs:
+CI runs tests. On success, `deploy.yml` triggers:
 
-- **`deploy-api`** — builds the Docker image from `apps/server/Dockerfile`, pushes to `ghcr.io/<your-username>/vault-api`, and updates the Container App.
-- **`deploy-web`** — builds the SPA (`pnpm --filter @vault/web build`) and deploys `apps/web/dist` to Cloudflare Worker (`wrangler pages deploy`).
+- **`terraform`** (optional, `workflow_dispatch` only) — applies infrastructure changes
+- **`deploy-api`** — builds Docker image from `apps/server/Dockerfile`, pushes to `ghcr.io/<username>/vault-api`, fetches secrets from Infisical via GitHub OIDC, updates Container App with new image and secrets
+- **`deploy-web`** — builds SPA and deploys to Cloudflare Worker
 
 A newer push to `main` cancels an in-flight deploy (workflow `concurrency` guard).
 
@@ -170,19 +186,17 @@ A newer push to `main` cancels an in-flight deploy (workflow `concurrency` guard
 
 ## Routine deployments
 
-After first-time setup, deploying is just pushing to `main`. The pipeline handles the rest.
+After first-time setup, deploying is pushing to `main`. The pipeline handles the rest.
 
 To deploy manually (e.g. from a branch):
 
 ```bash
-# Build and push
 IMAGE="ghcr.io/<your-username>/vault-api"
 SHA=$(git rev-parse --short HEAD)
 
 docker build -f apps/server/Dockerfile -t "$IMAGE:$SHA" .
 docker push "$IMAGE:$SHA"
 
-# Update Container App
 az containerapp update \
   --name vault-api \
   --resource-group vault-prod-rg \
@@ -213,39 +227,43 @@ az containerapp ingress traffic set \
 
 ## Environment variable reference
 
-### Server (apps/server/.env)
+### Server (`apps/server/.env`)
 
-| Variable | Local dev | CI | Production |
-|----------|-----------|----|------------|
-| `PORT` | `3001` | `3001` | `3001` |
-| `NODE_ENV` | — | — | `production` |
-| `BLOB_PROVIDER` | `azure` | `azure` | `r2` |
-| `AZURE_STORAGE_CONNECTION_STRING` | Azurite | Azurite | unset |
-| `R2_ACCOUNT_ID` | — | — | Cloudflare account ID |
-| `R2_ACCESS_KEY_ID` | — | — | R2 API token |
-| `R2_SECRET_ACCESS_KEY` | — | — | R2 API secret |
-| `R2_BUCKET_NAME` | — | — | `vault` |
-| `R2_ENDPOINT` | `http://localhost:9000` (RustFS) | `http://localhost:9000` | unset |
-| `COSMOS_DB_ENDPOINT` | `https://localhost:8081` | `https://localhost:8081` | real endpoint |
-| `COSMOS_DB_KEY` | emulator key (auto-injected) | emulator key (auto-injected) | unset → managed identity |
-| `ALLOWED_ORIGIN` | `http://localhost:3000` | `http://localhost:3000` | Worker hostname |
-| `APP_URL` | `http://localhost:3000` | `http://localhost:3000` | Worker hostname |
-| `JWT_SECRET` | `.env` | random | Container App secret |
-| `AUTH_SECRET` | `.env` | random | Container App secret |
-| `SMTP_URL` | `smtp://localhost:1025` | Mailpit | Resend SMTP |
+| Variable | Local dev | Production | Source in prod |
+|----------|-----------|------------|----------------|
+| `PORT` | `3001` | `3001` | Container App env |
+| `NODE_ENV` | — | `production` | Container App env |
+| `BLOB_PROVIDER` | `azure` | `r2` | Container App env |
+| `R2_ACCOUNT_ID` | — | Cloudflare account ID | Container App env |
+| `R2_ACCESS_KEY_ID` | — | R2 API token | **Infisical** |
+| `R2_SECRET_ACCESS_KEY` | — | R2 API secret | **Infisical** |
+| `R2_BUCKET_NAME` | — | `vault-bucket` | Container App env |
+| `AZURE_STORAGE_CONNECTION_STRING` | Azurite | unset | — |
+| `COSMOS_DB_ENDPOINT` | `https://localhost:8081` | Cosmos account endpoint | Container App env |
+| `COSMOS_DB_KEY` | emulator key (auto) | unset → managed identity | — |
+| `ALLOWED_ORIGIN` | `http://localhost:3000` | Worker hostname | Container App env |
+| `APP_URL` | `http://localhost:3000` | Worker hostname | Container App env |
+| `JWT_SECRET` | `.env` | Random hex | **Infisical** |
+| `AUTH_SECRET` | `.env` | Random hex | **Infisical** |
+| `SMTP_HOST` | `localhost` | `smtp.resend.com` | Container App env |
+| `SMTP_PORT` | `1025` | `587` | Container App env |
+| `SMTP_SECURE` | `false` | `false` | Container App env |
+| `SMTP_USER` | `resend` | Resend username | **Infisical** |
+| `SMTP_PASS` | Resend API key | Resend API key | **Infisical** |
+| `EMAIL_FROM` | `noreply@vault.app` | Verified domain | Container App env |
 
-### Client (apps/web/.env)
+### Client (`apps/web/.env`)
 
-| Variable | Local dev | CI | Production |
-|----------|-----------|----|------------|
-| `VITE_API_URL` | `http://localhost:3001` | — | Worker hostname |
-| `VITE_MAX_UPLOAD_MB` | `500` | `500` | `500` |
+| Variable | Local dev | Production |
+|----------|-----------|------------|
+| `VITE_API_URL` | `http://localhost:3001` (optional — Vite proxies `/api`) | unset — same-origin, resolved dynamically by deploy workflow |
+| `VITE_MAX_UPLOAD_MB` | `500` | `500` |
 
 ---
 
 ## Infrastructure changes
 
-To update infrastructure after provisioning, you have two options:
+To update infrastructure after provisioning:
 
 **Option 1: Run via CI/CD (recommended)**
 1. Go to Actions → Deploy workflow
@@ -256,11 +274,12 @@ To update infrastructure after provisioning, you have two options:
 **Option 2: Run locally**
 ```bash
 cd infra
-set -a
-source envs/.env.local  # Load secrets
-set +a
-terraform plan -var-file=envs/prod.tfvars
-terraform apply -var-file=envs/prod.tfvars
+terraform plan -var-file=envs/prod.tfvars \
+  -var="ghcr_token=<token>" \
+  -var="cloudflare_api_token=<token>"
+terraform apply -var-file=envs/prod.tfvars \
+  -var="ghcr_token=<token>" \
+  -var="cloudflare_api_token=<token>"
 ```
 
 Terraform tracks state in the Azure Storage Account created by `bootstrap.sh`.

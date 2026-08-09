@@ -44,10 +44,15 @@ vault-storage/
 
 ## Getting Started
 
-For detailed setup and development instructions, see [CONTRIBUTING.md](CONTRIBUTING.md).
+For local development setup and instructions, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Self-Hosting
+
+See [docs/deploy.md](docs/deploy.md) for the full production deployment guide. Covers provisioning infrastructure (Azure + Cloudflare), setting up Infisical for secret management, and configuring GitHub Actions CI/CD.
 
 ## Documentation
 
+- [Deployment Guide](docs/deploy.md) — production setup and CI/CD
 - [Architecture Decisions (ADRs)](docs/adr/) - Design rationale and technical decisions
 - [Roadmap](docs/roadmap.md) - Project status and roadmap
 - [Domain Documentation](docs/agents/domain.md) - Multi-context architecture

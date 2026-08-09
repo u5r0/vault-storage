@@ -139,36 +139,6 @@ resource "azurerm_container_app" "api" {
     value = var.ghcr_token
   }
 
-  secret {
-    name  = "jwt-secret"
-    value = var.jwt_secret
-  }
-
-  secret {
-    name  = "auth-secret"
-    value = var.auth_secret
-  }
-
-  secret {
-    name  = "smtp-user"
-    value = var.smtp_user
-  }
-
-  secret {
-    name  = "smtp-pass"
-    value = var.smtp_pass
-  }
-
-  secret {
-    name  = "r2-access-key-id"
-    value = var.r2_access_key_id
-  }
-
-  secret {
-    name  = "r2-secret-access-key"
-    value = var.r2_secret_access_key
-  }
-
   template {
     min_replicas = 0
     max_replicas = 3
@@ -212,16 +182,6 @@ resource "azurerm_container_app" "api" {
       }
 
       env {
-        name        = "R2_ACCESS_KEY_ID"
-        secret_name = "r2-access-key-id"
-      }
-
-      env {
-        name        = "R2_SECRET_ACCESS_KEY"
-        secret_name = "r2-secret-access-key"
-      }
-
-      env {
         name  = "ALLOWED_ORIGIN"
         value = var.allowed_origin
       }
@@ -229,16 +189,6 @@ resource "azurerm_container_app" "api" {
       env {
         name  = "APP_URL"
         value = var.app_url
-      }
-
-      env {
-        name        = "JWT_SECRET"
-        secret_name = "jwt-secret"
-      }
-
-      env {
-        name        = "AUTH_SECRET"
-        secret_name = "auth-secret"
       }
 
       env {
@@ -254,16 +204,6 @@ resource "azurerm_container_app" "api" {
       env {
         name  = "SMTP_SECURE"
         value = tostring(var.smtp_secure)
-      }
-
-      env {
-        name        = "SMTP_USER"
-        secret_name = "smtp-user"
-      }
-
-      env {
-        name        = "SMTP_PASS"
-        secret_name = "smtp-pass"
       }
 
       env {

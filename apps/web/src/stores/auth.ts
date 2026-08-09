@@ -2,7 +2,7 @@ import { ref, computed } from "vue"
 import { defineStore } from "pinia"
 import { getClientConfig } from "../lib/env"
 
-const API_BASE = getClientConfig().VITE_API_URL
+const API_BASE = getClientConfig().VITE_API_URL || ""
 
 interface User {
   id: string

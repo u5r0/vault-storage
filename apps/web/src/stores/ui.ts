@@ -6,10 +6,18 @@ export type SearchType = "file" | "folder" | undefined
 
 const THEME_KEY = "vault.theme"
 
+function applyThemeColorMeta(mode: ThemeMode) {
+  const meta = document.querySelector('meta[name="theme-color"]')
+  if (meta) {
+    meta.setAttribute("content", mode === "dark" ? "#0b1220" : "#fcf9f5")
+  }
+}
+
 function applyTheme(mode: ThemeMode) {
   const root = document.documentElement
   root.classList.toggle("dark", mode === "dark")
   root.dataset.theme = mode
+  applyThemeColorMeta(mode)
 }
 
 function normalizeMode(value: string | null): ThemeMode {

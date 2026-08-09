@@ -8,27 +8,25 @@ import AppLayout from "./layouts/AppLayout.vue"
 import AuthLayout from "./layouts/AuthLayout.vue"
 import AccountLayout from "./layouts/AccountLayout.vue"
 
-const publicRoutes = new Set(["login", "signup", "check-email", "forgot-password", "reset-password", "verify"])
-
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/", redirect: "/contents" },
     ...authRoutes.map(route => ({
       ...route,
-      meta: { layout: AuthLayout, requiresAuth: false }
+      meta: { ...route.meta, layout: AuthLayout, requiresAuth: false }
     })),
     ...filesRoutes.map(route => ({
       ...route,
-      meta: { layout: AppLayout, requiresAuth: true }
+      meta: { ...route.meta, layout: AppLayout, requiresAuth: true }
     })),
     ...settingsRoutes.map(route => ({
       ...route,
-      meta: { layout: AccountLayout, requiresAuth: true }
+      meta: { ...route.meta, layout: AccountLayout, requiresAuth: true }
     })),
     ...profileRoutes.map(route => ({
       ...route,
-      meta: { layout: AccountLayout, requiresAuth: true }
+      meta: { ...route.meta, layout: AccountLayout, requiresAuth: true }
     })),
   ],
 })

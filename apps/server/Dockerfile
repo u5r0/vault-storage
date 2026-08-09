@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # -------------------------------------------------------------------
 # Multi-stage build for @vault/server
-# Produces a minimal Node 22 Alpine image running dist/index.js
 # -------------------------------------------------------------------
 
 # ─── Stage 1: Install dependencies ────────────────────────────────
@@ -28,16 +27,12 @@ FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Copy only what's needed at runtime:
-# - The bundled server output (single file + sourcemap)
-# - node_modules for native deps (argon2) and non-bundled packages
+# Copy compiled output and package.json
 COPY --from=build /app/apps/server/dist ./dist
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=build /app/apps/server/package.json ./package.json
 
-# argon2 needs the .node binding from node_modules
-# The bundled index.js marks it as external so it resolves from node_modules
+# Copy node_modules for runtime dependencies (argon2, dotenv, etc.)
+COPY --from=build /app/node_modules ./node_modules
 
 # Declare the health endpoint so `docker run` and compose know when
 # the process is ready. Uses node's built-in fetch (Node ≥ 18) so no
@@ -47,4 +42,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
 
 USER node
 EXPOSE 3001
-CMD ["node", "dist/index.mjs"]
+CMD [ "node", "dist/index.mjs" ]

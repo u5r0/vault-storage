@@ -1,6 +1,6 @@
 import { vi } from "vitest"
 
-vi.mock("./lib/env", () => ({
+vi.mock("../lib/env", () => ({
   getServerConfig: vi.fn().mockReturnValue({
     PORT: 3001,
     ALLOWED_ORIGIN: "http://localhost:3000",
@@ -15,7 +15,7 @@ vi.mock("./lib/env", () => ({
     R2_BUCKET_NAME: "vault",
     R2_ENDPOINT: "",
     COSMOS_DB_ENDPOINT: "https://localhost:8081",
-    COSMOS_DB_KEY: "",
+    COSMOS_DB_KEY: "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==",
     COSMOS_DB_DATABASE: "vault",
     COSMOS_DB_CONTAINER: "vault_entries",
     COSMOS_DB_LOOKUP_CONTAINER: "vault_lookup",

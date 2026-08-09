@@ -3,8 +3,8 @@ import { getServerConfig } from "./env"
 
 const serverConfig = getServerConfig()
 
-const SMTP_HOST = serverConfig.SMTP_HOST || "localhost"
-const SMTP_PORT = parseInt(serverConfig.SMTP_PORT || "1025")
+const SMTP_HOST = serverConfig.SMTP_HOST ?? "localhost"
+const SMTP_PORT = Number(serverConfig.SMTP_PORT) || 1025
 const SMTP_SECURE = serverConfig.SMTP_SECURE === "true"
 const SMTP_USER = serverConfig.SMTP_USER
 const SMTP_PASS = serverConfig.SMTP_PASS

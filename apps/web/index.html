@@ -5,6 +5,13 @@
     <link rel="icon" type="image/png" href="/folder.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0b1220" />
+    <script>
+      (function() {
+        if (localStorage.getItem("vault.theme") !== "light") {
+          document.documentElement.classList.add("dark")
+        }
+      })()
+    </script>
     <title>Vault Storage — Your files, beautifully organized</title>
     <meta name="description" content="A modern cloud storage workspace for your files, folders, and ideas." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

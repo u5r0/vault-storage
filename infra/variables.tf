@@ -36,30 +36,6 @@ variable "r2_bucket_name" {
   default     = "vault"
 }
 
-variable "r2_access_key_id" {
-  description = "R2 API token access key ID"
-  type        = string
-  sensitive   = true
-}
-
-variable "r2_secret_access_key" {
-  description = "R2 API token secret access key"
-  type        = string
-  sensitive   = true
-}
-
-variable "jwt_secret" {
-  description = "Secret for signing JWTs"
-  type        = string
-  sensitive   = true
-}
-
-variable "auth_secret" {
-  description = "Secret for magic link tokens"
-  type        = string
-  sensitive   = true
-}
-
 variable "smtp_host" {
   description = "SMTP server host (e.g. smtp.resend.com)"
   type        = string
@@ -75,18 +51,6 @@ variable "smtp_secure" {
   description = "Use SSL/TLS (true for port 465, false for STARTTLS on port 587)"
   type        = bool
   default     = false
-}
-
-variable "smtp_user" {
-  description = "SMTP authentication username"
-  type        = string
-  sensitive   = true
-}
-
-variable "smtp_pass" {
-  description = "SMTP authentication password"
-  type        = string
-  sensitive   = true
 }
 
 variable "email_from" {
