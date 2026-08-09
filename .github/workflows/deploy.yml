@@ -63,7 +63,7 @@ jobs:
 
   deploy-api:
     needs: [terraform]
-    if: always() && needs.terraform.result != 'failure' && (github.event.workflow_run.conclusion == 'success' || github.event.type == 'workflow_dispatch')
+    if: always() && needs.terraform.result != 'failure' && (github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -123,7 +123,7 @@ jobs:
               R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
               
   deploy-web:
-    if: github.event.workflow_run.conclusion == 'success' || github.event.type == 'workflow_dispatch'
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
