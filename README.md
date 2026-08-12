@@ -28,6 +28,7 @@ This project is currently in active development. Core features are functional bu
 - **Backend**: Hono (Node.js), TypeScript
 - **Storage**: Cloudflare R2, Azure Cosmos DB
 - **Authentication**: Argon2id password hashing, JWT tokens, magic links
+- **Email**: Resend API (production), in-memory capture (dev/tests)
 - **Testing**: Vitest (unit + integration tests)
 - **SDK**: Shared TypeScript/Zod schemas for API contracts
 

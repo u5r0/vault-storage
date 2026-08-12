@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
@@ -23,14 +25,13 @@
     "argon2": "^0.44.0",
     "dotenv": "^17.2.3",
     "hono": "^4.12.17",
-    "nodemailer": "^8.0.7",
     "rate-limiter-flexible": "^11.1.0",
+    "resend": "catalog:",
     "uuid": "^11.0.3",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "@types/nodemailer": "^8.0.0",
     "msw": "^2.14.6",
     "tsdown": "^0.22.14",
     "tsx": "^4.21.0",

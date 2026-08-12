@@ -5,7 +5,7 @@ import {
   expectNoMessage,
   extractLinkToken,
   getMessagesFor,
-} from "../__setup__/mailpit"
+} from "../__setup__/email-capture"
 import { verifyMagicLinkToken } from "../lib/magic-link"
 
 const getApp = useAuthFixture()
@@ -44,7 +44,7 @@ async function registerAndVerify(
   }
 }
 
-describe("Auth — register flow (real Mailpit)", () => {
+describe("Auth — register flow (captured email)", () => {
   it("delivers a verification email; clicking the link logs the user in", async () => {
     const app = getApp()
     const email = uniqueEmail()

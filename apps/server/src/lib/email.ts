@@ -1,45 +1,61 @@
-import nodemailer from "nodemailer"
+import { Resend } from "resend"
 import { getServerConfig } from "./env.js"
 
 const serverConfig = getServerConfig()
-
-const SMTP_HOST = serverConfig.SMTP_HOST ?? "localhost"
-const SMTP_PORT = Number(serverConfig.SMTP_PORT) || 1025
-const SMTP_SECURE = serverConfig.SMTP_SECURE === "true"
-const SMTP_USER = serverConfig.SMTP_USER
-const SMTP_PASS = serverConfig.SMTP_PASS
+const RESEND_API_KEY = serverConfig.RESEND_API_KEY
 const EMAIL_FROM = serverConfig.EMAIL_FROM || "noreply@vault.app"
 const APP_URL = serverConfig.APP_URL || "http://localhost:3000"
 
-const transporter = nodemailer.createTransport({
-  host: SMTP_HOST,
-  port: SMTP_PORT,
-  secure: SMTP_SECURE,
-  auth: SMTP_USER && SMTP_PASS ? {
-    user: SMTP_USER,
-    pass: SMTP_PASS,
-  } : undefined,
-})
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null
 
 /**
- * Wrap every SMTP send so the underlying nodemailer error (auth failure,
- * unverified from-domain, connection refused) is logged before it propagates.
- * Callers at the service layer still catch and swallow the rejection so a
- * failed delivery never turns a privacy-preserving 200 endpoint into a 500 —
- * but without this log the operator would have no visibility into *why* the
- * mail never arrived. The error is re-thrown so those callers can act on it.
+ * Messages captured when no RESEND_API_KEY is configured (tests and offline
+ * local dev). Test helpers read this array directly instead of polling an SMTP
+ * inbox — see `__setup__/email-capture.ts`.
  */
-async function sendMail(options: nodemailer.SendMailOptions) {
-  try {
-    await transporter.sendMail(options)
-  } catch (error) {
-    console.error("[auth] email send failed", {
-      to: options.to,
-      subject: options.subject,
-      error,
+export interface CapturedEmail {
+  from: string
+  to: string
+  subject: string
+  html: string
+}
+
+export const capturedEmails: CapturedEmail[] = []
+
+/**
+ * Send an email via the Resend HTTP API. When RESEND_API_KEY is absent the
+ * message is captured in-memory (and logged) instead of hitting the network —
+ * this keeps integration tests and offline `pnpm dev` running with no external
+ * dependency, while production always uses the real Resend API.
+ */
+async function sendMail(opts: { to: string; subject: string; html: string }): Promise<void> {
+  if (resend) {
+    const { error } = await resend.emails.send({
+      from: EMAIL_FROM,
+      to: [opts.to],
+      subject: opts.subject,
+      html: opts.html,
     })
-    throw error
+    if (error) {
+      throw new Error(`Resend error (${error.name}): ${error.message}`)
+    }
+    return
   }
+
+  capturedEmails.push({
+    from: EMAIL_FROM,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+  })
+  if (serverConfig.NODE_ENV !== "test") {
+    console.log(`[email] captured (no RESEND_API_KEY): to=${opts.to} subject="${opts.subject}"`)
+  }
+}
+
+/** Clear captured messages. Used by test setup between cases. */
+export function resetCapturedEmails(): void {
+  capturedEmails.length = 0
 }
 
 export async function sendVerificationEmail(email: string, token: string) {
@@ -84,7 +100,6 @@ export async function sendVerificationEmail(email: string, token: string) {
   `
 
   await sendMail({
-    from: EMAIL_FROM,
     to: email,
     subject: "Verify Your Vault Account",
     html,
@@ -133,7 +148,6 @@ export async function sendPasswordResetEmail(email: string, token: string) {
   `
 
   await sendMail({
-    from: EMAIL_FROM,
     to: email,
     subject: "Reset Your Vault Password",
     html,
@@ -187,7 +201,6 @@ export async function sendAccountLockedEmail(email: string) {
   `
 
   await sendMail({
-    from: EMAIL_FROM,
     to: email,
     subject: "Your Vault Account Has Been Temporarily Locked",
     html,

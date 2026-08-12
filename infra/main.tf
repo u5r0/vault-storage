@@ -192,21 +192,6 @@ resource "azurerm_container_app" "api" {
       }
 
       env {
-        name  = "SMTP_HOST"
-        value = var.smtp_host
-      }
-
-      env {
-        name  = "SMTP_PORT"
-        value = var.smtp_port
-      }
-
-      env {
-        name  = "SMTP_SECURE"
-        value = tostring(var.smtp_secure)
-      }
-
-      env {
         name  = "EMAIL_FROM"
         value = var.email_from
       }

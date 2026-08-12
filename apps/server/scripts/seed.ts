@@ -11,7 +11,7 @@ import "dotenv/config"
 import { createVaultClient } from "@vault/sdk"
 import { entries as entriesContainer, authContainer } from "../src/db"
 import { getBlobStore } from "../src/lib/blob-provider"
-import { clearMailpit, waitForMessage, extractLinkToken } from "../src/__setup__/mailpit"
+import { generateMagicLinkToken } from "../src/lib/magic-link"
 import { getServerConfig } from "../src/lib/env"
 
 const serverConfig = getServerConfig()
@@ -255,39 +255,39 @@ async function cleanup() {
 // ── Demo user ────────────────────────────────────────────────────────────────
 
 /**
- * Provision the demo user entirely through the API — no direct Cosmos writes.
+ * Provision the demo user through the API, then exchange a locally-generated
+ * magic-link token to become verified AND authenticated.
  *
- * Flow on first run (new user):
- *   register → email-verification link in Mailpit → client.verify(token)
- *   → user is verified AND the SDK cookie jar has session cookies
+ * The register call still runs through the real API (creating the user and
+ * queuing its email), but instead of reading that email back out of a shared
+ * SMTP inbox we generate the identical token ourselves using the shared
+ * AUTH_SECRET and hand it to client.verify() — the same endpoint the email
+ * link would hit. This removes the Mailpit/nodemailer dependency without
+ * bypassing the verification code path (ADR 0019 §B6).
  *
- * Flow on re-runs (user already exists and is verified):
- *   register (no-op, API resends a login magic-link) →
- *   login magic-link in Mailpit → client.verify(token)
- *   → SDK cookie jar has session cookies
- *
- * In both cases the /verify endpoint issues session cookies (ADR 0019 §B6),
- * so client.verify() leaves the SDK fully authenticated — no separate
- * client.login() call needed, and the stored password hash is never an issue.
+ * Flow:
+ *   register → find user in Cosmos → generateMagicLinkToken(id, email, type)
+ *   → client.verify(token) → user verified + SDK cookie jar has session cookies
  */
 async function ensureDemoUser(): Promise<void> {
-  // Drain Mailpit so we don't accidentally pick up a token from a previous run.
-  await clearMailpit()
-
   // POST /api/auth/register — always returns 200 regardless of whether the
-  // email is new, already verified, or unverified. Sends an email in all cases:
-  //   new user          → email-verification link
-  //   existing verified → login magic-link
-  //   existing unverified → email-verification link
+  // email is new, already verified, or unverified.
   await client.register({
     email: DEMO_USER.email,
     password: DEMO_USER.password,
     name: DEMO_USER.name,
   })
 
-  // Both email-verification and login magic-links point to /verify.
-  const msg = await waitForMessage(DEMO_USER.email, { timeoutMs: 10_000 })
-  const token = extractLinkToken(msg.HTML, "/verify")
+  // Find the freshly-created user to determine its id and verified state.
+  // Poll briefly: Cosmos session consistency can lag a write from a separate
+  // process (the API server) to this one (the seed CLI).
+  const user = await pollForUser(DEMO_USER.email)
+
+  // Mirrors the API's register()/requestMagicLink() token choice:
+  //   unverified → email-verification token
+  //   verified   → login token
+  const tokenType = user.verified === "1" ? "login" : "email-verification"
+  const token = generateMagicLinkToken(user.id, user.email, tokenType)
 
   // client.verify() calls GET /api/auth/verify through the SDK's request()
   // method, which captures the Set-Cookie headers into the tough-cookie jar.
@@ -309,6 +309,24 @@ async function ensureDemoUser(): Promise<void> {
   }
 
   console.log(`  demo user ready: ${DEMO_USER.email}`)
+}
+
+async function pollForUser(email: string, timeoutMs = 10_000): Promise<any> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const { resources } = await authContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.type = @type AND c.email = @email",
+        parameters: [
+          { name: "@type", value: "user" },
+          { name: "@email", value: email },
+        ],
+      })
+      .fetchAll()
+    if (resources.length > 0) return resources[0]
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  throw new Error(`Demo user not found after register: ${email}`)
 }
 
 // ── Seed via SDK ─────────────────────────────────────────────────────────────

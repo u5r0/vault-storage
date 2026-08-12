@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterEach } from "vitest"
+import { describe, it, expect, beforeAll } from "vitest"
 import type {
   ListFilesResult,
   UploadUrlResult,
@@ -7,36 +7,35 @@ import type {
   VaultEntry,
 } from "@vault/sdk"
 import { useFilesFixture, parseCookies } from "../__setup__/fixtures"
+import { capturedEmails } from "../lib/email"
+import { extractLinkToken } from "../__setup__/email-capture"
 
 /**
  * Integration tests for the `/api/files` HTTP surface, exercising the real
  * Azure SDK against an in-memory Azurite (booted in __setup__/azurite.global.ts)
  * and Cosmos DB emulator (booted in __setup__/cosmos.global.ts).
  *
- * No mocks except email (SMTP boundary). We call `app.request(...)` directly
- * so the entire stack runs inside the test process.
+ * No mocks. We call `app.request(...)` directly so the entire stack runs
+ * inside the test process. Email is exercised via the in-memory capture
+ * transport (`lib/email.ts`) rather than an SMTP boundary.
  *
  * See ADR 0016 Phase D3, ADR 0017.
  */
-
-vi.mock("../lib/email", () => ({
-  sendVerificationEmail: vi.fn(),
-  sendPasswordResetEmail: vi.fn(),
-}))
 
 const getApp = useFilesFixture()
 
 // Default authenticated user — registered once in beforeAll, persists across
 // tests because useFilesFixture only clears file/blob entries (not users).
 let defaultCookies = ""
-const tokenStore = new Map<string, string>()
+
+/** Read the verification token for `email` out of the capture transport. */
+function verifyTokenFor(email: string): string {
+  const msg = [...capturedEmails].reverse().find((m) => m.to === email)
+  if (!msg) throw new Error(`no verification email captured for ${email}`)
+  return extractLinkToken(msg.html, "/verify")
+}
 
 beforeAll(async () => {
-  const { sendVerificationEmail } = await import("../lib/email")
-  vi.mocked(sendVerificationEmail).mockImplementation(async (email: string, token: string) => {
-    tokenStore.set(email, token)
-  })
-
   // Bootstrap a verified user once for the whole suite. Wrap each step so a
   // setup failure (e.g., Cosmos restart mid-run) surfaces as a clear message
   // instead of silently leaving `defaultCookies = ""` and producing a
@@ -57,10 +56,10 @@ beforeAll(async () => {
       )
     }
 
-    const verifyToken = tokenStore.get(email)
+    const verifyToken = verifyTokenFor(email)
     if (!verifyToken) {
       throw new Error(
-        "no verification token captured — sendVerificationEmail mock was not called",
+        "no verification token captured — sendVerificationEmail was not called",
       )
     }
     const verifyRes = await app.request(`/api/auth/verify?token=${verifyToken}`)
@@ -69,7 +68,6 @@ beforeAll(async () => {
         `verify failed (${verifyRes.status}): ${await verifyRes.text()}`,
       )
     }
-    tokenStore.clear()
 
     const loginRes = await app.request("/api/auth/login", {
       method: "POST",
@@ -92,14 +90,10 @@ beforeAll(async () => {
     throw new Error(
       `[files.test.ts beforeAll] integration bootstrap failed: ${reason}\n` +
         `This usually means an infrastructure dependency (Cosmos DB emulator, ` +
-        `Azurite, or Mailpit) is unreachable. Check \`docker ps\` and the ` +
+        `Azurite, or RustFS) is unreachable. Check \`docker ps\` and the ` +
         `readiness gates in apps/server/src/__setup__/*.global.ts.`,
     )
   }
-})
-
-afterEach(() => {
-  tokenStore.clear()
 })
 
 // ── Authenticated helpers ────────────────────────────────────────────────────
@@ -742,7 +736,7 @@ describe("GET /api/files/search", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: emailB, password }),
     })
-    const tokenB = tokenStore.get(emailB)!
+    const tokenB = verifyTokenFor(emailB)
     await app.request(`/api/auth/verify?token=${tokenB}`)
     const loginB = await app.request("/api/auth/login", {
       method: "POST",
@@ -827,7 +821,6 @@ describe("Auth enforcement on file routes", () => {
 
   it("user A cannot list user B's files", async () => {
     const app = getApp()
-    const { sendVerificationEmail } = await import("../lib/email")
 
     const emailA = `usera+${Date.now()}@example.com`
     const emailB = `userb+${Date.now()}@example.com`
@@ -838,7 +831,7 @@ describe("Auth enforcement on file routes", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: emailA, password }),
     })
-    const tokenA = tokenStore.get(emailA)!
+    const tokenA = verifyTokenFor(emailA)
     await app.request(`/api/auth/verify?token=${tokenA}`)
     const loginA = await app.request("/api/auth/login", {
       method: "POST",
@@ -852,7 +845,7 @@ describe("Auth enforcement on file routes", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: emailB, password }),
     })
-    const tokenB = tokenStore.get(emailB)!
+    const tokenB = verifyTokenFor(emailB)
     await app.request(`/api/auth/verify?token=${tokenB}`)
     const loginB = await app.request("/api/auth/login", {
       method: "POST",
@@ -892,7 +885,7 @@ describe("Auth enforcement on file routes", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: emailA, password }),
     })
-    const tokenA = tokenStore.get(emailA)!
+    const tokenA = verifyTokenFor(emailA)
     await app.request(`/api/auth/verify?token=${tokenA}`)
     const loginA = await app.request("/api/auth/login", {
       method: "POST",
@@ -906,7 +899,7 @@ describe("Auth enforcement on file routes", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: emailB, password }),
     })
-    const tokenB = tokenStore.get(emailB)!
+    const tokenB = verifyTokenFor(emailB)
     await app.request(`/api/auth/verify?token=${tokenB}`)
     const loginB = await app.request("/api/auth/login", {
       method: "POST",

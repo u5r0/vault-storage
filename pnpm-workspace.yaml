@@ -1,9 +1,6 @@
 packages:
-  - "apps/*"
-  - "packages/*"
-
-# Enable pnpm deploy
-inject-workspace-packages: true
+  - apps/*
+  - packages/*
 
 allowBuilds:
   argon2: true
@@ -13,8 +10,10 @@ allowBuilds:
   vue-demi: true
 
 catalog:
-  zod: "^4.4.3"
+  resend: ^6.19.0
+  zod: ^4.4.3
 
 catalogMode: prefer
+
 minimumReleaseAgeExclude:
   - '@cloudflare/workers-types@5.20260726.1'

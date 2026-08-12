@@ -1,5 +1,5 @@
 import { beforeAll, afterEach } from 'vitest'
-import { clearMailpit } from './mailpit.js'
+import { clearCapturedEmails } from './email-capture.js'
 import { entryPartitionKey } from '../lib/entry-lookup.js'
 
 /**
@@ -150,7 +150,7 @@ export function useAuthFixture() {
   })
 
   afterEach(async () => {
-    await clearMailpit()
+    await clearCapturedEmails()
     await clearUsers()
     await clearRefreshTokens()
   })
@@ -170,7 +170,7 @@ export function useFilesFixture() {
   })
 
   afterEach(async () => {
-    await clearMailpit()
+    await clearCapturedEmails()
     await clearBlobStore()
     await clearFileEntries()
   })

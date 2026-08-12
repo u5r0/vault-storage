@@ -99,7 +99,7 @@ export class AuthService {
     /**
      * The user document is created before the email is sent, so a failed send
      * must not surface as a 500 — otherwise the account exists but the caller
-     * sees an error. Swallow the SMTP failure (logged) and still return 200.
+     * sees an error. Swallow the email failure (logged) and still return 200.
      */
     const user = await createUser(email, password, name)
     const token = generateMagicLinkToken(user.id, user.email, "email-verification")
@@ -156,12 +156,13 @@ export class AuthService {
         lockedUntil,
       })
       // ADR 0019 §B3: lockout email on transition into locked state.
-      // Awaited so the auth response only returns once Mailpit has the
-      // message. The .catch() guarantees SMTP failures never block auth.
-      // Promise.resolve() guards against non-promise mocks in tests.
+      // Awaited so the auth response only returns once the email send has
+      // resolved (or been captured). The .catch() guarantees delivery
+      // failures never block auth. Promise.resolve() guards against
+      // non-promise mocks in tests.
       if (justLocked) {
         await Promise.resolve(sendAccountLockedEmail(user.email)).catch(() => {
-          /* SMTP failures must not block the auth response */
+          /* email delivery failures must not block the auth response */
         })
       }
       await stall(timeStart)

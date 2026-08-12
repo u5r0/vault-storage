@@ -19,14 +19,13 @@ Everything runs on always-free tiers at low traffic — see [ADR 0010](adr/0010-
 
 ## Secrets strategy (Infisical)
 
-Runtime secrets (JWT signing, SMTP credentials, R2 API keys) are fetched during deployment by the `Infisical/secrets-action` GitHub Action using **GitHub OIDC authentication** and injected as Container App environment variables. No secrets are baked into the Docker image, and no Infisical CLI runs inside the container.
+Runtime secrets (JWT signing, the Resend API key, R2 API keys) are fetched during deployment by the `Infisical/secrets-action` GitHub Action using **GitHub OIDC authentication** and injected as Container App environment variables. No secrets are baked into the Docker image, and no Infisical CLI runs inside the container.
 
 | Secret | Managed by |
 |--------|-----------|
 | `JWT_SECRET` | Infisical (project / env `prod`) |
 | `AUTH_SECRET` | Infisical |
-| `SMTP_USER` | Infisical |
-| `SMTP_PASS` | Infisical |
+| `RESEND_API_KEY` | Infisical |
 | `R2_ACCESS_KEY_ID` | Infisical |
 | `R2_SECRET_ACCESS_KEY` | Infisical |
 | `ghcr_token` | GitHub Secrets → Terraform (Container App image pull) |
@@ -65,11 +64,10 @@ ghcr_username         = "<your-github-username>"
 cloudflare_account_id = "<cloudflare-account-id>"
 r2_account_id         = "<cloudflare-account-id>"
 r2_bucket_name        = "vault-bucket"
-smtp_host             = "smtp.resend.com"
-smtp_port             = "587"
-smtp_secure           = false
-email_from            = "<your-verified-sending-domain>"
+email_from            = "<your-domain-verified-in-resend>"
 ```
+
+> `RESEND_API_KEY` is **not** a Terraform variable — it's an Infisical secret (step 4). `email_from` must be a domain you've verified in Resend.
 
 ### 3. Set up Infisical project and machine identity (GitHub OIDC)
 
@@ -95,8 +93,7 @@ In your Infisical project, environment `prod`, add:
 ```bash
 infisical secrets set JWT_SECRET="$(openssl rand -hex 32)"
 infisical secrets set AUTH_SECRET="$(openssl rand -hex 32)"
-infisical secrets set SMTP_USER="resend"
-infisical secrets set SMTP_PASS="<resend-api-key>"
+infisical secrets set RESEND_API_KEY="<resend-api-key>"
 infisical secrets set R2_ACCESS_KEY_ID="<r2-access-key-id>"
 infisical secrets set R2_SECRET_ACCESS_KEY="<r2-secret-access-key>"
 ```
@@ -139,14 +136,6 @@ The `deploy.yml` workflow needs these (Settings → Secrets and variables → Ac
 | `ghcr_token` | GitHub PAT with `read:packages` scope |
 | `cloudflare_api_token` | Same Cloudflare API token |
 | `INFISICAL_MACHINE_IDENTITY_ID` | From Infisical dashboard → Machine Identities |
-
-**Variables (non-secret):**
-
-| Variable | Value |
-|----------|-------|
-| `smtp_host` | `smtp.resend.com` |
-| `smtp_port` | `587` |
-| `smtp_secure` | `false` |
 
 ### 7. Create the Azure App Registration (OIDC federation for GitHub Actions)
 
@@ -245,12 +234,8 @@ az containerapp ingress traffic set \
 | `APP_URL` | `http://localhost:3000` | Worker hostname | Container App env |
 | `JWT_SECRET` | `.env` | Random hex | **Infisical** |
 | `AUTH_SECRET` | `.env` | Random hex | **Infisical** |
-| `SMTP_HOST` | `localhost` | `smtp.resend.com` | Container App env |
-| `SMTP_PORT` | `1025` | `587` | Container App env |
-| `SMTP_SECURE` | `false` | `false` | Container App env |
-| `SMTP_USER` | `resend` | Resend username | **Infisical** |
-| `SMTP_PASS` | Resend API key | Resend API key | **Infisical** |
-| `EMAIL_FROM` | `noreply@vault.app` | Verified domain | Container App env |
+| `RESEND_API_KEY` | unset (capture) | Resend API key | **Infisical** |
+| `EMAIL_FROM` | `noreply@vault.app` | Resend-verified domain | Container App env |
 
 ### Client (`apps/web/.env`)
 

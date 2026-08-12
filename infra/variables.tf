@@ -36,23 +36,6 @@ variable "r2_bucket_name" {
   default     = "vault"
 }
 
-variable "smtp_host" {
-  description = "SMTP server host (e.g. smtp.resend.com)"
-  type        = string
-}
-
-variable "smtp_port" {
-  description = "SMTP server port (e.g. 587 for STARTTLS)"
-  type        = string
-  default     = "587"
-}
-
-variable "smtp_secure" {
-  description = "Use SSL/TLS (true for port 465, false for STARTTLS on port 587)"
-  type        = bool
-  default     = false
-}
-
 variable "email_from" {
   description = "From address for transactional emails"
   type        = string

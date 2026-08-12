@@ -54,12 +54,11 @@ export default defineConfig({
           globalSetup: [
             "./apps/server/src/__setup__/blob.global.ts",
             "./apps/server/src/__setup__/cosmos.global.ts",
-            "./apps/server/src/__setup__/mailpit.global.ts",
           ],
           setupFiles: [
             "./apps/server/src/__setup__/blob.env.ts",
             "./apps/server/src/__setup__/cosmos.env.ts",
-            "./apps/server/src/__setup__/mailpit.env.ts",
+            "./apps/server/src/__setup__/email-capture.env.ts",
           ],
           testTimeout: 30_000,
           hookTimeout: 30_000,
