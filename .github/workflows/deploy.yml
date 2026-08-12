@@ -47,10 +47,7 @@ jobs:
           terraform init
           terraform apply -var-file=envs/prod.tfvars -auto-approve \
             -var="ghcr_token=${{ secrets.ghcr_token }}" \
-            -var="cloudflare_api_token=${{ secrets.cloudflare_api_token }}" \
-            -var="smtp_host=${{ vars.smtp_host }}" \
-            -var="smtp_port=${{ vars.smtp_port }}" \
-            -var="smtp_secure=${{ vars.smtp_secure }}"
+            -var="cloudflare_api_token=${{ secrets.cloudflare_api_token }}"
 
       - name: Get Terraform Output
         id: tf-output

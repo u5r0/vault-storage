@@ -56,7 +56,7 @@ variable "smtp_secure" {
 variable "email_from" {
   description = "From address for transactional emails"
   type        = string
-  default     = "noreply@vault.app"
+  default     = "noreply@layoutengine.dev"
 }
 
 # ─── Cloudflare ───────────────────────────────────────────────────────────────
@@ -77,8 +77,8 @@ variable "worker_hostname" {
   type        = string
 }
 
-variable "cloudflare_zone_id" {
-  description = "Cloudflare zone ID for the worker hostname"
-  type        = string
-  default = "value"
-}
+# variable "cloudflare_zone_id" {
+#   description = "Cloudflare zone ID for the worker hostname"
+#   type        = string
+#   default = "value"
+# }

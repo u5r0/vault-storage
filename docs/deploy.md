@@ -48,7 +48,7 @@ az login
 bash infra/bootstrap/bootstrap.sh
 ```
 
-The script prints a `storage_account_name`. Open `infra/versions.tf` and replace `REPLACE_AFTER_BOOTSTRAP` with that value.
+The script prints a `storage_account_name`. Open `infra/versions.tf` and replace it with that value.
 
 ### 2. Fill in `infra/envs/prod.tfvars`
 
