@@ -1,6 +1,6 @@
-import type { BlobStore } from "./storage"
-import { getServerConfig } from "./env"
-import { isConfigured as isAzureConfigured, getBlobStore as getAzureBlobStore } from "./azure"
+import type { BlobStore } from "./storage.js"
+import { getServerConfig } from "./env.js"
+import { isConfigured as isAzureConfigured, getBlobStore as getAzureBlobStore } from "./azure.js"
 
 export type BlobProvider = "r2" | "azure"
 
@@ -32,7 +32,7 @@ export async function getBlobStore(): Promise<BlobStore> {
   const provider = getProvider()
 
   if (provider === "r2") {
-    const { R2BlobStore } = await import("./r2-blob-store")
+    const { R2BlobStore } = await import("./r2-blob-store.js")
     _store = new R2BlobStore({
       accountId: getServerConfig().R2_ACCOUNT_ID ?? "",
       accessKeyId: getServerConfig().R2_ACCESS_KEY_ID!,

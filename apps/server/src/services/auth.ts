@@ -2,7 +2,7 @@ import { performance } from "node:perf_hooks"
 import { HTTPException } from "hono/http-exception"
 // Auth documents (user / refresh_token / spent_token) live in their own
 // container keyed by /id (ADR 0028 §3.1 — split out of the file HPK container).
-import { authContainer as authDb } from "../db"
+import { authContainer as authDb } from "../db.js"
 import {
   createUser,
   verifyPassword,
@@ -10,14 +10,14 @@ import {
   findRefreshToken,
   deleteRefreshToken,
   deleteAllRefreshTokensForUser,
-} from "../lib/auth"
-import { generateMagicLinkToken, verifyMagicLinkToken } from "../lib/magic-link"
+} from "../lib/auth.js"
+import { generateMagicLinkToken, verifyMagicLinkToken } from "../lib/magic-link.js"
 import {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendAccountLockedEmail,
-} from "../lib/email"
-import { stall } from "../lib/stall"
+} from "../lib/email.js"
+import { stall } from "../lib/stall.js"
 
 const LOCKOUT_THRESHOLD = 5
 const LOCKOUT_DURATION_MS = 30 * 60 * 1000

@@ -1,4 +1,4 @@
-import { db, entries, lookup } from "../db"
+import { db, entries, lookup } from "../db.js"
 
 /**
  * HPK / pointer-record helpers (ADR 0028 §3.1, Gap 2 resolution).

@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer"
-import { getServerConfig } from "./env"
+import { getServerConfig } from "./env.js"
 
 const serverConfig = getServerConfig()
 

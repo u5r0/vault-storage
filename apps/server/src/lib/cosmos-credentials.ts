@@ -1,6 +1,6 @@
 import { CosmosClient } from "@azure/cosmos"
 import { Agent as HttpsAgent } from "node:https"
-import { getServerConfig } from "./env"
+import { getServerConfig } from "./env.js"
 
 /**
  * TLS agent for the localhost Cosmos emulator ONLY. The vnext emulator serves

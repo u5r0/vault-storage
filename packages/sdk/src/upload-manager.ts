@@ -2,7 +2,7 @@ import type {
   UploadCompleteResult,
   UploadUrlResult,
   VaultEntry,
-} from "./schemas";
+} from "./schemas.js";
 
 /**
  * Minimal client interface the manager needs. Avoids importing the concrete

@@ -1,13 +1,13 @@
 import { Hono } from "hono"
 import { stream } from "hono/streaming"
 import { zValidator } from "@hono/zod-validator"
-import { authenticate } from "../middleware/authenticate"
-import { userRateLimit, consumeUserPoints } from "../middleware/rate-limit"
+import { authenticate } from "../middleware/authenticate.js"
+import { userRateLimit, consumeUserPoints } from "../middleware/rate-limit.js"
 import {
   createUserReadLimiter,
   createUserWriteLimiter,
   createVolumetricLimiter,
-} from "../lib/rate-limiter"
+} from "../lib/rate-limiter.js"
 import {
   ListFilesQuery,
   SearchFilesQuery,
@@ -19,7 +19,7 @@ import {
   UploadCompleteBody,
   DownloadUrlQuery,
 } from "@vault/sdk"
-import { filesService } from "../services/files"
+import { filesService } from "../services/files.js"
 
 const readLimiter       = createUserReadLimiter()
 const writeLimiter      = createUserWriteLimiter()

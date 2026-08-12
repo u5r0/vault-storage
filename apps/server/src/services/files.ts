@@ -1,16 +1,16 @@
 import { HTTPException } from "hono/http-exception"
 import { Readable } from "stream"
 import { v4 as uuidv4 } from "uuid"
-import { db, entries as entriesContainer } from "../db"
-import { getBlobStore } from "../lib/blob-provider"
-import { getServerConfig } from "../lib/env"
+import { db, entries as entriesContainer } from "../db.js"
+import { getBlobStore } from "../lib/blob-provider.js"
+import { getServerConfig } from "../lib/env.js"
 import { normalizeSearchText, type VaultEntry } from "@vault/sdk"
 import {
   putPointer,
   deletePointer,
   readEntryById,
   entryPartitionKey,
-} from "../lib/entry-lookup"
+} from "../lib/entry-lookup.js"
 
 const MAX_UPLOAD_MB = getServerConfig().MAX_UPLOAD_MB
 

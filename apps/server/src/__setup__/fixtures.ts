@@ -1,6 +1,6 @@
 import { beforeAll, afterEach } from 'vitest'
-import { clearMailpit } from './mailpit'
-import { entryPartitionKey } from '../lib/entry-lookup'
+import { clearMailpit } from './mailpit.js'
+import { entryPartitionKey } from '../lib/entry-lookup.js'
 
 /**
  * Test fixtures following Epic Web patterns.
@@ -20,7 +20,7 @@ let blobStore: any
  */
 export async function setupApp() {
   if (!app) {
-    const { createApp } = await import('../app')
+    const { createApp } = await import('../app.js')
     app = createApp()
   }
   return app
@@ -38,7 +38,7 @@ export async function setupApp() {
  */
 export async function setupContainers() {
   if (!entries || !lookup || !authContainer) {
-    const db = await import('../db')
+    const db = await import('../db.js')
     entries = db.entries
     lookup = db.lookup
     authContainer = db.authContainer
@@ -52,7 +52,7 @@ export async function setupContainers() {
  */
 export async function setupBlobStore() {
   if (!blobStore) {
-    const { getBlobStore } = await import('../lib/blob-provider')
+    const { getBlobStore } = await import('../lib/blob-provider.js')
     blobStore = await getBlobStore()
   }
   return blobStore

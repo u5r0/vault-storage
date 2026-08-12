@@ -1,5 +1,5 @@
 import crypto from "crypto"
-import { getServerConfig } from "./env"
+import { getServerConfig } from "./env.js"
 const serverConfig = getServerConfig()
 const TOKEN_EXPIRY_SECONDS = 15 * 60 // 15 minutes
 

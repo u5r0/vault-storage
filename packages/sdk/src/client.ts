@@ -27,7 +27,7 @@ import type {
   UploadUrlResult,
   VaultEntry,
   VaultStore,
-} from "./schemas";
+} from "./schemas.js";
 
 const isBrowser =
   typeof window !== "undefined" && typeof document !== "undefined";

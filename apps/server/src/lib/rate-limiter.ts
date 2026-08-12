@@ -15,7 +15,7 @@
  * not as a generic per-request middleware.
  */
 import { RateLimiterMemory } from "rate-limiter-flexible"
-import { getServerConfig } from "./env"
+import { getServerConfig } from "./env.js"
 
 export const createRegisterLimiter      = () => new RateLimiterMemory({ points: 5,                 duration: 900  })
 export const createLoginLimiter         = () => new RateLimiterMemory({ points: 10,                duration: 900  })

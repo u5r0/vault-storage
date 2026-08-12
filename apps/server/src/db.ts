@@ -5,8 +5,8 @@ import {
   type Container,
   type PartitionKeyDefinition,
 } from "@azure/cosmos"
-import { getServerConfig } from "./lib/env"
-import { createCosmosClient, emulatorTlsAgent } from "./lib/cosmos-credentials"
+import { getServerConfig } from "./lib/env.js"
+import { createCosmosClient, emulatorTlsAgent } from "./lib/cosmos-credentials.js"
 
 const serverConfig = getServerConfig()
 

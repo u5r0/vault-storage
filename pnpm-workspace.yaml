@@ -2,6 +2,9 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# Enable pnpm deploy
+inject-workspace-packages: true
+
 allowBuilds:
   argon2: true
   better-sqlite3: true
@@ -12,5 +15,6 @@ allowBuilds:
 catalog:
   zod: "^4.4.3"
 
+catalogMode: prefer
 minimumReleaseAgeExclude:
   - '@cloudflare/workers-types@5.20260726.1'

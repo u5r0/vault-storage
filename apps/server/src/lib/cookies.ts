@@ -1,7 +1,7 @@
 import { setCookie } from "hono/cookie"
 import type { Context } from "hono"
-import { generateAccessToken, generateRefreshToken, storeRefreshToken } from "./auth"
-import { getServerConfig } from "./env"
+import { generateAccessToken, generateRefreshToken, storeRefreshToken } from "./auth.js"
+import { getServerConfig } from "./env.js"
 
 const serverConfig = getServerConfig()
 

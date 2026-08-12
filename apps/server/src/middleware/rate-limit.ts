@@ -1,6 +1,6 @@
 import { RateLimiterMemory, type RateLimiterRes } from "rate-limiter-flexible"
 import type { Context, Next } from "hono"
-import { rateLimitsDisabled } from "../lib/rate-limiter"
+import { rateLimitsDisabled } from "../lib/rate-limiter.js"
 
 function retryAfterSeconds(rejection: unknown): number {
   const ms = (rejection as RateLimiterRes | undefined)?.msBeforeNext ?? 1000

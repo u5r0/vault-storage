@@ -2,12 +2,12 @@ import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { logger } from "hono/logger"
 import { HTTPException } from "hono/http-exception"
-import { getServerConfig } from "./lib/env"
-import { isBlobConfigured } from "./lib/blob-provider"
-import { createIpLimiter, rateLimitsDisabled } from "./lib/rate-limiter"
+import { getServerConfig } from "./lib/env.js"
+import { isBlobConfigured } from "./lib/blob-provider.js"
+import { createIpLimiter, rateLimitsDisabled } from "./lib/rate-limiter.js"
 import type { RateLimiterRes } from "rate-limiter-flexible"
-import files from "./controllers/files"
-import auth from "./controllers/auth"
+import files from "./controllers/files.js"
+import auth from "./controllers/auth.js"
 
 const serverConfig = getServerConfig()
 

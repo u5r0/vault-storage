@@ -1,10 +1,10 @@
 import "dotenv/config"
 import { serve } from "@hono/node-server"
-import { createApp } from "./app"
-import { getServerConfig } from "./lib/env"
-import { isBlobConfigured, getProvider } from "./lib/blob-provider"
-import { ensureCorsForBrowserUploads } from "./lib/cors-bootstrap"
-import { initializeDatabase } from "./db"
+import { createApp } from "./app.js"
+import { getServerConfig } from "./lib/env.js"
+import { isBlobConfigured, getProvider } from "./lib/blob-provider.js"
+import { ensureCorsForBrowserUploads } from "./lib/cors-bootstrap.js"
+import { initializeDatabase } from "./db.js"
 
 const app = createApp({ withLogger: true })
 

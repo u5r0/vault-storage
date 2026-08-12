@@ -1,7 +1,7 @@
 import type { TestProject } from "vitest/node"
 import { CosmosClient, PartitionKeyKind, PartitionKeyDefinitionVersion } from "@azure/cosmos"
 import { get as httpsGet } from "node:https"
-import { emulatorTlsAgent } from "../lib/cosmos-credentials"
+import { emulatorTlsAgent } from "../lib/cosmos-credentials.js"
 
 const EMULATOR_KEY =
   "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="

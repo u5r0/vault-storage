@@ -4,8 +4,8 @@ import {
   CreateBucketCommand,
   PutBucketCorsCommand,
 } from "@aws-sdk/client-s3"
-import { getProvider } from "./blob-provider"
-import { getServerConfig } from "./env"
+import { getProvider } from "./blob-provider.js"
+import { getServerConfig } from "./env.js"
 
 export async function ensureCorsForBrowserUploads(): Promise<void> {
   const allowedOrigin = getServerConfig().ALLOWED_ORIGIN

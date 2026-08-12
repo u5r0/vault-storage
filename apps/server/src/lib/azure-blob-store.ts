@@ -12,10 +12,10 @@ import type {
   PresignedUrl,
   UploadUrlOptions,
   DownloadUrlOptions,
-} from "./storage"
+} from "./storage.js"
 import { Readable } from "stream"
-import { getServerConfig } from "./env"
-import { resolveAccountCredentials } from "./azure"
+import { getServerConfig } from "./env.js"
+import { resolveAccountCredentials } from "./azure.js"
 import { StorageSharedKeyCredential } from "@azure/storage-blob"
 
 const serverConfig = getServerConfig()

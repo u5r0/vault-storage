@@ -2,9 +2,9 @@ import argon2 from "argon2"
 import { sign, verify } from "hono/jwt"
 // Auth documents (user / refresh_token) live in the dedicated auth container
 // keyed by /id (ADR 0028 §3.1).
-import { authContainer as authDb } from "../db"
+import { authContainer as authDb } from "../db.js"
 import { randomUUID } from "crypto"
-import { getServerConfig } from "./env"
+import { getServerConfig } from "./env.js"
 
 const serverConfig = getServerConfig()
 const JWT_SECRET = serverConfig.JWT_SECRET

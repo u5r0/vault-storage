@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import { getCookie } from "hono/cookie"
 import { verify } from "hono/jwt"
-import { getServerConfig } from "../lib/env"
+import { getServerConfig } from "../lib/env.js"
 import {
   RegisterBody,
   LoginBody,
@@ -15,11 +15,11 @@ import {
   createLoginLimiter,
   createMagicLinkLimiter,
   createPasswordResetLimiter,
-} from "../lib/rate-limiter"
-import { consumeEmailLimit } from "../middleware/rate-limit"
-import { authenticate } from "../middleware/authenticate"
-import { issueTokens, setAuthCookies, clearAuthCookies } from "../lib/cookies"
-import { authService } from "../services/auth"
+} from "../lib/rate-limiter.js"
+import { consumeEmailLimit } from "../middleware/rate-limit.js"
+import { authenticate } from "../middleware/authenticate.js"
+import { issueTokens, setAuthCookies, clearAuthCookies } from "../lib/cookies.js"
+import { authService } from "../services/auth.js"
 
 const app = new Hono()
 

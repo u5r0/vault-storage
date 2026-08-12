@@ -3,9 +3,9 @@ import {
   StorageSharedKeyCredential,
   type ContainerClient,
 } from "@azure/storage-blob"
-import { getServerConfig } from "./env"
-import { AzureBlobStore } from "./azure-blob-store"
-import type { BlobStore } from "./storage"
+import { getServerConfig } from "./env.js"
+import { AzureBlobStore } from "./azure-blob-store.js"
+import type { BlobStore } from "./storage.js"
 
 let _container: ContainerClient | null = null
 let _ready: Promise<ContainerClient> | null = null

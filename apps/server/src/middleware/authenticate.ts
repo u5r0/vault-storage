@@ -1,7 +1,7 @@
 import { getCookie } from "hono/cookie"
 import { verify } from "hono/jwt"
 import type { Context, Next } from "hono"
-import { getServerConfig } from "../lib/env"
+import { getServerConfig } from "../lib/env.js"
 
 const serverConfig = getServerConfig()
 const JWT_SECRET = serverConfig.JWT_SECRET
