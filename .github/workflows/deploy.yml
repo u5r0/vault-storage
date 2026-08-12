@@ -137,8 +137,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
-        with:
-          version: 11
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -149,6 +147,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build SDK
+        run: pnpm --filter @vault/sdk build
       - name: Build SPA
         run: pnpm --filter @vault/web build
 
