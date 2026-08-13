@@ -10,6 +10,7 @@ allowBuilds:
   vue-demi: true
 
 catalog:
+  oxlint: ^1.78.0
   resend: ^6.19.0
   zod: ^4.4.3
 

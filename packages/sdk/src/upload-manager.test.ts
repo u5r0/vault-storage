@@ -137,9 +137,9 @@ describe("UploadManager", () => {
     })
 
     expect(completed).toHaveBeenCalledTimes(1)
-    if (handle.state.status === "completed") {
-      expect(handle.state.entry.name).toBe("a.txt")
-    }
+    const state = handle.state
+    if (state.status !== "completed") throw new Error(`expected completed, got ${state.status}`)
+    expect(state.entry.name).toBe("a.txt")
     expect(putCalls).toHaveLength(1)
   })
 
@@ -207,9 +207,9 @@ describe("UploadManager", () => {
     await vi.waitFor(() => {
       expect(handle.state.status).toBe("error")
     })
-    if (handle.state.status === "error") {
-      expect(handle.state.error.message).toBe("nope")
-    }
+    const state = handle.state
+    if (state.status !== "error") throw new Error(`expected error, got ${state.status}`)
+    expect(state.error.message).toBe("nope")
     expect(onError).toHaveBeenCalledTimes(1)
     // PUT must not have been attempted — error happened before that step.
     expect(putCalls).toHaveLength(0)

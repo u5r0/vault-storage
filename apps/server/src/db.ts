@@ -153,7 +153,7 @@ export async function initializeDatabase() {
     } catch (error: any) {
       if (Date.now() - startTime > timeout) {
         console.error(`[Cosmos DB] Failed to initialize after ${timeout}ms:`, error.message)
-        throw new Error(`Cosmos DB initialization timeout: ${error.message}`)
+        throw new Error(`Cosmos DB initialization timeout: ${error.message}`, { cause: error })
       }
       if (isTransientNetworkError(error)) {
         attempt++

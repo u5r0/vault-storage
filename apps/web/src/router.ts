@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router"
+import { createRouter, createWebHistory } from "vue-router"
 import { authRoutes }     from "./modules/auth"
 import { filesRoutes }    from "./modules/files"
 import { settingsRoutes } from "./modules/settings"

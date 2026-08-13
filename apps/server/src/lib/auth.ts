@@ -43,7 +43,7 @@ export async function generateRefreshToken(user: { id: string }) {
 export async function verifyToken(token: string) {
   try {
     return await verify(token, JWT_SECRET, "HS256") as Record<string, any>
-  } catch (e) {
+  } catch {
     return null
   }
 }

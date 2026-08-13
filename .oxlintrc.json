@@ -1,0 +1,33 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "vue", "vitest", "import"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn",
+    "pedantic": "off"
+  },
+  "rules": {
+    "no-unused-vars": "error",
+    "typescript/no-unused-vars": "error",
+    "no-unreachable": "error",
+    "no-unreachable-loop": "error",
+    "no-constant-binary-expression": "error",
+    "vitest/require-mock-type-parameters": "warn",
+    "import/no-unassigned-import": "off"
+  },
+  "env": {
+    "es6": true,
+    "browser": true,
+    "node": true
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.integration.test.ts", "**/__setup__/**"],
+      "env": {
+        "vitest": true
+      }
+    }
+  ],
+  "ignorePatterns": [".wrangler/**", ".agents/**", "dist/**", "coverage/**", "*.tsbuildinfo"]
+}

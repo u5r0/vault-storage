@@ -219,7 +219,7 @@ async function cleanup() {
     console.log(`  cleared auth docs:`, authCounts)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    throw new Error(`auth doc cleanup failed: ${msg}`)
+    throw new Error(`auth doc cleanup failed: ${msg}`, { cause: e })
   }
 
   // File/folder docs live in vault_entries with HPK [/ownerId, /parentId, /id].
@@ -247,7 +247,7 @@ async function cleanup() {
     console.log(`  cleared entry docs:`, entryCounts)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    throw new Error(`entry doc cleanup failed: ${msg}`)
+    throw new Error(`entry doc cleanup failed: ${msg}`, { cause: e })
   }
 
   console.log()
@@ -305,7 +305,7 @@ async function ensureDemoUser(): Promise<void> {
   } catch (e: any) {
     throw new Error(
       `Demo user provisioned but password login failed: ${e.message ?? e}. ` +
-      `This usually means a stale duplicate user document survived cleanup.`,
+      `This usually means a stale duplicate user document survived cleanup.`, { cause: e },
     )
   }
 

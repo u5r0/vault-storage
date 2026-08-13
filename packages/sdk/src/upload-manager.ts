@@ -319,7 +319,7 @@ export class UploadManager extends Emitter<UploadEvents> {
       method: "PUT",
       headers: {
         "Content-Type": handle.type,
-        ...(ticket.requiredHeaders ?? {}),
+        ...ticket.requiredHeaders,
       },
       body: handle.data,
       signal: handle.controller.signal,

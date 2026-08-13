@@ -91,7 +91,7 @@ beforeAll(async () => {
       `[files.test.ts beforeAll] integration bootstrap failed: ${reason}\n` +
         `This usually means an infrastructure dependency (Cosmos DB emulator, ` +
         `Azurite, or RustFS) is unreachable. Check \`docker ps\` and the ` +
-        `readiness gates in apps/server/src/__setup__/*.global.ts.`,
+        `readiness gates in apps/server/src/__setup__/*.global.ts.`, { cause: err },
     )
   }
 })
@@ -766,7 +766,7 @@ describe("GET /api/files/search", () => {
 // ── Cursor pagination on GET /api/files (ADR 0018 §B) ────────────────────────
 
 describe("GET /api/files cursor pagination", () => {
-  it.skip("returns a cursor when more pages remain, and exhausts in two requests", async () => {
+  it("returns a cursor when more pages remain, and exhausts in two requests", async () => {
     // Seed 3 files at root and request a page size of 2 — Cosmos should hand
     // back a continuation token, and the second request should drain.
     for (const n of ["page-a.txt", "page-b.txt", "page-c.txt"]) {

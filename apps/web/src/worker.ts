@@ -1,4 +1,5 @@
 /// <reference types="@cloudflare/workers-types" />
+// oxlint-disable-next-line typescript/triple-slash-reference
 /// <reference path="../worker-configuration.d.ts" />
 
 function proxyError(message: string, detail?: unknown): Response {
