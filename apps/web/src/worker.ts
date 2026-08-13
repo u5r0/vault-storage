@@ -32,12 +32,14 @@ async function handleApiProxy(request: Request, env: Env): Promise<Response> {
 
   try {
     const body =
-      request.method !== "GET" && request.method !== "HEAD" ? await request.text() : undefined
+      request.method !== "GET" && request.method !== "HEAD"
+        ? await request.arrayBuffer()
+        : undefined
     return await fetch(target, {
       method: request.method,
       headers,
       body,
-      redirect: "manual",
+      redirect: "follow",
     })
   } catch (err) {
     const cause = (err as { cause?: unknown } | null)?.cause ?? err

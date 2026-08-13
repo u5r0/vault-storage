@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, ref } from "vue"
 import { Share2, Download } from "@lucide/vue"
 import FileIcon from "./FileIcon.vue"
 import type { VaultEntry } from "@vault/sdk"
@@ -18,8 +18,23 @@ const meta = computed(() => {
   ]
 })
 
-function downloadUrl(file: VaultEntry): string {
-  return client.getDownloadUrl(file.id)
+const downloading = ref(false)
+
+async function handleDownload(file: VaultEntry) {
+  if (downloading.value) return
+  downloading.value = true
+  try {
+    const { url } = await client.createDownloadUrl(file.id)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = file.name
+    a.rel = "noopener noreferrer"
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  } finally {
+    downloading.value = false
+  }
 }
 </script>
 
@@ -46,13 +61,14 @@ function downloadUrl(file: VaultEntry): string {
         </div>
 
         <div class="flex w-full items-center gap-2 pt-1">
-          <a
-            :href="downloadUrl(file)"
-            :download="file.name"
-            class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-3 py-2 text-[12.5px] font-medium text-[var(--color-primary-foreground)] transition hover:opacity-90"
+          <button
+            type="button"
+            :disabled="downloading"
+            class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-3 py-2 text-[12.5px] font-medium text-[var(--color-primary-foreground)] transition hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+            @click="handleDownload(file)"
           >
-            <Download :size="13" :stroke-width="2.25" /> Download
-          </a>
+            <Download :size="13" :stroke-width="2.25" /> {{ downloading ? "Preparing…" : "Download" }}
+          </button>
           <button
             type="button"
             class="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-[12.5px] font-medium transition hover:bg-[var(--color-muted)]"
