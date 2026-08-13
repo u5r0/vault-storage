@@ -43,7 +43,7 @@ Controllers contain no business logic. They do not query the database directly.
 Business logic layer. Each service owns one domain:
 
 - `AuthService` — registration, login, magic links, password reset, token rotation
-- `FilesService` — list, create folder, upload, download, rename, move, delete, quick links
+- `FilesService` — list, create folder, upload, download-url, rename, move, delete, quick links
 
 Services receive `ownerId` on every method call (set by the auth middleware) to enforce owner isolation. They interact with Cosmos DB via `db.ts` and Azure Blob Storage via `lib/azure.ts`.
 

@@ -28,6 +28,7 @@ async function handleDownload(file: VaultEntry) {
     const a = document.createElement("a")
     a.href = url
     a.download = file.name
+    a.target = "_blank"
     a.rel = "noopener noreferrer"
     document.body.appendChild(a)
     a.click()

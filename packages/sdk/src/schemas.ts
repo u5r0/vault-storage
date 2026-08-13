@@ -268,39 +268,3 @@ export const UpdateSettingsInput = z.object({
   maxUploadMb: z.number().nullable(),
 });
 export type UpdateSettings = z.infer<typeof UpdateSettingsInput>;
-
-export interface VaultStore {
-  getConfig(): Promise<Config>;
-  getSettings(): Promise<Settings>;
-  updateSettings(input: UpdateSettings): Promise<Settings>;
-  register(input: RegisterInput): Promise<AckResult>;
-  resendVerification(input: ResendVerificationInput): Promise<AckResult>;
-  login(input: LoginInput): Promise<AuthResult>;
-  logout(): Promise<void>;
-  me(): Promise<AuthResult>;
-  listFiles(input?: Partial<ListFilesInput>): Promise<ListFilesResult>;
-  searchFiles(
-    input: SearchFilesInput,
-    init?: { signal?: AbortSignal },
-  ): Promise<SearchFilesResult>;
-  createFolder(input: CreateFolderInput): Promise<CreateFolderResult>;
-  uploadFiles(input: { parentId?: string; files: File[] }): Promise<UploadResult>;
-  /**
-   * Browser-direct upload: bytes go straight to object storage via a
-   * presigned URL, then the server records the entry. Same result shape
-   * as `uploadFiles` so callers can switch paths transparently.
-   */
-  uploadFilesDirect(input: { parentId?: string; files: File[] }): Promise<UploadResult>;
-  createUploadUrl(input: UploadUrlInput): Promise<UploadUrlResult>;
-  completeUpload(input: UploadCompleteInput): Promise<UploadCompleteResult>;
-  getDownloadUrl(id: string): string;
-  createDownloadUrl(id: string): Promise<DownloadUrlResult>;
-  renameFile(input: RenameInput): Promise<RenameResult>;
-  moveFile(input: MoveInput): Promise<MoveResult>;
-  deleteFile(input: DeleteInput): Promise<DeleteResult>;
-  getQuickLinks(): Promise<QuickLinksResult>;
-  /** Flat index-hydration: returns all entries for the authed user, capped
-   *  at 10 000. `truncated: true` means the vault is too large to index
-   *  locally and server search should be used exclusively. */
-  listAllEntries(): Promise<AllFilesResult>;
-}

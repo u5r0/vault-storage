@@ -1,5 +1,4 @@
 import { Hono } from "hono"
-import { stream } from "hono/streaming"
 import { zValidator } from "@hono/zod-validator"
 import { authenticate } from "../middleware/authenticate.js"
 import { userRateLimit, consumeUserPoints } from "../middleware/rate-limit.js"
@@ -56,21 +55,6 @@ files.get("/all", userRateLimit(readLimiter), async (c) => {
   const ownerId = (c as any).get("userId") as string
   const { entries, truncated } = await filesService.listAll(ownerId)
   return c.json({ entries, truncated })
-})
-
-files.get("/download", userRateLimit(readLimiter), async (c) => {
-  const id = c.req.query("id")
-  if (!id) return c.json({ error: "Missing 'id' query param" }, 400)
-  const ownerId = (c as any).get("userId") as string
-  const { stream: downloadStream, metadata, name } = await filesService.download(id, ownerId)
-  c.header("Content-Type", metadata.contentType ?? "application/octet-stream")
-  c.header("Content-Length", String(metadata.size))
-  c.header("Content-Disposition", `attachment; filename="${encodeURIComponent(name)}"`)
-  return stream(c, async (s) => {
-    for await (const chunk of downloadStream as NodeJS.ReadableStream) {
-      await s.write(chunk as Uint8Array)
-    }
-  })
 })
 
 /**

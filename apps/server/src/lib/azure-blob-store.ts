@@ -8,7 +8,6 @@ import type {
   BlobListItem,
   BlobMetadata,
   UploadOptions,
-  DownloadResult,
   PresignedUrl,
   UploadUrlOptions,
   DownloadUrlOptions,
@@ -99,27 +98,6 @@ export class AzureBlobStore implements BlobStore {
 
     const nodeStream = Readable.from(data as AsyncIterable<Uint8Array>)
     await block.uploadStream(nodeStream, 4 * 1024 * 1024, 5, headers)
-  }
-
-  async download(path: string): Promise<DownloadResult> {
-    const blob = this.container.getBlobClient(path)
-    const props = await blob.getProperties()
-    const download = await blob.download()
-
-    if (!download.readableStreamBody) {
-      throw new Error("Empty download stream")
-    }
-
-    return {
-      stream: download.readableStreamBody as NodeJS.ReadableStream,
-      metadata: {
-        name: path.split("/").pop() ?? "file",
-        path,
-        size: Number(props.contentLength ?? 0),
-        contentType: props.contentType ?? null,
-        modifiedAt: props.lastModified ? new Date(props.lastModified) : null,
-      },
-    }
   }
 
   async copy(fromPath: string, toPath: string): Promise<void> {

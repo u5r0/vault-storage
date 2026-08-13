@@ -29,8 +29,8 @@ import type {
   UploadUrlInput,
   UploadUrlResult,
   VaultEntry,
-  VaultStore,
 } from "./schemas.js";
+import type { VaultStore } from "./types.js";
 
 const isBrowser =
   typeof window !== "undefined" && typeof document !== "undefined";
@@ -294,10 +294,6 @@ export class VaultClient implements VaultStore {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     });
-  }
-
-  getDownloadUrl(id: string): string {
-    return `${this.baseUrl}/api/files/download?id=${encodeURIComponent(id)}`;
   }
 
   /**

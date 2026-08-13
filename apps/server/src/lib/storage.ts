@@ -19,11 +19,6 @@ export type UploadOptions = {
   contentType?: string
 }
 
-export type DownloadResult = {
-  stream: ReadableStream | NodeJS.ReadableStream
-  metadata: BlobMetadata
-}
-
 export type PresignedUrl = {
   url: string
   expiresAt: Date
@@ -65,7 +60,7 @@ export interface BlobStore {
 
   /**
    * Look up blob metadata without opening the body. Returns null when the
-   * blob does not exist. Cheaper than `download(...)` when you only need
+   * blob does not exist. Cheaper than downloading when you only need
    * size / contentType (e.g. server-side validation after a presigned PUT).
    */
   stat(path: string): Promise<BlobMetadata | null>
@@ -75,11 +70,6 @@ export interface BlobStore {
    * Accepts a NodeJS.ReadableStream, an AsyncIterable<Uint8Array>, or Buffer.
    */
   upload(path: string, data: Buffer | NodeJS.ReadableStream | AsyncIterable<Uint8Array>, options?: UploadOptions): Promise<void>
-
-  /**
-   * Download a blob as a stream
-   */
-  download(path: string): Promise<DownloadResult>
 
   /**
    * Copy a blob from one path to another

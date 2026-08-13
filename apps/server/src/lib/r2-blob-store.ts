@@ -14,7 +14,6 @@ import type {
   BlobListItem,
   BlobMetadata,
   UploadOptions,
-  DownloadResult,
   PresignedUrl,
   UploadUrlOptions,
   DownloadUrlOptions,
@@ -167,28 +166,6 @@ export class R2BlobStore implements BlobStore {
       ContentLength: body.length,
       ContentType: options?.contentType ?? "application/octet-stream",
     }))
-  }
-
-  async download(path: string): Promise<DownloadResult> {
-    const response = await this.client.send(new GetObjectCommand({
-      Bucket: this.bucket,
-      Key: path,
-    }))
-
-    if (!response.Body) {
-      throw new Error("Empty download body")
-    }
-
-    return {
-      stream: response.Body as NodeJS.ReadableStream,
-      metadata: {
-        name: path.split("/").pop() ?? "file",
-        path,
-        size: response.ContentLength ?? 0,
-        contentType: response.ContentType ?? null,
-        modifiedAt: response.LastModified ?? null,
-      },
-    }
   }
 
   async copy(fromPath: string, toPath: string): Promise<void> {

@@ -189,20 +189,6 @@ describe("POST /api/files/upload", () => {
   })
 })
 
-describe("GET /api/files/download", () => {
-  it("returns the bytes that were uploaded", async () => {
-    const app = getApp()
-    const { uploaded } = await uploadText(null, "greet.txt", "bonjour")
-    const fileId = uploaded[0].id
-    const res = await app.request(`/api/files/download?id=${fileId}`, {
-      headers: { Cookie: defaultCookies },
-    })
-    expect(res.status).toBe(200)
-    expect(res.headers.get("Content-Type")).toBe("text/plain")
-    expect(await res.text()).toBe("bonjour")
-  })
-})
-
 /**
  * Two-step direct upload: client gets a presigned PUT URL, ships bytes
  * straight to object storage, then asks the server to record the entry.
@@ -427,10 +413,11 @@ describe("PATCH /api/files/rename", () => {
     expect(names).toContain("new.txt")
     expect(names).not.toContain("old.txt")
 
-    const dl = await app.request(`/api/files/download?id=${fileId}`, {
+    const dlUrl = await app.request(`/api/files/download-url?id=${fileId}`, {
       headers: { Cookie: defaultCookies },
     })
-    expect(await dl.text()).toBe("stays the same")
+    const { url } = (await dlUrl.json()) as DownloadUrlResult
+    expect(await (await fetch(url)).text()).toBe("stays the same")
   })
 })
 
@@ -525,13 +512,13 @@ describe("DELETE /api/files", () => {
     const list = await listRoot()
     expect(list.entries.find((e: VaultEntry) => e.name === "Root")).toBeUndefined()
 
-    // Blobs are physically gone — downloading either file must 404
-    const dlDeep = await app.request(`/api/files/download?id=${deepFile.id}`, {
+    // Blobs are physically gone — minting a download URL for either file must 404
+    const dlDeep = await app.request(`/api/files/download-url?id=${deepFile.id}`, {
       headers: { Cookie: defaultCookies },
     })
     expect(dlDeep.status).toBe(404)
 
-    const dlTop = await app.request(`/api/files/download?id=${topFile.id}`, {
+    const dlTop = await app.request(`/api/files/download-url?id=${topFile.id}`, {
       headers: { Cookie: defaultCookies },
     })
     expect(dlTop.status).toBe(404)
@@ -591,26 +578,17 @@ describe("PATCH /api/files/move", () => {
 // ── Error paths ──────────────────────────────────────────────────────────────
 
 describe("File API error paths", () => {
-  it("returns 404 for non-existent file download", async () => {
+  it("returns 400 for invalid UUID in download-url", async () => {
     const app = getApp()
-    const res = await app.request(
-      "/api/files/download?id=00000000-0000-0000-0000-000000000000",
-      { headers: { Cookie: defaultCookies } },
-    )
-    expect(res.status).toBe(404)
-  })
-
-  it("returns 404 for invalid UUID format", async () => {
-    const app = getApp()
-    const res = await app.request("/api/files/download?id=invalid-uuid", {
+    const res = await app.request("/api/files/download-url?id=invalid-uuid", {
       headers: { Cookie: defaultCookies },
     })
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(400)
   })
 
-  it("returns 400 for missing id parameter", async () => {
+  it("returns 400 for missing id in download-url", async () => {
     const app = getApp()
-    const res = await app.request("/api/files/download", {
+    const res = await app.request("/api/files/download-url", {
       headers: { Cookie: defaultCookies },
     })
     expect(res.status).toBe(400)
@@ -813,9 +791,9 @@ describe("Auth enforcement on file routes", () => {
     expect(res.status).toBe(401)
   })
 
-  it("unauthenticated download -> 401", async () => {
+  it("unauthenticated download-url -> 401", async () => {
     const app = getApp()
-    const res = await app.request("/api/files/download?id=00000000-0000-0000-0000-000000000000")
+    const res = await app.request("/api/files/download-url?id=00000000-0000-4000-8000-000000000000")
     expect(res.status).toBe(401)
   })
 

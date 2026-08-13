@@ -108,12 +108,11 @@ afterAll(async () => {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-async function streamToString(stream: NodeJS.ReadableStream): Promise<string> {
-  const chunks: Buffer[] = []
-  for await (const chunk of stream) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk)
-  }
-  return Buffer.concat(chunks).toString("utf-8")
+async function readViaPresigned(path: string): Promise<string> {
+  const { url } = await store.createDownloadUrl(path, { expiresMinutes: 5 })
+  const res = await fetch(url)
+  expect(res.ok).toBe(true)
+  return res.text()
 }
 
 async function collectList(prefix: string): Promise<BlobListItem[]> {
@@ -125,16 +124,16 @@ async function collectList(prefix: string): Promise<BlobListItem[]> {
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe("R2BlobStore (against RustFS)", () => {
-  describe("upload + download", () => {
+  describe("upload + presigned download", () => {
     it("round-trips a Buffer payload", async () => {
       const path = "round-trip/buffer.txt"
       await store.upload(path, Buffer.from("hello buffer"), { contentType: "text/plain" })
 
-      const { stream, metadata } = await store.download(path)
-      expect(metadata.path).toBe(path)
-      expect(metadata.contentType).toBe("text/plain")
-      expect(metadata.size).toBe(Buffer.byteLength("hello buffer"))
-      expect(await streamToString(stream as NodeJS.ReadableStream)).toBe("hello buffer")
+      const meta = await store.stat(path)
+      expect(meta!.path).toBe(path)
+      expect(meta!.contentType).toBe("text/plain")
+      expect(meta!.size).toBe(Buffer.byteLength("hello buffer"))
+      expect(await readViaPresigned(path)).toBe("hello buffer")
     })
 
     it("round-trips a Node Readable stream", async () => {
@@ -142,10 +141,7 @@ describe("R2BlobStore (against RustFS)", () => {
       const source = Readable.from(["chunk-1 ", "chunk-2 ", "chunk-3"])
       await store.upload(path, source, { contentType: "text/plain" })
 
-      const { stream } = await store.download(path)
-      expect(await streamToString(stream as NodeJS.ReadableStream)).toBe(
-        "chunk-1 chunk-2 chunk-3",
-      )
+      expect(await readViaPresigned(path)).toBe("chunk-1 chunk-2 chunk-3")
     })
 
     it("round-trips an AsyncIterable<Uint8Array>", async () => {
@@ -155,9 +151,9 @@ describe("R2BlobStore (against RustFS)", () => {
         yield new Uint8Array([0x21]) // "!"
       }
       await store.upload(path, gen())
-      const { stream, metadata } = await store.download(path)
-      expect(metadata.contentType).toBe("application/octet-stream") // default
-      expect(await streamToString(stream as NodeJS.ReadableStream)).toBe("hi!")
+      const meta = await store.stat(path)
+      expect(meta!.contentType).toBe("application/octet-stream") // default
+      expect(await readViaPresigned(path)).toBe("hi!")
     })
   })
 
@@ -244,8 +240,7 @@ describe("R2BlobStore (against RustFS)", () => {
       expect(await store.exists(from)).toBe(true)
       expect(await store.exists(to)).toBe(true)
 
-      const { stream } = await store.download(to)
-      expect(await streamToString(stream as NodeJS.ReadableStream)).toBe("payload")
+      expect(await readViaPresigned(to)).toBe("payload")
     })
   })
 
@@ -299,9 +294,8 @@ describe("R2BlobStore (against RustFS)", () => {
       })
       expect(res.ok).toBe(true)
 
-      // Round-trip through the adapter: upload via presigned URL, read via SDK.
-      const { stream } = await store.download(path)
-      expect(await streamToString(stream as NodeJS.ReadableStream)).toBe("presigned body")
+      // Round-trip through the adapter: upload via presigned URL, read via presigned GET.
+      expect(await readViaPresigned(path)).toBe("presigned body")
     })
   })
 

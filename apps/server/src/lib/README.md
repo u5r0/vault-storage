@@ -23,7 +23,6 @@ Defines the `BlobStore` interface with methods for:
 - `list(prefix)` - List files and folders
 - `exists(path)` - Check if a blob exists
 - `upload(path, data, options)` - Upload a file
-- `download(path)` - Download a file as a stream
 - `copy(from, to)` - Copy a file
 - `delete(path)` - Delete a file
 - `deletePrefix(prefix)` - Delete all files with a prefix (folder deletion)
@@ -72,8 +71,8 @@ await store.upload('path/to/file.txt', buffer, {
   contentType: 'text/plain'
 })
 
-// Download
-const { stream, metadata } = await store.download('path/to/file.txt')
+// Download (presigned URL for direct client-side fetch)
+const { url } = await store.createDownloadUrl('path/to/file.txt')
 
 // Copy/rename
 await store.copy('old/path.txt', 'new/path.txt')

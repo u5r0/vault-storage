@@ -365,19 +365,6 @@ export class FilesService {
     return uploaded
   }
 
-  async download(id: string, ownerId: string) {
-    const resource = await readEntryById(id)
-    if (!resource) throw new HTTPException(404, { message: "File not found" })
-    checkOwner(resource, ownerId)
-    if (!resource.blobName) throw new HTTPException(400, { message: "Not a file" })
-
-    const store = await getBlobStore()
-    if (!(await store.exists(resource.blobName))) throw new HTTPException(404, { message: "File blob not found" })
-
-    const { stream, metadata } = await store.download(resource.blobName)
-    return { stream, metadata, name: resource.name }
-  }
-
   /**
    * Step 1 of browser-direct upload. Mints a presigned PUT URL bound to a
    * server-generated blob key (UUID); no Cosmos write happens here. The

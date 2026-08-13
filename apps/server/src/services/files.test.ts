@@ -202,7 +202,6 @@ describe("FilesService", () => {
 
       vi.mocked(getBlobStore).mockResolvedValue({
         upload: vi.fn().mockResolvedValue(undefined),
-        download: vi.fn(),
         delete: vi.fn(),
         exists: vi.fn(),
         list: vi.fn(),
@@ -225,7 +224,6 @@ describe("FilesService", () => {
       blobErr.statusCode = 429
       vi.mocked(getBlobStore).mockResolvedValue({
         upload: vi.fn().mockRejectedValue(blobErr),
-        download: vi.fn(),
         delete: vi.fn(),
         exists: vi.fn(),
         list: vi.fn(),
@@ -244,7 +242,6 @@ describe("FilesService", () => {
       const { getBlobStore } = await import("../lib/blob-provider")
       vi.mocked(getBlobStore).mockResolvedValue({
         upload: vi.fn().mockResolvedValue(undefined),
-        download: vi.fn(),
         delete: vi.fn(),
         exists: vi.fn(),
         list: vi.fn(),
@@ -298,7 +295,6 @@ describe("FilesService", () => {
         exists: vi.fn().mockResolvedValue(false),
         delete: vi.fn(),
         upload: vi.fn(),
-        download: vi.fn(),
         list: vi.fn(),
         copy: vi.fn(),
         deletePrefix: vi.fn(),

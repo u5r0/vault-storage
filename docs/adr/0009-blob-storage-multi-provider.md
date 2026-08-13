@@ -36,7 +36,6 @@ All adapters implement:
 | `exists(path)` | Check blob presence |
 | `stat(path)` | Head metadata without downloading body |
 | `upload(path, data, opts)` | Upload from Buffer, ReadableStream, or AsyncIterable |
-| `download(path)` | Download as stream with metadata |
 | `copy(from, to)` | Server-side copy |
 | `delete(path)` | Delete single blob |
 | `deletePrefix(prefix)` | Batch delete (folder deletion) |
