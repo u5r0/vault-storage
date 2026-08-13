@@ -8,7 +8,9 @@ import { getProvider } from "./blob-provider.js"
 import { getServerConfig } from "./env.js"
 
 export async function ensureCorsForBrowserUploads(): Promise<void> {
-  const allowedOrigin = getServerConfig().ALLOWED_ORIGIN
+  // Local blob backends (Azurite / RustFS) only need one origin; the first
+  // configured one is fine for dev.
+  const allowedOrigin = getServerConfig().ALLOWED_ORIGIN[0] ?? "http://localhost:3000"
   const provider = getProvider()
 
   try {

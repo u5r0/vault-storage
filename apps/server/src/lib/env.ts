@@ -1,9 +1,23 @@
 import { z } from "zod"
 
+/**
+ * Parse the comma-separated `ALLOWED_ORIGIN` env var into a list of origins.
+ * Returns `undefined` when the value is missing/empty so the schema's default
+ * kicks in. Each entry is validated as a URL by the schema below.
+ */
+export function parseAllowedOrigins(value: string | undefined): string[] | undefined {
+  if (!value) return undefined
+  const origins = value.split(",").map((o) => o.trim()).filter(Boolean)
+  return origins.length > 0 ? origins : undefined
+}
+
 const ServerEnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().default(3001),
-  ALLOWED_ORIGIN: z.url().default("http://localhost:3000"),
+  // Comma-separated list so the API can serve multiple SPA origins (workers.dev
+  // URL + custom domain) without a redeploy.
+  ALLOWED_ORIGIN: z
+    .preprocess(parseAllowedOrigins, z.array(z.url()).min(1).default(["http://localhost:3000"])),
   BLOB_PROVIDER: z.enum(["azure", "r2"]).default("azure"),
   AZURE_STORAGE_CONNECTION_STRING: z.string().optional(),
   AZURE_STORAGE_ACCOUNT_NAME: z.string().optional(),

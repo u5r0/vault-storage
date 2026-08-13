@@ -67,7 +67,7 @@ r2_bucket_name        = "vault-bucket"
 email_from            = "<your-domain-verified-in-resend>"
 ```
 
-> `RESEND_API_KEY` is **not** a Terraform variable — it's an Infisical secret (step 4). `email_from` must be a domain you've verified in Resend.
+> `allowed_origin` may be a comma-separated list of origins (e.g. the workers.dev URL plus a custom domain) — the server accepts them all for CORS. `RESEND_API_KEY` is **not** a Terraform variable — it's an Infisical secret (step 4). `email_from` must be a domain you've verified in Resend.
 
 ### 3. Set up Infisical project and machine identity (GitHub OIDC)
 
