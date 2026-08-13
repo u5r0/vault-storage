@@ -44,9 +44,15 @@ export interface EntryPointer {
   parentId: string | null
 }
 
-/** The Cosmos partition-key value for an entry document (never contains null). */
-export function entryPartitionKey(p: EntryPointer): [string, string, string] {
-  return [p.ownerId, resolveParentId(p.parentId), p.id]
+/**
+ * The Cosmos partition-key value for an entry document, reconstructed from its
+ * stored `parentId` verbatim (null stays null, `ROOT_PARENT_ID` stays the
+ * sentinel). It must NOT coerce null→sentinel: a point read/delete must target
+ * the exact partition the document was written under, and legacy documents
+ * predating ADR 0011 were written with `parentId: null`.
+ */
+export function entryPartitionKey(p: EntryPointer): [string, string | null, string] {
+  return [p.ownerId, p.parentId, p.id]
 }
 
 /**

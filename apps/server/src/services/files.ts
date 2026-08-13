@@ -547,7 +547,7 @@ export class FilesService {
     const resource = await readEntryById(id)
     if (!resource) throw new HTTPException(404, { message: "Item not found" })
     checkOwner(resource, ownerId)
-    const oldParentId = resolveParentId(resource.parentId)
+    const oldParentId = resource.parentId ?? null
     const newParentId = resolveParentId(parentId)
     if (oldParentId === newParentId) return
 
