@@ -7,5 +7,9 @@ directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 
-[vars]
-VITE_MAX_UPLOAD_MB = 500
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# [observability.traces]
+# enabled = true
