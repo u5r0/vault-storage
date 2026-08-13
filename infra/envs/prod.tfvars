@@ -11,3 +11,6 @@ r2_bucket_name        = "vault-bucket"
 
 # Email configuration (Resend)
 email_from            = "noreply@layoutengine.dev"
+
+# Per-file upload limit (MB)
+max_upload_mb         = 500

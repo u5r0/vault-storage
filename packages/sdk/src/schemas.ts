@@ -254,7 +254,13 @@ export type AckResult = z.infer<typeof AckResponse>;
 
 /* ======================== Store contract ======================== */
 
+export const ConfigResponse = z.object({
+  maxUploadMb: z.number(),
+});
+export type Config = z.infer<typeof ConfigResponse>;
+
 export interface VaultStore {
+  getConfig(): Promise<Config>;
   register(input: RegisterInput): Promise<AckResult>;
   resendVerification(input: ResendVerificationInput): Promise<AckResult>;
   login(input: LoginInput): Promise<AuthResult>;

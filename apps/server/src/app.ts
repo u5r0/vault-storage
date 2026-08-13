@@ -3,7 +3,6 @@ import { cors } from "hono/cors"
 import { logger } from "hono/logger"
 import { HTTPException } from "hono/http-exception"
 import { getServerConfig } from "./lib/env.js"
-import { isBlobConfigured } from "./lib/blob-provider.js"
 import { createIpLimiter, rateLimitsDisabled } from "./lib/rate-limiter.js"
 import type { RateLimiterRes } from "rate-limiter-flexible"
 import files from "./controllers/files.js"
@@ -53,14 +52,18 @@ export function createApp(opts: { withLogger?: boolean } = {}) {
   app.get("/api/health", (c) =>
     c.json({
       status: "ok",
-      blobConfigured: isBlobConfigured(),
-      container: serverConfig.AZURE_STORAGE_CONTAINER_NAME,
-      // Surfaced so dev tooling (the seed, smoke tests) can verify the
-      // flag is actually live in the running process — `tsx watch` does
-      // not reload .env. Always present, regardless of value.
-      rateLimitsDisabled,
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      version: process.env.npm_package_version ?? "0.0.0",
     }),
   )
+
+  app.get("/api/config", (c) =>
+    c.json({
+      maxUploadMb: serverConfig.MAX_UPLOAD_MB,
+    }),
+  )
+
   app.route("/api/auth", auth)
 
   app.route("/api/files", files)

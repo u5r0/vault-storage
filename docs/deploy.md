@@ -51,11 +51,9 @@ The script prints a `storage_account_name`. Open `infra/versions.tf` and replace
 
 ### 2. Fill in `infra/envs/prod.tfvars`
 
-Copy `infra/envs/.env.example` to `infra/envs/prod.tfvars` and set the following values. Resource group and Container App names are defined in `infra/main.tf` — adjust them there if needed.
+Create `infra/envs/prod.tfvars` (copy `infra/envs/.env.example` if you have an older checkout) and set the following values. Resource group and Container App names are defined in `infra/main.tf` — adjust them there if needed.
 
 ```hcl
-# (copy infra/envs/.env.example to infra/envs/prod.tfvars)
-
 # Required — fill these in
 worker_hostname       = "<your-worker-subdomain>"
 allowed_origin        = "https://<your-worker-subdomain>.workers.dev"
@@ -65,6 +63,7 @@ cloudflare_account_id = "<cloudflare-account-id>"
 r2_account_id         = "<cloudflare-account-id>"
 r2_bucket_name        = "vault-bucket"
 email_from            = "<your-domain-verified-in-resend>"
+max_upload_mb         = 500
 ```
 
 > `allowed_origin` may be a comma-separated list of origins (e.g. the workers.dev URL plus a custom domain) — the server accepts them all for CORS. `RESEND_API_KEY` is **not** a Terraform variable — it's an Infisical secret (step 4). `email_from` must be a domain you've verified in Resend.
@@ -235,6 +234,7 @@ az containerapp ingress traffic set \
 | `JWT_SECRET` | `.env` | Random hex | **Infisical** |
 | `AUTH_SECRET` | `.env` | Random hex | **Infisical** |
 | `RESEND_API_KEY` | unset (capture) | Resend API key | **Infisical** |
+| `MAX_UPLOAD_MB` | `500` | `500` | Container App env (tfvar `max_upload_mb`) |
 | `EMAIL_FROM` | `noreply@vault.app` | Resend-verified domain | Container App env |
 
 ### Client (`apps/web/.env`)
@@ -242,7 +242,8 @@ az containerapp ingress traffic set \
 | Variable | Local dev | Production |
 |----------|-----------|------------|
 | `VITE_API_URL` | `http://localhost:3001` (optional — Vite proxies `/api`) | unset — same-origin, resolved dynamically by deploy workflow |
-| `VITE_MAX_UPLOAD_MB` | `500` | `500` |
+
+The client learns the upload limit from `GET /api/config` (returns `maxUploadMb`); there is no build-time `VITE_MAX_UPLOAD_MB`. Public endpoints: `/api/health` (status, uptime, timestamp, version) and `/api/config` (app config).
 
 ---
 

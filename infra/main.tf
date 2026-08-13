@@ -196,6 +196,11 @@ resource "azurerm_container_app" "api" {
         value = var.email_from
       }
 
+      env {
+        name  = "MAX_UPLOAD_MB"
+        value = var.max_upload_mb
+      }
+
       # ── Probes ────────────────────────────────────────────────
       # startup_probe gates liveness and readiness until the container is
       # ready — important with min_replicas = 0 (scale-to-zero) because a

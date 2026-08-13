@@ -3,6 +3,7 @@ import type {
   AckResult,
   AllFilesResult,
   AuthResult,
+  Config,
   CreateFolderInput,
   CreateFolderResult,
   DeleteInput,
@@ -130,6 +131,10 @@ export class VaultClient implements VaultStore {
   }
 
   /* ======================== Auth API ======================== */
+
+  async getConfig(): Promise<Config> {
+    return this.request<Config>("/api/config");
+  }
 
   async register(input: RegisterInput): Promise<AckResult> {
     return this.request<AckResult>("/api/auth/register", {

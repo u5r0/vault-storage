@@ -42,6 +42,12 @@ variable "email_from" {
   default     = "noreply@layoutengine.dev"
 }
 
+variable "max_upload_mb" {
+  description = "Per-file upload limit in MB (surfaced to the client via GET /api/config)"
+  type        = number
+  default     = 500
+}
+
 # ─── Cloudflare ───────────────────────────────────────────────────────────────
 
 variable "cloudflare_account_id" {

@@ -151,7 +151,7 @@ export class R2BlobStore implements BlobStore {
     // AWS SDK v3's flexible-checksums + chunked-streaming path requires
     // either a pre-known Content-Length OR an AWS-specific streaming
     // signer that non-AWS S3 implementations (RustFS, MinIO) don't always
-    // accept. For our blob sizes (capped at VITE_MAX_UPLOAD_MB), buffer
+    // accept. For our blob sizes (capped at MAX_UPLOAD_MB), buffer
     // the body so Content-Length is known and the request goes out as a
     // simple PUT. True streaming for multi-GB blobs would call for
     // @aws-sdk/lib-storage multipart upload — not needed today.

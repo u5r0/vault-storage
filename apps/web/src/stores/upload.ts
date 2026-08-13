@@ -2,7 +2,7 @@ import { defineStore } from "pinia"
 import { ref, shallowRef, computed } from "vue"
 import { UploadManager, type UploadHandle } from "@vault/sdk"
 import { client } from "@/lib/client"
-import { getClientConfig } from "@/lib/env"
+import { useConfigStore } from "@/stores/config"
 import { useVaultIndex } from "@/modules/files/composables/useVaultIndex"
 
 /**
@@ -18,7 +18,6 @@ import { useVaultIndex } from "@/modules/files/composables/useVaultIndex"
  * results reflect uploads immediately.
  */
 
-const MAX_UPLOAD_MB = getClientConfig().VITE_MAX_UPLOAD_MB
 const MAX_FILES = 20
 const CONCURRENCY = 3
 
@@ -28,10 +27,11 @@ const CONCURRENCY = 3
 type ItemInput = { name: string; type: string; size: number; data: File }
 
 export const useUploadStore = defineStore("upload", () => {
+  const config = useConfigStore()
   const manager = new UploadManager(client, {
     concurrency: CONCURRENCY,
     maxFiles: MAX_FILES,
-    maxFileSize: MAX_UPLOAD_MB * 1024 * 1024,
+    maxFileSize: config.maxUploadMb * 1024 * 1024,
   })
 
   // The reactive surface for templates. Re-assigned on every `change`

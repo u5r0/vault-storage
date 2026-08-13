@@ -6,6 +6,7 @@ import App from "./App.vue"
 import { registerGlobals } from "./components/register"
 import { useAuthStore } from "./stores/auth"
 import { useUIStore } from "./stores/ui"
+import { useConfigStore } from "./stores/config"
 import "./style.css"
 
 const app = createApp(App)
@@ -30,6 +31,7 @@ app.use(router)
 
 const authStore = useAuthStore()
 useUIStore()
+useConfigStore().load()
 
 authStore.checkAuth()
 

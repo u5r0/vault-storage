@@ -166,7 +166,7 @@ Global Pinia stores using the composition API style (`defineStore('id', () => { 
 
 - Concurrency: 3 simultaneous uploads
 - Max files: 20 per batch
-- Max file size: `VITE_MAX_UPLOAD_MB` (default 100 MB)
+- Max file size: server `MAX_UPLOAD_MB` (default 500 MB), surfaced to the client via `GET /api/config`
 - `addFiles()` enqueues items using `currentEntityId` as the target folder
 - On `completed`, the handle is removed from the queue and `lastCompletedAt` is bumped — the file-list view watches that timestamp to invalidate its TanStack Query cache and refetch
 

@@ -42,7 +42,7 @@ const ServerEnvSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().optional(),
   APP_URL: z.url().default("http://localhost:3000"),
-  MAX_UPLOAD_MB: z.coerce.number().default(100),
+  MAX_UPLOAD_MB: z.coerce.number().default(500),
   RATE_LIMIT_DISABLED: z.string().optional().default("0"),
   SEED_API_URL: z.url().optional(),
 })

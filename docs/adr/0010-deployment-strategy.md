@@ -93,8 +93,8 @@ Set in **Settings → Secrets and variables → Actions** before the first deplo
 | `TF_VAR_ghcr_token` | GitHub PAT, `read:packages` (Container App image pull) |
 | `TF_VAR_r2_access_key_id` / `TF_VAR_r2_secret_access_key` | R2 API token |
 | `TF_VAR_jwt_secret` / `TF_VAR_auth_secret` | `openssl rand -hex 32` each |
-| `TF_VAR_smtp_user` | Resend SMTP username (`resend`) |
-| `TF_VAR_smtp_pass` | Resend API key |
+| `RESEND_API_KEY` | Resend API key (Infisical secret, not a Terraform var) |
+| `MAX_UPLOAD_MB` | `500` (Terraform var `max_upload_mb` — Container App env, not a secret) |
 | `TF_VAR_cloudflare_api_token` | Same Cloudflare token (R2:Edit + Workers Scripts:Edit) |
 
 **Variables (non-secret):** `VITE_API_URL` = `https://<container-app-fqdn>` — the deploy.yml terraform job auto-sets this via `gh variable set`, or set manually after the first `terraform apply`.

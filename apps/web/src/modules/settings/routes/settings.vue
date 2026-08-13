@@ -6,6 +6,7 @@ import { useUIStore } from "@/stores/ui"
 import { useSettingsStore } from "@/stores/settings"
 import { useAuthStore } from "@/stores/auth"
 import { useFilesStore } from "@/stores/files"
+import { useConfigStore } from "@/stores/config"
 import SettingsSection from "../components/SettingsSection.vue"
 import ToggleSwitch from "../components/ToggleSwitch.vue"
 
@@ -14,6 +15,7 @@ const ui       = useUIStore()
 const settings = useSettingsStore()
 const auth     = useAuthStore()
 const files    = useFilesStore()
+const config   = useConfigStore()
 
 const active = computed<string>(() => (route.query.section as string) || "account")
 
@@ -133,6 +135,9 @@ const themes = [
           description="When off, files can only be uploaded inside a folder. When on, drops and uploads at the root level are accepted (matches Drive, Dropbox, OneDrive)."
           @update:model-value="files.setAllowRootUploads($event)"
         />
+        <p class="text-xs text-muted-foreground">
+          Max upload size: {{ config.maxUploadMb }} MB
+        </p>
       </div>
     </SettingsSection>
 
