@@ -21,6 +21,8 @@ import type {
   ResendVerificationInput,
   SearchFilesInput,
   SearchFilesResult,
+  Settings,
+  UpdateSettings,
   UploadCompleteInput,
   UploadCompleteResult,
   UploadResult,
@@ -134,6 +136,18 @@ export class VaultClient implements VaultStore {
 
   async getConfig(): Promise<Config> {
     return this.request<Config>("/api/config");
+  }
+
+  async getSettings(): Promise<Settings> {
+    return this.request<Settings>("/api/settings");
+  }
+
+  async updateSettings(input: UpdateSettings): Promise<Settings> {
+    return this.request<Settings>("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
   }
 
   async register(input: RegisterInput): Promise<AckResult> {

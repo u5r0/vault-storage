@@ -78,6 +78,7 @@ export async function createUser(email: string, password: string, name?: string)
     failedLoginAttempts: 0,
     lockedUntil: null,
     lastLoginAt: null,
+    maxUploadMb: null,
   }
 
   await authDb.items.create(user)

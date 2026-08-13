@@ -7,6 +7,7 @@ import { registerGlobals } from "./components/register"
 import { useAuthStore } from "./stores/auth"
 import { useUIStore } from "./stores/ui"
 import { useConfigStore } from "./stores/config"
+import { useSettingsStore } from "./stores/settings"
 import "./style.css"
 
 const app = createApp(App)
@@ -33,6 +34,8 @@ const authStore = useAuthStore()
 useUIStore()
 useConfigStore().load()
 
-authStore.checkAuth()
+authStore.checkAuth().then(() => {
+  if (authStore.isAuthenticated) useSettingsStore().load()
+})
 
 app.mount("#app")

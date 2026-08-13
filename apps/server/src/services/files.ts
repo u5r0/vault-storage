@@ -1,7 +1,7 @@
 import { HTTPException } from "hono/http-exception"
 import { Readable } from "stream"
 import { v4 as uuidv4 } from "uuid"
-import { db, entries as entriesContainer } from "../db.js"
+import { db, entries as entriesContainer, authContainer } from "../db.js"
 import { getBlobStore } from "../lib/blob-provider.js"
 import { getServerConfig } from "../lib/env.js"
 import { normalizeSearchText, type VaultEntry } from "@vault/sdk"
@@ -15,6 +15,25 @@ import {
 } from "../lib/entry-lookup.js"
 
 const MAX_UPLOAD_MB = getServerConfig().MAX_UPLOAD_MB
+
+/**
+ * Resolve a user's effective per-file upload limit (MB). A per-account
+ * override (user doc `maxUploadMb`) can only lower the global default, never
+ * raise it. Falls back to the global default when no override exists.
+ */
+async function resolveUploadLimitMb(ownerId: string): Promise<number> {
+  try {
+    const { resource: user } = await authContainer.item(ownerId, ownerId).read()
+    const override = user?.maxUploadMb
+    if (typeof override === "number" && Number.isFinite(override)) {
+      return Math.min(override, MAX_UPLOAD_MB)
+    }
+  } catch {
+    // Non-fatal: fall through to the global default. A transient auth-read
+    // failure shouldn't block the upload path.
+  }
+  return MAX_UPLOAD_MB
+}
 
 function isSafeName(name: string): boolean {
   if (!name || name.length > 255) return false
@@ -281,12 +300,13 @@ export class FilesService {
     if (files.length === 0) throw new HTTPException(400, { message: "No files provided in 'files' field" })
 
     const store = await getBlobStore()
-    const limit = MAX_UPLOAD_MB * 1024 * 1024
+    const limitMb = await resolveUploadLimitMb(ownerId)
+    const limit = limitMb * 1024 * 1024
     const uploaded: VaultEntry[] = []
 
     for (const file of files) {
       if (!isSafeName(file.name)) throw new HTTPException(400, { message: `Invalid filename: ${file.name}` })
-      if (file.size > limit) throw new HTTPException(413, { message: `File "${file.name}" exceeds ${MAX_UPLOAD_MB}MB limit` })
+      if (file.size > limit) throw new HTTPException(413, { message: `File "${file.name}" exceeds ${limitMb}MB limit` })
 
       const id = uuidv4()
       const blobName = `vault/blobs/${id}`
@@ -375,13 +395,14 @@ export class FilesService {
     name: string,
     contentType: string,
     size: number,
-    _ownerId: string,
+    ownerId: string,
   ): Promise<{ blobName: string; uploadUrl: string; expiresAt: Date; requiredHeaders: Record<string, string> }> {
     if (!isSafeName(name)) throw new HTTPException(400, { message: `Invalid filename: ${name}` })
 
-    const limit = MAX_UPLOAD_MB * 1024 * 1024
+    const limitMb = await resolveUploadLimitMb(ownerId)
+    const limit = limitMb * 1024 * 1024
     if (size > limit) {
-      throw new HTTPException(413, { message: `File "${name}" exceeds ${MAX_UPLOAD_MB}MB limit` })
+      throw new HTTPException(413, { message: `File "${name}" exceeds ${limitMb}MB limit` })
     }
 
     // Parent-ownership check is a future hardening step; today the API
@@ -447,12 +468,13 @@ export class FilesService {
     }
     if (!meta) throw new HTTPException(404, { message: "Upload not found — PUT to uploadUrl first" })
 
-    const limit = MAX_UPLOAD_MB * 1024 * 1024
+    const limitMb = await resolveUploadLimitMb(ownerId)
+    const limit = limitMb * 1024 * 1024
     if (meta.size > limit) {
       // Reject and clean up — client uploaded more than declared.
       await store.delete(blobName).catch(() => {})
       throw new HTTPException(413, {
-        message: `Uploaded blob exceeds ${MAX_UPLOAD_MB}MB limit`,
+        message: `Uploaded blob exceeds ${limitMb}MB limit`,
       })
     }
 

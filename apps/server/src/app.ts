@@ -7,6 +7,7 @@ import { createIpLimiter, rateLimitsDisabled } from "./lib/rate-limiter.js"
 import type { RateLimiterRes } from "rate-limiter-flexible"
 import files from "./controllers/files.js"
 import auth from "./controllers/auth.js"
+import settings from "./controllers/settings.js"
 
 const serverConfig = getServerConfig()
 
@@ -67,6 +68,8 @@ export function createApp(opts: { withLogger?: boolean } = {}) {
   app.route("/api/auth", auth)
 
   app.route("/api/files", files)
+
+  app.route("/api/settings", settings)
 
   app.notFound((c) => c.json({ error: "Not found" }, 404))
 

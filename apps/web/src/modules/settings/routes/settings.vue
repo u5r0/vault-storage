@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 import { Sun, Moon, Check } from "@lucide/vue"
 import { useUIStore } from "@/stores/ui"
@@ -18,6 +18,24 @@ const files    = useFilesStore()
 const config   = useConfigStore()
 
 const active = computed<string>(() => (route.query.section as string) || "account")
+
+// Local draft for the upload limit so an invalid/empty value isn't committed
+// on every keystroke. `null` means "use default".
+const uploadLimitDraft = ref<string>(String(settings.maxUploadMb ?? ""))
+watch(
+  () => settings.maxUploadMb,
+  (v) => { uploadLimitDraft.value = v == null ? "" : String(v) },
+)
+
+const effectiveUploadLimit = computed(() => settings.maxUploadMb ?? config.maxUploadMb)
+
+async function saveUploadLimit() {
+  const raw = uploadLimitDraft.value.trim()
+  settings.maxUploadMb = raw === "" ? null : Number(raw)
+  try {
+    await settings.save()
+  } catch { /* error surfaced via settings.error */ }
+}
 
 const themes = [
   { id: "light" as const, icon: Sun,  label: "Light" },
@@ -135,9 +153,25 @@ const themes = [
           description="When off, files can only be uploaded inside a folder. When on, drops and uploads at the root level are accepted (matches Drive, Dropbox, OneDrive)."
           @update:model-value="files.setAllowRootUploads($event)"
         />
-        <p class="text-xs text-muted-foreground">
-          Max upload size: {{ config.maxUploadMb }} MB
-        </p>
+        <div class="space-y-1.5">
+          <label class="block text-sm font-medium">Max upload size (MB)</label>
+          <div class="flex items-center gap-2">
+            <v-input
+              v-model="uploadLimitDraft"
+              type="number"
+              min="1"
+              placeholder="Use default"
+            />
+            <v-button variant="outline" @click="saveUploadLimit">Save</v-button>
+          </div>
+          <p class="text-[11px] text-muted-foreground">
+            Effective limit: {{ effectiveUploadLimit }} MB
+            (default {{ config.maxUploadMb }} MB). Leaving blank uses the default.
+          </p>
+          <p v-if="settings.error" class="text-[11px] text-[var(--color-destructive)]">
+            {{ settings.error }}
+          </p>
+        </div>
       </div>
     </SettingsSection>
 

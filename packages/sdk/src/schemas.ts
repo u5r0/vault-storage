@@ -259,8 +259,20 @@ export const ConfigResponse = z.object({
 });
 export type Config = z.infer<typeof ConfigResponse>;
 
+export const SettingsResponse = z.object({
+  maxUploadMb: z.number().nullable(),
+});
+export type Settings = z.infer<typeof SettingsResponse>;
+
+export const UpdateSettingsInput = z.object({
+  maxUploadMb: z.number().nullable(),
+});
+export type UpdateSettings = z.infer<typeof UpdateSettingsInput>;
+
 export interface VaultStore {
   getConfig(): Promise<Config>;
+  getSettings(): Promise<Settings>;
+  updateSettings(input: UpdateSettings): Promise<Settings>;
   register(input: RegisterInput): Promise<AckResult>;
   resendVerification(input: ResendVerificationInput): Promise<AckResult>;
   login(input: LoginInput): Promise<AuthResult>;

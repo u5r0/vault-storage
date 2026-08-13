@@ -1,8 +1,9 @@
 import { defineStore } from "pinia"
-import { ref, shallowRef, computed } from "vue"
+import { ref, shallowRef, computed, watch } from "vue"
 import { UploadManager, type UploadHandle } from "@vault/sdk"
 import { client } from "@/lib/client"
 import { useConfigStore } from "@/stores/config"
+import { useSettingsStore } from "@/stores/settings"
 import { useVaultIndex } from "@/modules/files/composables/useVaultIndex"
 
 /**
@@ -28,11 +29,23 @@ type ItemInput = { name: string; type: string; size: number; data: File }
 
 export const useUploadStore = defineStore("upload", () => {
   const config = useConfigStore()
+  const settings = useSettingsStore()
   const manager = new UploadManager(client, {
     concurrency: CONCURRENCY,
     maxFiles: MAX_FILES,
     maxFileSize: config.maxUploadMb * 1024 * 1024,
   })
+
+  // Effective per-file limit: per-account override wins over the server
+  // default. Watched so a Settings change updates the manager without a
+  // rebuild. The server 413 remains authoritative regardless.
+  const effectiveMaxUploadMb = computed(() => settings.maxUploadMb ?? config.maxUploadMb)
+
+  watch(
+    effectiveMaxUploadMb,
+    (mb) => manager.updateMaxFileSize(mb * 1024 * 1024),
+    { immediate: true },
+  )
 
   // The reactive surface for templates. Re-assigned on every `change`
   // event so Vue re-renders even though individual handle objects are

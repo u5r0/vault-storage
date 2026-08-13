@@ -243,7 +243,7 @@ az containerapp ingress traffic set \
 |----------|-----------|------------|
 | `VITE_API_URL` | `http://localhost:3001` (optional — Vite proxies `/api`) | unset — same-origin, resolved dynamically by deploy workflow |
 
-The client learns the upload limit from `GET /api/config` (returns `maxUploadMb`); there is no build-time `VITE_MAX_UPLOAD_MB`. Public endpoints: `/api/health` (status, uptime, timestamp, version) and `/api/config` (app config).
+The client learns the upload limit from `GET /api/config` (returns `maxUploadMb`); there is no build-time `VITE_MAX_UPLOAD_MB`. Each account can set a lower per-account limit (never higher than the server default) via Settings → Files, backed by `GET`/`PATCH /api/settings`. Public endpoints: `/api/health` (status, uptime, timestamp, version) and `/api/config` (app config).
 
 ---
 

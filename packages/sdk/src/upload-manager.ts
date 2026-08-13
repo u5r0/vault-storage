@@ -128,6 +128,15 @@ export class UploadManager extends Emitter<UploadEvents> {
   }
 
   /**
+   * Update the per-file size cap after construction (e.g. when a user's
+   * per-account limit changes at runtime). Affects only future `add` calls;
+   * files already enqueued are not re-validated.
+   */
+  updateMaxFileSize(bytes: number): void {
+    this.opts.maxFileSize = bytes;
+  }
+
+  /**
    * Enqueue one file. Returns the handle, or `null` if the file was rejected
    * by a restriction (queue full, file too big). Restriction failures are
    * not error states on a handle — the file simply never enters the queue.
