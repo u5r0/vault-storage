@@ -10,6 +10,8 @@ import {
   deletePointer,
   readEntryById,
   entryPartitionKey,
+  resolveParentId,
+  toApiParentId,
 } from "../lib/entry-lookup.js"
 
 const MAX_UPLOAD_MB = getServerConfig().MAX_UPLOAD_MB
@@ -70,25 +72,19 @@ function rethrowBackendError(err: unknown, contextMessage: string): never {
 
 export class FilesService {
   /**
-   * HPK-scoped split query (ADR 0028 §3.1 point 2/3): two single-partition
-   * reads instead of the old `OR c.ownerId = null` cross-partition fan-out.
+   * Own-only folder listing (ADR 0011, correcting ADR 0028 §3.1 point 2).
    *
-   *  - "own" phase scopes to the partial hierarchical partition key
-   *    [ownerId, parentId] — every document a user owns in this folder
-   *    shares that (ownerId, parentId) prefix, so Cosmos resolves this to
-   *    exactly the physical partitions holding this folder's contents.
-   *  - "global" phase scopes to [null, parentId] — files.ts never writes
-   *    an entry with ownerId: null today (every write path sets the
-   *    caller's ownerId), but `checkOwner`/`toVaultEntry` already treat
-   *    `ownerId === null` as a first-class "global file" case, so the
-   *    read path scopes for it regardless of whether anything populates it
-   *    yet.
+   * Returns only the caller's entries whose `parentId` matches. The query is
+   * routed to the right physical partitions by including the leading HPK
+   * values (`ownerId`, `parentId`) in the WHERE clause — NOT by passing a
+   * partial `partitionKey`, which Cosmos rejects with `400 substatus 1001`
+   * ("Partition key provided either doesn't correspond to definition…").
    *
-   * "own" is always fully drained before "global" begins, and a phase
-   * transition happening mid-page falls through into the next phase within
-   * the same call — so no entry is ever skipped or duplicated across a
-   * page boundary, and the caller never sees a spurious empty page at the
-   * own→global seam.
+   * The ADR 0028 "global" phase (ownerId = null) is dropped: no write path
+   * ever produces a global entry, so the phase would always be empty.
+   *
+   * A Cosmos query can still hand back empty segments with continuation
+   * tokens, so we drain until the page is full or the iterator is exhausted.
    */
   async list(
     parentId: string | null,
@@ -96,59 +92,40 @@ export class FilesService {
     opts: { cursor?: string; pageSize?: number } = {},
   ): Promise<{ entries: VaultEntry[]; cursor: string | null }> {
     const pageSize = opts.pageSize ?? 100
-
-    type ListCursor = { phase: "own"; token?: string }
-    const startCursor: ListCursor = opts.cursor ? JSON.parse(opts.cursor) : { phase: "own" }
+    const continuationToken = opts.cursor ?? undefined
 
     const query = {
       query:
-        "SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND c.parentId = @parentId AND c.deletedAt = null",
+        "SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND c.ownerId = @ownerId AND c.parentId = @parentId AND c.deletedAt = null",
       parameters: [
         { name: "@fileType", value: "file" },
         { name: "@folderType", value: "folder" },
-        { name: "@parentId", value: parentId ?? null },
+        { name: "@ownerId", value: ownerId },
+        { name: "@parentId", value: resolveParentId(parentId) },
       ],
     }
 
-    // HPK prefix [ownerId, parentId] already scopes this query to the
-    // caller's own entries in this folder — no cross-partition "global"
-    // phase is needed.
     const resources: any[] = []
     const iterator = db.items.query(query, {
       maxItemCount: pageSize,
-      continuationToken: startCursor.token,
-      partitionKey: [ownerId, parentId ?? null] as unknown as string,
+      continuationToken,
     })
-    let ownToken: string | undefined
+    let nextToken: string | undefined
     while (resources.length < pageSize) {
       const segment = await iterator.fetchNext()
       resources.push(...segment.resources)
-      ownToken = segment.continuationToken ?? undefined
-      if (!ownToken) break
+      nextToken = segment.continuationToken ?? undefined
+      if (!nextToken) break
     }
-    const nextCursor: ListCursor | null = ownToken ? { phase: "own", token: ownToken } : null
 
-    const entries: VaultEntry[] = resources.map((r: any) => ({
-      id: r.id,
-      ownerId: r.ownerId ?? null,
-      parentId: r.parentId,
-      name: r.name,
-      type: r.type,
-      size: r.size ?? 0,
-      contentType: r.contentType ?? null,
-      blobUrl: r.blobName ?? null,
-      isFavorite: r.isFavorite === "1",
-      tags: r.tags ? JSON.parse(r.tags) : [],
-      createdAt: r.createdAt,
-      modifiedAt: r.modifiedAt ?? null,
-    }))
+    const entries: VaultEntry[] = resources.map((r: any) => this.toVaultEntry(r))
 
     entries.sort((a, b) => {
       if (a.type !== b.type) return a.type === "folder" ? -1 : 1
       return (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" })
     })
 
-    return { entries, cursor: nextCursor ? JSON.stringify(nextCursor) : null }
+    return { entries, cursor: nextToken ?? null }
   }
 
   async search(
@@ -186,7 +163,12 @@ export class FilesService {
         // `nameNormalized`; for those we fall back to the old
         // CONTAINS(LOWER(c.name), …) behaviour so nothing silently drops out
         // until a backfill runs.
-        query: `SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND (c.ownerId = @ownerId OR c.ownerId = null) AND c.deletedAt = null AND ((IS_DEFINED(c.nameNormalized) AND CONTAINS(c.nameNormalized, @qNorm)) OR (NOT IS_DEFINED(c.nameNormalized) AND CONTAINS(LOWER(c.name), LOWER(@q))))${typeClause}`,
+        //
+        // Own-only (ADR 0011): search spans arbitrary folders, so it is a
+        // cross-partition query regardless of HPK, but it is scoped to the
+        // caller's documents. The `OR c.ownerId = null` "global" branch was
+        // removed — no write path produces global entries.
+        query: `SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND c.ownerId = @ownerId AND c.deletedAt = null AND ((IS_DEFINED(c.nameNormalized) AND CONTAINS(c.nameNormalized, @qNorm)) OR (NOT IS_DEFINED(c.nameNormalized) AND CONTAINS(LOWER(c.name), LOWER(@q))))${typeClause}`,
         parameters: params,
       },
       { maxItemCount: pageSize, continuationToken: opts.cursor },
@@ -202,20 +184,7 @@ export class FilesService {
       if (resources.length >= pageSize) break
     }
 
-    const entries: VaultEntry[] = resources.slice(0, pageSize).map((r: any) => ({
-      id: r.id,
-      ownerId: r.ownerId ?? null,
-      parentId: r.parentId,
-      name: r.name,
-      type: r.type,
-      size: r.size ?? 0,
-      contentType: r.contentType ?? null,
-      blobUrl: r.blobName ?? null,
-      isFavorite: r.isFavorite === "1",
-      tags: r.tags ? JSON.parse(r.tags) : [],
-      createdAt: r.createdAt,
-      modifiedAt: r.modifiedAt ?? null,
-    }))
+    const entries: VaultEntry[] = resources.slice(0, pageSize).map((r: any) => this.toVaultEntry(r))
 
     return { entries, cursor: continuationToken ?? null }
   }
@@ -241,7 +210,7 @@ export class FilesService {
       const iterator = db.items.query(
         {
           query:
-            "SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND (c.ownerId = @ownerId OR c.ownerId = null) AND c.deletedAt = null",
+            "SELECT * FROM c WHERE (c.type = @fileType OR c.type = @folderType) AND c.ownerId = @ownerId AND c.deletedAt = null",
           parameters: [
             { name: "@fileType", value: "file" },
             { name: "@folderType", value: "folder" },
@@ -283,7 +252,7 @@ export class FilesService {
       await db.items.create({
         id,
         ownerId,
-        parentId: parentId ?? null,
+        parentId: resolveParentId(parentId),
         name,
         // Persisted search index (ADR 0028 §3.2): server writes it, the
         // search query matches against it, so diacritic/alef/case folding
@@ -341,7 +310,7 @@ export class FilesService {
 
         const size = buf ? buf.byteLength : file.size
         const entry = {
-          id, ownerId, parentId,
+          id, ownerId, parentId: resolveParentId(parentId),
           name: file.name,
           nameNormalized: normalizeSearchText(file.name),
           type: "file",
@@ -493,7 +462,7 @@ export class FilesService {
     const doc = {
       id,
       ownerId,
-      parentId: parentId ?? null,
+      parentId: resolveParentId(parentId),
       name,
       nameNormalized: normalizeSearchText(name),
       type: "file",
@@ -541,7 +510,7 @@ export class FilesService {
     return {
       id: r.id,
       ownerId: r.ownerId ?? null,
-      parentId: r.parentId ?? null,
+      parentId: toApiParentId(r.parentId),
       name: r.name,
       type: r.type,
       size: r.size ?? 0,
@@ -578,8 +547,8 @@ export class FilesService {
     const resource = await readEntryById(id)
     if (!resource) throw new HTTPException(404, { message: "Item not found" })
     checkOwner(resource, ownerId)
-    const oldParentId = resource.parentId ?? null
-    const newParentId = parentId ?? null
+    const oldParentId = resolveParentId(resource.parentId)
+    const newParentId = resolveParentId(parentId)
     if (oldParentId === newParentId) return
 
     // parentId is part of the hierarchical partition key, so a move changes
@@ -700,7 +669,7 @@ export class FilesService {
 
   async quickLinks(ownerId: string) {
     const { resources } = await db.items.query({
-      query: "SELECT * FROM c WHERE c.ownerId = @ownerId OR c.ownerId = null",
+      query: "SELECT * FROM c WHERE c.ownerId = @ownerId",
       parameters: [{ name: "@ownerId", value: ownerId }],
     }).fetchAll()
 

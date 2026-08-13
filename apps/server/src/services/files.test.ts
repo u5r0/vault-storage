@@ -114,7 +114,7 @@ describe("FilesService", () => {
       // Two segments fetched; the second one filled the page so we stopped.
       expect(fetchNext).toHaveBeenCalledTimes(2)
       expect(result.entries).toHaveLength(2)
-      expect(result.cursor).toBe(JSON.stringify({ phase: "own", token: "p3" }))
+      expect(result.cursor).toBe("p3")
     })
   })
 

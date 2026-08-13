@@ -15,16 +15,38 @@ import { db, entries, lookup } from "../db.js"
  * a 1-RU point read on `entries` with the reconstructed hierarchical key.
  */
 
+/**
+ * Sentinel stored in `/parentId` for root-level entries (ADR 0011).
+ *
+ * Cosmos DB does not tolerate `null` as a hierarchical-partition-key segment
+ * (and SQL `= null` never matches), so the root folder's parent is represented
+ * by this sentinel at rest. The public API keeps `parentId: null` meaning
+ * "root" — `resolveParentId` maps null→sentinel at the storage boundary and
+ * `toApiParentId` maps sentinel→null on the way back out.
+ */
+export const ROOT_PARENT_ID = "__root__"
+
+/** Map an API-facing parentId (null = root) to the storage sentinel. */
+export function resolveParentId(parentId: string | null | undefined): string {
+  return parentId ?? ROOT_PARENT_ID
+}
+
+/** Map a stored parentId (sentinel = root) back to the API-facing null. */
+export function toApiParentId(parentId: string | null | undefined): string | null {
+  if (parentId == null || parentId === ROOT_PARENT_ID) return null
+  return parentId
+}
+
 export interface EntryPointer {
   id: string
   ownerId: string
-  /** null for root-level entries. */
+  /** null for root-level entries (API-facing); resolved to `ROOT_PARENT_ID` at rest. */
   parentId: string | null
 }
 
-/** The Cosmos partition-key value for an entry document. */
-export function entryPartitionKey(p: EntryPointer): [string, string | null, string] {
-  return [p.ownerId, p.parentId, p.id]
+/** The Cosmos partition-key value for an entry document (never contains null). */
+export function entryPartitionKey(p: EntryPointer): [string, string, string] {
+  return [p.ownerId, resolveParentId(p.parentId), p.id]
 }
 
 /**
@@ -33,7 +55,7 @@ export function entryPartitionKey(p: EntryPointer): [string, string | null, stri
  * of the key).
  */
 export async function putPointer(p: EntryPointer): Promise<void> {
-  await lookup.items.upsert({ id: p.id, ownerId: p.ownerId, parentId: p.parentId })
+  await lookup.items.upsert({ id: p.id, ownerId: p.ownerId, parentId: resolveParentId(p.parentId) })
 }
 
 /** Delete the pointer record for an entry. Tolerates an already-absent record. */

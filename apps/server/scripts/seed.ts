@@ -13,6 +13,7 @@ import { entries as entriesContainer, authContainer } from "../src/db"
 import { getBlobStore } from "../src/lib/blob-provider"
 import { generateMagicLinkToken } from "../src/lib/magic-link"
 import { getServerConfig } from "../src/lib/env"
+import { entryPartitionKey } from "../src/lib/entry-lookup"
 
 const serverConfig = getServerConfig()
 const API_URL = serverConfig.SEED_API_URL || `http://localhost:${serverConfig.PORT}`
@@ -235,8 +236,8 @@ async function cleanup() {
     })
     for (const doc of entriesToDelete) {
       const { id, ownerId, parentId } = doc as { id: string; ownerId: string; parentId: string | null }
-      // Full HPK array [ownerId, parentId ?? null, id] required for MultiHash container.
-      await entriesContainer.item(id, [ownerId, parentId ?? null, id]).delete()
+      // Full HPK array [ownerId, parentId, id] required for MultiHash container.
+      await entriesContainer.item(id, entryPartitionKey({ id, ownerId, parentId })).delete()
     }
     const entryCounts = entriesToDelete.reduce((acc: Record<string, number>, d: unknown) => {
       const doc = d as { type: string }
