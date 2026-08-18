@@ -33,19 +33,22 @@ export const router = createRouter({
 
 router.beforeEach(async (to, _from, next) => {
   const auth = useAuthStore()
-  
-  if (auth.isInitializing) {
-    await auth.waitForInitialization()
-  }
-  
   const requiresAuth = to.meta.requiresAuth ?? true
-  if (requiresAuth && !auth.isAuthenticated) {
-    next({ name: "login" })
+
+  if (requiresAuth) {
+    if (auth.isInitializing) {
+      await auth.waitForInitialization()
+    }
+    if (!auth.isAuthenticated) {
+      next({ name: "login" })
+      return
+    }
   } else if (to.name === "login" && auth.isAuthenticated) {
     next({ name: "content" })
-  } else {
-    next()
+    return
   }
+
+  next()
 })
 
 /** Coerce a route param to a nullable entity ID. */

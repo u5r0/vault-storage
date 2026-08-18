@@ -9,8 +9,7 @@ const auth = useAuthStore()
 
 const requiresAuth = route.meta.requiresAuth ?? true
 const showLoading = computed(() => {
-  if (auth.isInitializing) return true
-  if (requiresAuth && !auth.isAuthenticated) return true
+  if (requiresAuth && (auth.isInitializing || !auth.isAuthenticated)) return true
   return false
 })
 </script>

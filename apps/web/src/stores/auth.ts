@@ -4,6 +4,14 @@ import { getClientConfig } from "../lib/env"
 
 const API_BASE = getClientConfig().VITE_API_URL || ""
 
+/**
+ * How long we wait on `/api/auth/me` before deciding the session is unknown
+ * (serverless cold start). The underlying request is never aborted — it keeps
+ * running in the background to warm the instance and its result is applied
+ * late if it arrives after the timeout.
+ */
+const AUTH_CHECK_TIMEOUT_MS = 8_000
+
 interface User {
   id: string
   email: string
@@ -25,6 +33,14 @@ export const useAuthStore = defineStore("auth", () => {
   const user = ref<User | null>(null)
   let checkAuthPromise: Promise<void> | null = null
 
+  /**
+   * Bumped whenever a mutating auth action (signIn / verifyToken / signOut)
+   * changes the session. A background `checkAuth` result is only applied if
+   * the epoch is unchanged, so a stale 401 can never clobber a session the
+   * user has just established.
+   */
+  let authEpoch = 0
+
   const isAuthenticated = computed(() => user.value !== null)
   const userEmail = computed(() => user.value?.email ?? null)
   const userId = computed(() => user.value?.id ?? null)
@@ -33,22 +49,36 @@ export const useAuthStore = defineStore("auth", () => {
     user.value = null
   }
 
-  async function checkAuth() {
+  async function checkAuth(timeoutMs = AUTH_CHECK_TIMEOUT_MS) {
     if (checkAuthPromise) {
       return checkAuthPromise
     }
     checkAuthPromise = (async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
-        if (res.ok) {
-          const data = await res.json()
-          user.value = data.user
-        } else {
+      const epoch = authEpoch
+      const slowFetch = fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
+        .then(async (res) => {
+          if (epoch !== authEpoch) return
+          if (res.ok) {
+            const data = await res.json()
+            user.value = data.user
+          } else {
+            user.value = null
+          }
+        })
+        .catch(() => {
+          if (epoch !== authEpoch) return
           user.value = null
-        }
-      } catch {
-        user.value = null
+        })
+
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeout = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs)
+      })
+
+      try {
+        await Promise.race([slowFetch, timeout])
       } finally {
+        clearTimeout(timer)
         isInitializing.value = false
         checkAuthPromise = null
       }
@@ -89,6 +119,7 @@ export const useAuthStore = defineStore("auth", () => {
       throw new AuthError(data.error || "login_failed", data.error || "Login failed")
     }
     const data = await res.json()
+    authEpoch++
     user.value = data.user
     return data
   }
@@ -97,6 +128,7 @@ export const useAuthStore = defineStore("auth", () => {
     try {
       await fetch(`${API_BASE}/api/auth/logout`, { method: "POST", credentials: "include" })
     } finally {
+      authEpoch++
       clearAuth()
     }
   }
@@ -139,6 +171,7 @@ export const useAuthStore = defineStore("auth", () => {
       throw new Error(data.error || "Verification failed")
     }
     const data = await res.json()
+    authEpoch++
     user.value = data.user
     return data
   }

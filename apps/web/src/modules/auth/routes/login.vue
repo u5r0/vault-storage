@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { ref, computed } from "vue"
+import { ref, computed, watch } from "vue"
+import { useRouter } from "vue-router"
 import { Lock, Mail } from "@lucide/vue"
 import { useSignIn, useResendVerification, AuthError } from "../composables/useAuthMutations"
+import { useAuthStore } from "@/stores/auth"
 import BrandMark from "../components/BrandMark.vue"
 import AuthCard from "../components/AuthCard.vue"
 import ErrorBanner from "../components/ErrorBanner.vue"
+
+const router = useRouter()
+const auth = useAuthStore()
 
 const email    = ref("")
 const password = ref("")
@@ -17,6 +22,28 @@ const signIn = useSignIn()
 const resend = useResendVerification()
 
 const error = computed(() => signIn.error.value?.message ?? "")
+
+// Warm the serverless API while the user reads/types credentials, and
+// re-check the session. `checkAuth` is deduped in the store, so this never
+// stacks duplicate in-flight requests.
+let warmTimer: ReturnType<typeof setTimeout> | undefined
+watch([email, password], () => {
+  if (auth.isAuthenticated || auth.isInitializing) return
+  clearTimeout(warmTimer)
+  warmTimer = setTimeout(() => auth.checkAuth(), 600)
+})
+
+// If a background auth check (e.g. one that outlived the timeout) confirms a
+// valid session while the form is still pristine, continue to the vault
+// instead of forcing a pointless re-login.
+watch(
+  () => auth.user,
+  (current) => {
+    if (current && email.value === "" && password.value === "") {
+      router.push({ name: "content" })
+    }
+  },
+)
 
 async function handleLogin() {
   errorCode.value = ""
